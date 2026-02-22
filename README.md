@@ -35,6 +35,7 @@
   - [Streaming](#streaming)
   - [Reasoning Models](#reasoning-models)
   - [Multimodal Input](#multimodal-input)
+  - [Audio Output](#audio-output)
   - [Structured Output](#structured-output)
   - [Sub-Agents](#sub-agents)
   - [Error Handling](#error-handling)
@@ -251,6 +252,12 @@ for try await event in agent.stream(userMessage: "Write a poem", context: EmptyC
         print("\n[Executing \(name)...]")
     case .toolCallCompleted(_, let name, _):
         print("[Completed \(name)]")
+    case .audioData(let data):
+        audioPlayer.enqueue(data)  // PCM16 chunk for real-time playback
+    case .audioTranscript(let text):
+        print(text, terminator: "")
+    case .audioFinished(_, _, let data):
+        audioPlayer.finalize(data)  // Complete audio buffer
     case .finished(let tokenUsage, _, _, _):
         print("\nTokens: \(tokenUsage.total)")
     }
@@ -273,6 +280,12 @@ for try await delta in client.stream(messages: messages, tools: []) {
         print("\n[Tool: \(name)]")
     case .toolCallDelta(_, _):
         break
+    case .audioData(let data):
+        audioPlayer.enqueue(data)
+    case .audioTranscript(let text):
+        print(text, terminator: "")
+    case .audioStarted(_, _):
+        break
     case .finished(let usage):
         if let usage { print("\nTokens: \(usage.total)") }
     }
@@ -285,6 +298,9 @@ for try await delta in client.stream(messages: messages, tools: []) {
 | `.reasoningDelta(String)` | `.reasoning(String)` |
 | `.toolCallStarted(name:id:)` | `.toolCallStart(index:id:name:)` |
 | `.toolCallCompleted(id:name:result:)` | `.toolCallDelta(index:arguments:)` |
+| `.audioData(Data)` | `.audioData(Data)` |
+| `.audioTranscript(String)` | `.audioTranscript(String)` |
+| `.audioFinished(id:expiresAt:data:)` | `.audioStarted(id:expiresAt:)` |
 | `.finished(tokenUsage:content:reason:history:)` | `.finished(usage:)` |
 
 </details>
@@ -397,6 +413,39 @@ let transcript = try await client.transcribe(
 ```
 
 </details>
+
+### Audio Output
+
+Stream audio responses from models that support `modalities: ["text", "audio"]` (e.g., `gpt-4o-audio-preview`). Enable audio output via `RequestContext.extraFields`:
+
+```swift
+let requestContext = RequestContext(extraFields: [
+    "modalities": .array([.string("text"), .string("audio")]),
+    "audio": .object([
+        "voice": .string("alloy"),
+        "format": .string("pcm16"),
+    ]),
+])
+
+for try await event in chat.stream("Tell me a story", context: EmptyContext(), requestContext: requestContext) {
+    switch event {
+    case .audioData(let chunk):
+        audioPlayer.enqueue(chunk)       // PCM16 24kHz mono, stream in real time
+    case .audioTranscript(let text):
+        print(text, terminator: "")      // Partial transcript of the spoken audio
+    case .audioFinished(let id, let expiresAt, let data):
+        save(data, id: id)               // Complete accumulated audio buffer
+    case .delta(let text):
+        print(text, terminator: "")      // Text content (if any)
+    case .finished(_, _, _, _):
+        break
+    default:
+        break
+    }
+}
+```
+
+Audio events flow alongside text and tool call events. The streaming pipeline accumulates audio chunks internally and emits `.audioFinished` with the complete buffer after the stream ends. When the model returns audio without text content, the audio transcript is automatically used as the assistant's content in conversation history.
 
 ### Structured Output
 

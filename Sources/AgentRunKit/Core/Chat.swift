@@ -180,7 +180,7 @@ public struct Chat<C: ToolContext>: Sendable {
             let reasoning = iteration.reasoning.isEmpty ? nil : ReasoningContent(content: iteration.reasoning)
             let details = iteration.reasoningDetails.isEmpty ? nil : iteration.reasoningDetails
             messages.append(.assistant(AssistantMessage(
-                content: iteration.content,
+                content: iteration.effectiveContent,
                 toolCalls: iteration.toolCalls,
                 reasoning: reasoning,
                 reasoningDetails: details

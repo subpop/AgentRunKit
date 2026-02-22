@@ -317,7 +317,7 @@ struct StreamingChunkParsingTests {
         """
         let client = OpenAIClient(apiKey: "test", model: "test", baseURL: OpenAIClient.openRouterBaseURL)
         let chunk = try client.parseStreamingChunk(Data(json.utf8))
-        let deltas = client.extractDeltas(from: chunk)
+        let deltas = try client.extractDeltas(from: chunk)
 
         #expect(deltas.count == 1)
         #expect(deltas[0] == .reasoning("Let me think..."))
@@ -338,7 +338,7 @@ struct StreamingChunkParsingTests {
         """
         let client = OpenAIClient(apiKey: "test", model: "test", baseURL: OpenAIClient.openRouterBaseURL)
         let chunk = try client.parseStreamingChunk(Data(json.utf8))
-        let deltas = client.extractDeltas(from: chunk)
+        let deltas = try client.extractDeltas(from: chunk)
 
         #expect(deltas.count == 1)
         #expect(deltas[0] == .reasoning("Alternative field..."))
@@ -359,7 +359,7 @@ struct StreamingChunkParsingTests {
         """
         let client = OpenAIClient(apiKey: "test", model: "test", baseURL: OpenAIClient.openRouterBaseURL)
         let chunk = try client.parseStreamingChunk(Data(json.utf8))
-        let deltas = client.extractDeltas(from: chunk)
+        let deltas = try client.extractDeltas(from: chunk)
 
         #expect(deltas.count == 1)
         #expect(deltas[0] == .reasoning("Primary"))
@@ -380,7 +380,7 @@ struct StreamingChunkParsingTests {
         """
         let client = OpenAIClient(apiKey: "test", model: "test", baseURL: OpenAIClient.openRouterBaseURL)
         let chunk = try client.parseStreamingChunk(Data(json.utf8))
-        let deltas = client.extractDeltas(from: chunk)
+        let deltas = try client.extractDeltas(from: chunk)
 
         #expect(deltas.count == 1)
         #expect(deltas[0] == .content("Hello"))
@@ -401,7 +401,7 @@ struct StreamingChunkParsingTests {
         """
         let client = OpenAIClient(apiKey: "test", model: "test", baseURL: OpenAIClient.openRouterBaseURL)
         let chunk = try client.parseStreamingChunk(Data(json.utf8))
-        let deltas = client.extractDeltas(from: chunk)
+        let deltas = try client.extractDeltas(from: chunk)
 
         #expect(deltas.count == 2)
         #expect(deltas[0] == .reasoning("Thinking..."))
@@ -420,7 +420,7 @@ struct StreamingChunkParsingTests {
         """
         let client = OpenAIClient(apiKey: "test", model: "test", baseURL: OpenAIClient.openRouterBaseURL)
         let chunk = try client.parseStreamingChunk(Data(json.utf8))
-        let deltas = client.extractDeltas(from: chunk)
+        let deltas = try client.extractDeltas(from: chunk)
 
         #expect(deltas.isEmpty)
         #expect(chunk.usage?.promptTokens == 100)
@@ -696,5 +696,81 @@ struct ReasoningDetailsResponseTests {
         #expect(obj["reasoning_type"] == .string("chain_of_thought"))
         #expect(obj["inner_data"] == .object(["nested_key": .string("value")]))
         #expect(obj["reasoningType"] == nil, "snake_case keys must NOT be mangled to camelCase")
+    }
+}
+
+@Suite
+struct StreamingAudioChunkTests {
+    @Test
+    func audioTranscriptChunkParsesCorrectly() throws {
+        let json = #"{"choices":[{"delta":{"audio":{"transcript":"Hello"}},"finish_reason":null}]}"#
+        let client = OpenAIClient(apiKey: "test", model: "test", baseURL: OpenAIClient.openRouterBaseURL)
+        let chunk = try client.parseStreamingChunk(Data(json.utf8))
+        let deltas = try client.extractDeltas(from: chunk)
+
+        #expect(deltas == [.audioTranscript("Hello")])
+    }
+
+    @Test
+    func audioDataChunkParsesCorrectly() throws {
+        let json = #"{"choices":[{"delta":{"audio":{"data":"AQAB"}},"finish_reason":null}]}"#
+        let client = OpenAIClient(apiKey: "test", model: "test", baseURL: OpenAIClient.openRouterBaseURL)
+        let chunk = try client.parseStreamingChunk(Data(json.utf8))
+        let deltas = try client.extractDeltas(from: chunk)
+
+        #expect(deltas == [.audioData(Data([1, 0, 1]))])
+    }
+
+    @Test
+    func audioStartedChunkWithIdAndExpiresAt() throws {
+        let json = #"{"choices":[{"delta":{"audio":{"id":"audio_123","data":"AQAB","expires_at":1729234747}},"finish_reason":null}]}"#
+        let client = OpenAIClient(apiKey: "test", model: "test", baseURL: OpenAIClient.openRouterBaseURL)
+        let chunk = try client.parseStreamingChunk(Data(json.utf8))
+        let deltas = try client.extractDeltas(from: chunk)
+
+        #expect(deltas.count == 2)
+        #expect(deltas[0] == .audioStarted(id: "audio_123", expiresAt: 1_729_234_747))
+        #expect(deltas[1] == .audioData(Data([1, 0, 1])))
+    }
+
+    @Test
+    func audioChunkWithInvalidBase64Throws() throws {
+        let json = #"{"choices":[{"delta":{"audio":{"data":"!!invalid!!"}},"finish_reason":null}]}"#
+        let client = OpenAIClient(apiKey: "test", model: "test", baseURL: OpenAIClient.openRouterBaseURL)
+        let chunk = try client.parseStreamingChunk(Data(json.utf8))
+
+        #expect(throws: AgentError.self) {
+            _ = try client.extractDeltas(from: chunk)
+        }
+    }
+
+    @Test
+    func audioChunkCoexistsWithTextContent() throws {
+        let json = #"{"choices":[{"delta":{"content":"Text","audio":{"transcript":"Spoken"}},"finish_reason":null}]}"#
+        let client = OpenAIClient(apiKey: "test", model: "test", baseURL: OpenAIClient.openRouterBaseURL)
+        let chunk = try client.parseStreamingChunk(Data(json.utf8))
+        let deltas = try client.extractDeltas(from: chunk)
+
+        #expect(deltas == [.content("Text"), .audioTranscript("Spoken")])
+    }
+
+    @Test
+    func emptyAudioFieldsIgnored() throws {
+        let json = #"{"choices":[{"delta":{"audio":{}},"finish_reason":null}]}"#
+        let client = OpenAIClient(apiKey: "test", model: "test", baseURL: OpenAIClient.openRouterBaseURL)
+        let chunk = try client.parseStreamingChunk(Data(json.utf8))
+        let deltas = try client.extractDeltas(from: chunk)
+
+        #expect(deltas.isEmpty)
+    }
+
+    @Test
+    func audioChunkWithOnlyIdIgnoresEmptyData() throws {
+        let json = #"{"choices":[{"delta":{"audio":{"id":"audio_123","expires_at":1729234747}},"finish_reason":null}]}"#
+        let client = OpenAIClient(apiKey: "test", model: "test", baseURL: OpenAIClient.openRouterBaseURL)
+        let chunk = try client.parseStreamingChunk(Data(json.utf8))
+        let deltas = try client.extractDeltas(from: chunk)
+
+        #expect(deltas == [.audioStarted(id: "audio_123", expiresAt: 1_729_234_747)])
     }
 }

@@ -372,11 +372,19 @@ struct StreamingChoice: Decodable, Sendable {
     let finishReason: String?
 }
 
+struct StreamingAudioDelta: Decodable, Sendable {
+    let id: String?
+    let data: String?
+    let transcript: String?
+    let expiresAt: Int?
+}
+
 struct StreamingDelta: Decodable, Sendable {
     let content: String?
     let toolCalls: [StreamingToolCall]?
     let reasoning: String?
     let reasoningContent: String?
+    let audio: StreamingAudioDelta?
 }
 
 struct StreamingToolCall: Decodable, Sendable {

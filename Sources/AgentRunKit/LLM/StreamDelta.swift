@@ -6,5 +6,8 @@ public enum StreamDelta: Sendable, Equatable {
     case reasoningDetails([JSONValue])
     case toolCallStart(index: Int, id: String, name: String)
     case toolCallDelta(index: Int, arguments: String)
+    case audioData(Data)
+    case audioTranscript(String)
+    case audioStarted(id: String, expiresAt: Int)
     case finished(usage: TokenUsage?)
 }

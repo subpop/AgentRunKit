@@ -29,7 +29,7 @@ extension OpenAIClient {
                 if let details = try JSONValue.extractReasoningDetails(from: chunkData) {
                     continuation.yield(.reasoningDetails(details))
                 }
-                for delta in extractDeltas(from: chunk) {
+                for delta in try extractDeltas(from: chunk) {
                     continuation.yield(delta)
                 }
             }
@@ -266,7 +266,7 @@ extension OpenAIClient {
         }
     }
 
-    func extractDeltas(from chunk: StreamingChunk) -> [StreamDelta] {
+    func extractDeltas(from chunk: StreamingChunk) throws -> [StreamDelta] {
         var deltas: [StreamDelta] = []
         for choice in chunk.choices ?? [] {
             if let reasoning = choice.delta.reasoning ?? choice.delta.reasoningContent, !reasoning.isEmpty {
@@ -283,6 +283,22 @@ extension OpenAIClient {
                     if let args = call.function?.arguments, !args.isEmpty {
                         deltas.append(.toolCallDelta(index: call.index, arguments: args))
                     }
+                }
+            }
+            if let audio = choice.delta.audio {
+                if let id = audio.id, !id.isEmpty {
+                    deltas.append(.audioStarted(id: id, expiresAt: audio.expiresAt ?? 0))
+                }
+                if let base64 = audio.data, !base64.isEmpty {
+                    guard let decoded = Data(base64Encoded: base64) else {
+                        throw AgentError.llmError(.decodingFailed(
+                            description: "Invalid base64 in audio data"
+                        ))
+                    }
+                    deltas.append(.audioData(decoded))
+                }
+                if let transcript = audio.transcript, !transcript.isEmpty {
+                    deltas.append(.audioTranscript(transcript))
                 }
             }
             if choice.finishReason != nil {

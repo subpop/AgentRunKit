@@ -560,3 +560,60 @@ private struct NoopOutput: Codable, Sendable {}
 private enum TestToolError: Error, Sendable {
     case intentional
 }
+
+@Suite
+struct AgentAudioStreamingTests {
+    @Test
+    func audioEventsPassThroughAgent() async throws {
+        let deltas: [StreamDelta] = [
+            .audioStarted(id: "audio_1", expiresAt: 1_700_000_000),
+            .audioTranscript("Response"),
+            .audioData(Data([1, 2, 3])),
+            .toolCallStart(index: 0, id: "call_1", name: "finish"),
+            .toolCallDelta(index: 0, arguments: #"{"content": "Done"}"#),
+            .finished(usage: TokenUsage(input: 10, output: 5)),
+        ]
+        let client = StreamingMockLLMClient(streamSequences: [deltas])
+        let agent = Agent<EmptyContext>(client: client, tools: [])
+
+        var events: [StreamEvent] = []
+        for try await event in agent.stream(userMessage: "Hi", context: EmptyContext()) {
+            events.append(event)
+        }
+
+        #expect(events.contains(.audioTranscript("Response")))
+        #expect(events.contains(.audioData(Data([1, 2, 3]))))
+        #expect(events.contains(.audioFinished(id: "audio_1", expiresAt: 1_700_000_000, data: Data([1, 2, 3]))))
+        guard case .finished = events.last else {
+            Issue.record("Expected finished event")
+            return
+        }
+    }
+
+    @Test
+    func audioTranscriptInAgentHistory() async throws {
+        let deltas: [StreamDelta] = [
+            .audioStarted(id: "audio_1", expiresAt: 1_700_000_000),
+            .audioTranscript("Response"),
+            .audioData(Data([1, 2, 3])),
+            .toolCallStart(index: 0, id: "call_1", name: "finish"),
+            .toolCallDelta(index: 0, arguments: #"{"content": "Done"}"#),
+            .finished(usage: TokenUsage(input: 10, output: 5)),
+        ]
+        let client = StreamingMockLLMClient(streamSequences: [deltas])
+        let agent = Agent<EmptyContext>(client: client, tools: [])
+
+        var finalHistory: [ChatMessage] = []
+        for try await event in agent.stream(userMessage: "Hi", context: EmptyContext()) {
+            if case let .finished(_, _, _, history) = event {
+                finalHistory = history
+            }
+        }
+
+        let assistantMessage = finalHistory.compactMap { msg -> AssistantMessage? in
+            if case let .assistant(assistant) = msg { return assistant }
+            return nil
+        }.first
+        #expect(assistantMessage?.content == "Response")
+    }
+}

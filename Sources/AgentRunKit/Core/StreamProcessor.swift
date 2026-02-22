@@ -50,6 +50,11 @@ struct StreamIteration: Sendable {
     let toolCalls: [ToolCall]
     let reasoning: String
     let reasoningDetails: [JSONValue]
+    let audioTranscript: String
+
+    var effectiveContent: String {
+        content.isEmpty && !audioTranscript.isEmpty ? audioTranscript : content
+    }
 }
 
 struct StreamProcessor: Sendable {
@@ -68,6 +73,10 @@ struct StreamProcessor: Sendable {
         var reasoningDetailAccumulator = ReasoningDetailAccumulator()
         var accumulators: [Int: ToolCallAccumulator] = [:]
         var pendingArguments: [Int: String] = [:]
+        var audioDataBuffer = Data()
+        var audioTranscriptBuffer = ""
+        var audioId: String?
+        var audioExpiresAt = 0
 
         for try await delta in client.stream(
             messages: messages,
@@ -104,6 +113,18 @@ struct StreamProcessor: Sendable {
                     pendingArguments[index, default: ""] += arguments
                 }
 
+            case let .audioStarted(id, expiresAt):
+                audioId = id
+                audioExpiresAt = expiresAt
+
+            case let .audioData(data):
+                audioDataBuffer.append(data)
+                continuation.yield(.audioData(data))
+
+            case let .audioTranscript(text):
+                audioTranscriptBuffer += text
+                continuation.yield(.audioTranscript(text))
+
             case let .finished(usage):
                 if let usage { totalUsage += usage }
             }
@@ -113,6 +134,10 @@ struct StreamProcessor: Sendable {
             throw AgentError.malformedStream(.orphanedToolCallArguments(indices: pendingArguments.keys.sorted()))
         }
 
+        if let audioId {
+            continuation.yield(.audioFinished(id: audioId, expiresAt: audioExpiresAt, data: audioDataBuffer))
+        }
+
         let toolCalls = accumulators.keys.sorted().compactMap { index in
             accumulators[index]?.toToolCall()
         }
@@ -120,7 +145,8 @@ struct StreamProcessor: Sendable {
             content: contentBuffer,
             toolCalls: toolCalls,
             reasoning: reasoningBuffer,
-            reasoningDetails: reasoningDetailAccumulator.consolidated()
+            reasoningDetails: reasoningDetailAccumulator.consolidated(),
+            audioTranscript: audioTranscriptBuffer
         )
     }
 }

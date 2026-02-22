@@ -485,3 +485,103 @@ private struct NoopOutput: Codable, Sendable {}
 private enum TestToolError: Error, Sendable {
     case intentional
 }
+
+@Suite
+struct ChatAudioStreamingTests {
+    @Test
+    func audioDataAndTranscriptEventsEmitted() async throws {
+        let deltas: [StreamDelta] = [
+            .audioStarted(id: "audio_1", expiresAt: 1_700_000_000),
+            .audioTranscript("Hello "),
+            .audioTranscript("world"),
+            .audioData(Data([1, 2, 3])),
+            .audioData(Data([4, 5, 6])),
+            .finished(usage: TokenUsage(input: 10, output: 5)),
+        ]
+        let client = StreamingMockLLMClient(streamSequences: [deltas])
+        let chat = Chat<EmptyContext>(client: client)
+
+        var events: [StreamEvent] = []
+        for try await event in chat.stream("Hi", context: EmptyContext()) {
+            events.append(event)
+        }
+
+        #expect(events.contains(.audioTranscript("Hello ")))
+        #expect(events.contains(.audioTranscript("world")))
+        #expect(events.contains(.audioData(Data([1, 2, 3]))))
+        #expect(events.contains(.audioData(Data([4, 5, 6]))))
+        #expect(events.contains(.audioFinished(id: "audio_1", expiresAt: 1_700_000_000, data: Data([1, 2, 3, 4, 5, 6]))))
+    }
+
+    @Test
+    func audioTranscriptUsedAsContentInHistory() async throws {
+        let deltas: [StreamDelta] = [
+            .audioStarted(id: "audio_1", expiresAt: 1_700_000_000),
+            .audioTranscript("Spoken response"),
+            .audioData(Data([1, 2])),
+            .finished(usage: TokenUsage(input: 10, output: 5)),
+        ]
+        let client = StreamingMockLLMClient(streamSequences: [deltas])
+        let chat = Chat<EmptyContext>(client: client)
+
+        var finalHistory: [ChatMessage] = []
+        for try await event in chat.stream("Hi", context: EmptyContext()) {
+            if case let .finished(_, _, _, history) = event {
+                finalHistory = history
+            }
+        }
+
+        let assistantMessage = finalHistory.compactMap { msg -> AssistantMessage? in
+            if case let .assistant(assistant) = msg { return assistant }
+            return nil
+        }.first
+        #expect(assistantMessage?.content == "Spoken response")
+    }
+
+    @Test
+    func textContentPreferredOverTranscriptInHistory() async throws {
+        let deltas: [StreamDelta] = [
+            .content("Text content"),
+            .audioTranscript("Spoken content"),
+            .finished(usage: TokenUsage(input: 10, output: 5)),
+        ]
+        let client = StreamingMockLLMClient(streamSequences: [deltas])
+        let chat = Chat<EmptyContext>(client: client)
+
+        var finalHistory: [ChatMessage] = []
+        for try await event in chat.stream("Hi", context: EmptyContext()) {
+            if case let .finished(_, _, _, history) = event {
+                finalHistory = history
+            }
+        }
+
+        let assistantMessage = finalHistory.compactMap { msg -> AssistantMessage? in
+            if case let .assistant(assistant) = msg { return assistant }
+            return nil
+        }.first
+        #expect(assistantMessage?.content == "Text content")
+    }
+
+    @Test
+    func noAudioProducesNoAudioEvents() async throws {
+        let deltas: [StreamDelta] = [
+            .content("Just text"),
+            .finished(usage: TokenUsage(input: 10, output: 5)),
+        ]
+        let client = StreamingMockLLMClient(streamSequences: [deltas])
+        let chat = Chat<EmptyContext>(client: client)
+
+        var events: [StreamEvent] = []
+        for try await event in chat.stream("Hi", context: EmptyContext()) {
+            events.append(event)
+        }
+
+        let audioEvents = events.filter { event in
+            switch event {
+            case .audioData, .audioTranscript, .audioFinished: true
+            default: false
+            }
+        }
+        #expect(audioEvents.isEmpty)
+    }
+}
