@@ -8,6 +8,7 @@ public enum TransportError: Error, Sendable, Equatable, CustomStringConvertible 
     case encodingFailed(description: String)
     case decodingFailed(description: String)
     case noChoices
+    case streamStalled
     case other(String)
 
     public static func networkError(_ error: some Error) -> TransportError {
@@ -36,6 +37,7 @@ public enum TransportError: Error, Sendable, Equatable, CustomStringConvertible 
         case let .encodingFailed(description): "Encoding failed: \(description)"
         case let .decodingFailed(description): "Decoding failed: \(description)"
         case .noChoices: "No choices in response"
+        case .streamStalled: "Stream stalled (no data received within timeout)"
         case let .other(message): message
         }
     }

@@ -6,7 +6,7 @@ public struct OpenAIClient: LLMClient, Sendable {
     let apiKey: String?
     let baseURL: URL
     let chatCompletionPath: String
-    let additionalHeaders: [String: String]
+    let additionalHeaders: @Sendable () -> [String: String]
     let session: URLSession
     let retryPolicy: RetryPolicy
     let reasoningConfig: ReasoningConfig?
@@ -17,7 +17,7 @@ public struct OpenAIClient: LLMClient, Sendable {
         maxTokens: Int = 16384,
         baseURL: URL,
         chatCompletionPath: String = "chat/completions",
-        additionalHeaders: [String: String] = [:],
+        additionalHeaders: @Sendable @escaping () -> [String: String] = { [:] },
         session: URLSession = .shared,
         retryPolicy: RetryPolicy = .default,
         reasoningConfig: ReasoningConfig? = nil
@@ -151,7 +151,7 @@ extension OpenAIClient {
         if let apiKey {
             urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         }
-        for (field, value) in additionalHeaders {
+        for (field, value) in additionalHeaders() {
             urlRequest.setValue(value, forHTTPHeaderField: field)
         }
 
@@ -195,7 +195,7 @@ extension OpenAIClient {
         urlRequest.httpMethod = "POST"
         urlRequest.setValue(formData.contentType, forHTTPHeaderField: "Content-Type")
         urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        for (field, value) in additionalHeaders {
+        for (field, value) in additionalHeaders() {
             urlRequest.setValue(value, forHTTPHeaderField: field)
         }
         urlRequest.httpBody = formData.encoded()
@@ -233,7 +233,7 @@ extension OpenAIClient {
         urlRequest.httpMethod = "POST"
         urlRequest.setValue(formData.contentType, forHTTPHeaderField: "Content-Type")
         urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        for (field, value) in additionalHeaders {
+        for (field, value) in additionalHeaders() {
             urlRequest.setValue(value, forHTTPHeaderField: field)
         }
 
@@ -323,7 +323,7 @@ public extension OpenAIClient {
         baseURL: URL,
         maxTokens: Int = 16384,
         chatCompletionPath: String = "chat/completions",
-        additionalHeaders: [String: String] = [:],
+        additionalHeaders: @Sendable @escaping () -> [String: String] = { [:] },
         session: URLSession = .shared,
         retryPolicy: RetryPolicy = .default,
         reasoningConfig: ReasoningConfig? = nil

@@ -242,7 +242,7 @@ print(response2.content)  // "Alice"
 **Agent/Chat streaming** with `StreamEvent`:
 
 ```swift
-for try await event in agent.stream(userMessage: "Write a poem", context: EmptyContext()) {
+for try await event in agent.stream(userMessage: "Write a poem", context: EmptyContext(), tokenBudget: 10000) {
     switch event {
     case .delta(let text):
         print(text, terminator: "")
@@ -583,7 +583,8 @@ let client = OpenAIClient(
     retryPolicy: RetryPolicy(
         maxAttempts: 5,
         baseDelay: .seconds(2),
-        maxDelay: .seconds(60)
+        maxDelay: .seconds(60),
+        streamStallTimeout: .seconds(30)  // Detect silently dropped SSE connections
     )
 )
 ```
@@ -658,9 +659,11 @@ For backends that handle auth and model selection server-side:
 ```swift
 let client = OpenAIClient.proxy(
     baseURL: URL(string: "https://api.myapp.com/v1/ai")!,
-    additionalHeaders: ["Authorization": "Bearer \(userToken)"]
+    additionalHeaders: { ["Authorization": "Bearer \(userToken)"] }
 )
 ```
+
+The header closure is evaluated per-request, enabling rotating tokens or dynamic auth.
 
 Useful for iOS apps where:
 - Backend manages LLM API keys (security)

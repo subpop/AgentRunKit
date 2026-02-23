@@ -11,12 +11,14 @@ struct RetryPolicyTests {
         #expect(policy.maxAttempts == 3)
         #expect(policy.baseDelay == .seconds(1))
         #expect(policy.maxDelay == .seconds(30))
+        #expect(policy.streamStallTimeout == nil)
     }
 
     @Test
     func noneHasSingleAttempt() {
         let policy = RetryPolicy.none
         #expect(policy.maxAttempts == 1)
+        #expect(policy.streamStallTimeout == nil)
     }
 
     @Test
@@ -50,6 +52,23 @@ struct RetryPolicyTests {
             delays.insert(delay.components.attoseconds)
         }
         #expect(delays.count > 1)
+    }
+
+    @Test
+    func streamStallTimeoutCustomValue() {
+        let policy = RetryPolicy(streamStallTimeout: .seconds(30))
+        #expect(policy.streamStallTimeout == .seconds(30))
+    }
+
+    @Test
+    func streamStallTimeoutEquality() {
+        let policy30a = RetryPolicy(streamStallTimeout: .seconds(30))
+        let policy30b = RetryPolicy(streamStallTimeout: .seconds(30))
+        let policy60 = RetryPolicy(streamStallTimeout: .seconds(60))
+        let policyNone = RetryPolicy()
+        #expect(policy30a == policy30b)
+        #expect(policy30a != policy60)
+        #expect(policy30a != policyNone)
     }
 
     @Test

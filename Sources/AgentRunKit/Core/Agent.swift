@@ -113,24 +113,34 @@ public final class Agent<C: ToolContext>: Sendable {
         userMessage: String,
         history: [ChatMessage] = [],
         context: C,
+        tokenBudget: Int? = nil,
         requestContext: RequestContext? = nil
     ) -> AsyncThrowingStream<StreamEvent, Error> {
-        stream(userMessage: .user(userMessage), history: history, context: context, requestContext: requestContext)
+        stream(
+            userMessage: .user(userMessage),
+            history: history,
+            context: context,
+            tokenBudget: tokenBudget,
+            requestContext: requestContext
+        )
     }
 
     public func stream(
         userMessage: ChatMessage,
         history: [ChatMessage] = [],
         context: C,
+        tokenBudget: Int? = nil,
         requestContext: RequestContext? = nil
     ) -> AsyncThrowingStream<StreamEvent, Error> {
-        AsyncThrowingStream { continuation in
+        if let tokenBudget { precondition(tokenBudget >= 1, "tokenBudget must be at least 1") }
+        return AsyncThrowingStream { continuation in
             let task = Task {
                 do {
                     try await performStream(
                         userMessage: userMessage,
                         history: history,
                         context: context,
+                        tokenBudget: tokenBudget,
                         requestContext: requestContext,
                         continuation: continuation
                     )
@@ -148,6 +158,7 @@ public final class Agent<C: ToolContext>: Sendable {
         userMessage: ChatMessage,
         history: [ChatMessage],
         context: C,
+        tokenBudget: Int?,
         requestContext: RequestContext?,
         continuation: AsyncThrowingStream<StreamEvent, Error>.Continuation
     ) async throws {
@@ -189,6 +200,11 @@ public final class Agent<C: ToolContext>: Sendable {
                 let finishEvent = try parseFinishEvent(from: iteration.toolCalls, tokenUsage: totalUsage, history: messages)
                 continuation.yield(finishEvent)
                 continuation.finish()
+                return
+            }
+
+            if let tokenBudget, totalUsage.total > tokenBudget {
+                continuation.finish(throwing: AgentError.tokenBudgetExceeded(budget: tokenBudget, used: totalUsage.total))
                 return
             }
         }

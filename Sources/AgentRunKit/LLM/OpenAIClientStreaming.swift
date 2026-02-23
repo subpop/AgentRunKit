@@ -17,23 +17,78 @@ extension OpenAIClient {
         let urlRequest = try buildURLRequest(request)
 
         try await performStreamWithRetry(urlRequest: urlRequest, onResponse: onResponse) { bytes in
-            for try await line in UnboundedLines(source: bytes) {
-                try Task.checkCancellation()
-                guard let payload = Self.extractSSEPayload(from: line) else { continue }
-                if payload == "[DONE]" {
-                    continuation.finish()
-                    return
-                }
-                let chunkData = Data(payload.utf8)
-                let chunk = try parseStreamingChunk(chunkData)
-                if let details = try JSONValue.extractReasoningDetails(from: chunkData) {
-                    continuation.yield(.reasoningDetails(details))
-                }
-                for delta in try extractDeltas(from: chunk) {
-                    continuation.yield(delta)
+            if let stallTimeout = self.retryPolicy.streamStallTimeout {
+                try await self.processStreamWithStallDetection(
+                    bytes: bytes,
+                    stallTimeout: stallTimeout,
+                    continuation: continuation
+                )
+            } else {
+                try await self.processStreamLines(bytes: bytes, continuation: continuation)
+            }
+        }
+    }
+
+    private func handleSSELine(
+        _ line: String,
+        continuation: AsyncThrowingStream<StreamDelta, Error>.Continuation
+    ) throws -> Bool {
+        try Task.checkCancellation()
+        guard let payload = Self.extractSSEPayload(from: line) else { return false }
+        if payload == "[DONE]" {
+            continuation.finish()
+            return true
+        }
+        let chunkData = Data(payload.utf8)
+        let chunk = try parseStreamingChunk(chunkData)
+        if let details = try JSONValue.extractReasoningDetails(from: chunkData) {
+            continuation.yield(.reasoningDetails(details))
+        }
+        for delta in try extractDeltas(from: chunk) {
+            continuation.yield(delta)
+        }
+        return false
+    }
+
+    func processStreamLines<S: AsyncSequence>(
+        bytes: S,
+        continuation: AsyncThrowingStream<StreamDelta, Error>.Continuation
+    ) async throws where S.Element == UInt8 {
+        for try await line in UnboundedLines(source: bytes) {
+            if try handleSSELine(line, continuation: continuation) { return }
+        }
+        continuation.finish()
+    }
+
+    func processStreamWithStallDetection<S: AsyncSequence & Sendable>(
+        bytes: S,
+        stallTimeout: Duration,
+        continuation: AsyncThrowingStream<StreamDelta, Error>.Continuation
+    ) async throws where S.Element == UInt8 {
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            let watchdog = StallWatchdog()
+
+            group.addTask {
+                while !Task.isCancelled {
+                    let snapshot = await watchdog.lastActivity
+                    try await Task.sleep(for: stallTimeout)
+                    let current = await watchdog.lastActivity
+                    if current == snapshot {
+                        throw AgentError.llmError(.streamStalled)
+                    }
                 }
             }
-            continuation.finish()
+
+            group.addTask { [self] in
+                for try await line in UnboundedLines(source: bytes) {
+                    await watchdog.recordActivity()
+                    if try handleSSELine(line, continuation: continuation) { return }
+                }
+                continuation.finish()
+            }
+
+            try await group.next()
+            group.cancelAll()
         }
     }
 
@@ -339,6 +394,14 @@ extension OpenAIClient {
             group.cancelAll()
             return "(error body read timed out)"
         }
+    }
+}
+
+actor StallWatchdog {
+    private(set) var lastActivity: ContinuousClock.Instant = .now
+
+    func recordActivity() {
+        lastActivity = .now
     }
 }
 

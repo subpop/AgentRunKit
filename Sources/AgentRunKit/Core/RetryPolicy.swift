@@ -4,20 +4,26 @@ public struct RetryPolicy: Sendable, Equatable {
     public let maxAttempts: Int
     public let baseDelay: Duration
     public let maxDelay: Duration
+    public let streamStallTimeout: Duration?
 
     private static let maxExponentialShift = 10
 
     public init(
         maxAttempts: Int = 3,
         baseDelay: Duration = .seconds(1),
-        maxDelay: Duration = .seconds(30)
+        maxDelay: Duration = .seconds(30),
+        streamStallTimeout: Duration? = nil
     ) {
         precondition(maxAttempts >= 1, "maxAttempts must be at least 1")
         precondition(baseDelay >= .milliseconds(1), "baseDelay must be at least 1ms")
         precondition(maxDelay >= baseDelay, "maxDelay must be at least baseDelay")
+        if let streamStallTimeout {
+            precondition(streamStallTimeout >= .milliseconds(100), "streamStallTimeout must be at least 100ms")
+        }
         self.maxAttempts = maxAttempts
         self.baseDelay = baseDelay
         self.maxDelay = maxDelay
+        self.streamStallTimeout = streamStallTimeout
     }
 
     public static let `default` = RetryPolicy()

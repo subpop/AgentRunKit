@@ -562,6 +562,93 @@ private enum TestToolError: Error, Sendable {
 }
 
 @Suite
+struct AgentStreamingTokenBudgetTests {
+    @Test
+    func budgetExceededDuringStreaming() async throws {
+        let noopTool = try Tool<NoopParams, NoopOutput, EmptyContext>(
+            name: "noop",
+            description: "No-op",
+            executor: { _, _ in NoopOutput() }
+        )
+        let firstDeltas: [StreamDelta] = [
+            .toolCallStart(index: 0, id: "call_1", name: "noop"),
+            .toolCallDelta(index: 0, arguments: "{}"),
+            .finished(usage: TokenUsage(input: 40, output: 40))
+        ]
+        let secondDeltas: [StreamDelta] = [
+            .toolCallStart(index: 0, id: "call_2", name: "finish"),
+            .toolCallDelta(index: 0, arguments: #"{"content": "done"}"#),
+            .finished(usage: nil)
+        ]
+        let client = StreamingMockLLMClient(streamSequences: [firstDeltas, secondDeltas])
+        let agent = Agent<EmptyContext>(client: client, tools: [noopTool])
+
+        do {
+            for try await _ in agent.stream(
+                userMessage: "Go",
+                context: EmptyContext(),
+                tokenBudget: 50
+            ) {}
+            Issue.record("Expected tokenBudgetExceeded")
+        } catch let error as AgentError {
+            guard case let .tokenBudgetExceeded(budget, used) = error else {
+                Issue.record("Expected tokenBudgetExceeded, got \(error)")
+                return
+            }
+            #expect(budget == 50)
+            #expect(used == 80)
+        }
+    }
+
+    @Test
+    func finishReturnedEvenWhenOverBudget() async throws {
+        let deltas: [StreamDelta] = [
+            .toolCallStart(index: 0, id: "call_1", name: "finish"),
+            .toolCallDelta(index: 0, arguments: #"{"content": "completed"}"#),
+            .finished(usage: TokenUsage(input: 100, output: 100))
+        ]
+        let client = StreamingMockLLMClient(streamSequences: [deltas])
+        let agent = Agent<EmptyContext>(client: client, tools: [])
+
+        var events: [StreamEvent] = []
+        for try await event in agent.stream(
+            userMessage: "Go",
+            context: EmptyContext(),
+            tokenBudget: 50
+        ) {
+            events.append(event)
+        }
+
+        guard case let .finished(_, content, _, _) = events.last else {
+            Issue.record("Expected finished event")
+            return
+        }
+        #expect(content == "completed")
+    }
+
+    @Test
+    func streamingWithNilBudgetNeverThrows() async throws {
+        let deltas: [StreamDelta] = [
+            .toolCallStart(index: 0, id: "call_1", name: "finish"),
+            .toolCallDelta(index: 0, arguments: #"{"content": "done"}"#),
+            .finished(usage: TokenUsage(input: 10000, output: 10000))
+        ]
+        let client = StreamingMockLLMClient(streamSequences: [deltas])
+        let agent = Agent<EmptyContext>(client: client, tools: [])
+
+        var events: [StreamEvent] = []
+        for try await event in agent.stream(userMessage: "Go", context: EmptyContext()) {
+            events.append(event)
+        }
+
+        guard case .finished = events.last else {
+            Issue.record("Expected finished event")
+            return
+        }
+    }
+}
+
+@Suite
 struct AgentAudioStreamingTests {
     @Test
     func audioEventsPassThroughAgent() async throws {

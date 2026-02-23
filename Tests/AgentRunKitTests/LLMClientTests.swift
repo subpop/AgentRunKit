@@ -353,6 +353,8 @@ struct TransportErrorTests {
     func errorsAreEquatable() {
         #expect(TransportError.invalidResponse == TransportError.invalidResponse)
         #expect(TransportError.noChoices == TransportError.noChoices)
+        #expect(TransportError.streamStalled == TransportError.streamStalled)
+        #expect(TransportError.streamStalled != TransportError.invalidResponse)
         let err400 = TransportError.httpError(statusCode: 400, body: "bad")
         let err401 = TransportError.httpError(statusCode: 401, body: "bad")
         #expect(err400 == err400)
@@ -767,7 +769,7 @@ struct ProxyModeTests {
     func proxyWithAdditionalHeaders() throws {
         let client = OpenAIClient.proxy(
             baseURL: URL(string: "http://localhost:8080")!,
-            additionalHeaders: ["X-Custom-Header": "custom-value"]
+            additionalHeaders: { ["X-Custom-Header": "custom-value"] }
         )
         let messages: [ChatMessage] = [.user("Hello")]
         let request = client.buildRequest(messages: messages, tools: [])
@@ -794,5 +796,93 @@ struct ProxyModeTests {
         await #expect(throws: AgentError.self) {
             _ = try await client.transcribe(audio: Data(), format: .wav, model: "whisper-1")
         }
+    }
+}
+
+struct ControlledByteStream: AsyncSequence, Sendable {
+    typealias Element = UInt8
+    let stream: AsyncStream<UInt8>
+
+    func makeAsyncIterator() -> AsyncStream<UInt8>.AsyncIterator {
+        stream.makeAsyncIterator()
+    }
+}
+
+@Suite
+struct StreamStallDetectionTests {
+    private func makeClient() -> OpenAIClient {
+        OpenAIClient.proxy(baseURL: URL(string: "http://localhost:8080")!)
+    }
+
+    private func sseChunk(_ json: String) -> [UInt8] {
+        Array("data: \(json)\n\n".utf8)
+    }
+
+    private func sseDone() -> [UInt8] {
+        Array("data: [DONE]\n\n".utf8)
+    }
+
+    private let minimalChunkJSON = """
+    {"choices":[{"delta":{"content":"hello"},"index":0}]}
+    """
+
+    private let finishChunkJSON = """
+    {"choices":[{"delta":{},"index":0,"finish_reason":"stop"}]}
+    """
+
+    @Test
+    func stalledStreamThrowsError() async throws {
+        let client = makeClient()
+        let (byteStream, continuation) = AsyncStream<UInt8>.makeStream()
+
+        for byte in sseChunk(minimalChunkJSON) {
+            continuation.yield(byte)
+        }
+
+        let controlled = ControlledByteStream(stream: byteStream)
+        let (deltaStream, deltaContinuation) = AsyncThrowingStream<StreamDelta, Error>.makeStream()
+
+        do {
+            try await client.processStreamWithStallDetection(
+                bytes: controlled,
+                stallTimeout: .milliseconds(100),
+                continuation: deltaContinuation
+            )
+            Issue.record("Expected streamStalled error")
+        } catch let error as AgentError {
+            guard case let .llmError(transport) = error else {
+                Issue.record("Expected llmError, got \(error)")
+                return
+            }
+            #expect(transport == .streamStalled)
+        }
+
+        _ = deltaStream
+    }
+
+    @Test
+    func healthyStreamCompletesWithStallDetection() async throws {
+        let client = makeClient()
+        let (byteStream, byteContinuation) = AsyncStream<UInt8>.makeStream()
+
+        for byte in sseChunk(minimalChunkJSON) + sseDone() {
+            byteContinuation.yield(byte)
+        }
+        byteContinuation.finish()
+
+        let controlled = ControlledByteStream(stream: byteStream)
+        let (deltaStream, deltaContinuation) = AsyncThrowingStream<StreamDelta, Error>.makeStream()
+
+        try await client.processStreamWithStallDetection(
+            bytes: controlled,
+            stallTimeout: .seconds(5),
+            continuation: deltaContinuation
+        )
+
+        var collected: [StreamDelta] = []
+        for try await delta in deltaStream {
+            collected.append(delta)
+        }
+        #expect(collected.contains { if case .content("hello") = $0 { return true }; return false })
     }
 }
