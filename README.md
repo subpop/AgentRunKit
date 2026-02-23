@@ -44,6 +44,8 @@
   - [Retry Policy](#retry-policy)
   - [Per-Request Customization](#per-request-customization)
 - [LLM Providers](#llm-providers)
+  - [OpenAI Responses API](#openai-responses-api)
+  - [ChatGPT Subscription (OAuth)](#chatgpt-subscription-oauth)
   - [Proxy Mode](#proxy-mode)
 - [API Reference](#api-reference)
 - [Requirements](#requirements)
@@ -310,11 +312,20 @@ for try await delta in client.stream(messages: messages, tools: []) {
 For models with extended thinking:
 
 ```swift
+// Via OpenRouter / Chat Completions
 let client = OpenAIClient(
     apiKey: apiKey,
     model: "deepseek/deepseek-r1",
     baseURL: OpenAIClient.openRouterBaseURL,
     reasoningConfig: .high  // .xhigh, .high, .medium, .low, .minimal, .none
+)
+
+// Via OpenAI Responses API (native reasoning with GPT-5.2)
+let client = ResponsesAPIClient(
+    apiKey: apiKey,
+    model: "gpt-5.2",
+    baseURL: ResponsesAPIClient.openAIBaseURL,
+    reasoningConfig: .medium
 )
 ```
 
@@ -346,26 +357,33 @@ let client = OpenAIClient(
 <details>
 <summary><b>Interleaved Thinking</b></summary>
 
-Models like Claude and DeepSeek return opaque `reasoning_details` blocks alongside their responses. These must be echoed back verbatim on subsequent requests to maintain thinking continuity across tool-calling turns.
+Reasoning models return opaque reasoning blocks alongside their responses. When the model makes tool calls, these reasoning blocks must be echoed back verbatim on the next request to maintain thinking continuity.
 
-AgentRunKit handles this automatically — `reasoning_details` are extracted from each response, stored on `AssistantMessage`, and included in the next request. No configuration needed.
+AgentRunKit handles this automatically for both clients:
+
+- **`OpenAIClient`** — `reasoning_details` are extracted from Chat Completions responses, stored on `AssistantMessage`, and included in subsequent requests.
+- **`ResponsesAPIClient`** — Reasoning output items (including `encrypted_content` when `store: false`) are captured as raw JSON, accumulated across streaming fragments, and echoed back as input items on the next turn.
+
+No configuration needed — the agent loop preserves reasoning across all tool-calling iterations.
 
 ```swift
-// reasoning_details are preserved across tool-calling turns automatically
-let result = try await agent.run(
+// Reasoning is preserved across tool-calling turns automatically
+for try await event in agent.stream(
     userMessage: "Analyze this data and search for related papers",
     context: EmptyContext()
-)
-
-// Access reasoning details if needed
-for message in result.history {
-    if case .assistant(let msg) = message, let details = msg.reasoningDetails {
-        print("Reasoning blocks: \(details.count)")
+) {
+    switch event {
+    case .reasoningDelta(let text):
+        print("[Thinking] \(text)", terminator: "")
+    case .delta(let text):
+        print(text, terminator: "")
+    case .finished(let usage, _, _, _):
+        print("\nReasoning tokens: \(usage.reasoning)")
+    default:
+        break
     }
 }
 ```
-
-Keys inside `reasoning_details` are preserved verbatim (not mangled by `camelCase` conversion), ensuring the opaque contract with the provider is maintained.
 
 </details>
 
@@ -626,6 +644,8 @@ let (response, history) = try await chat.send("Hello", requestContext: requestCo
 
 ## LLM Providers
 
+### Chat Completions (`OpenAIClient`)
+
 Works with any OpenAI-compatible API:
 
 | Provider | Base URL |
@@ -651,6 +671,74 @@ let client = OpenAIClient(
     baseURL: OpenAIClient.ollamaBaseURL
 )
 ```
+
+### OpenAI Responses API
+
+`ResponsesAPIClient` speaks OpenAI's [Responses API](https://platform.openai.com/docs/api-reference/responses) — a newer endpoint with native support for reasoning models, server-side conversation state, and structured tool calling.
+
+```swift
+let client = ResponsesAPIClient(
+    apiKey: ProcessInfo.processInfo.environment["OPENAI_API_KEY"]!,
+    model: "gpt-5.2",
+    baseURL: ResponsesAPIClient.openAIBaseURL,
+    reasoningConfig: .medium
+)
+
+let agent = Agent<EmptyContext>(client: client, tools: [myTool])
+let result = try await agent.run(userMessage: "Solve this problem", context: EmptyContext())
+```
+
+Both `Agent` and `Chat` work identically with either client — just swap the client at construction time.
+
+<details>
+<summary><b>Server-Side Conversation State</b></summary>
+
+When `store: true` (the default), `ResponsesAPIClient` automatically tracks `previous_response_id` across requests. On subsequent turns, only new messages are sent — the server reconstructs the full conversation from its stored state. This reduces request size and latency on long conversations.
+
+This is transparent to the agent loop — the same `[ChatMessage]` history API works regardless.
+
+</details>
+
+### ChatGPT Subscription (OAuth)
+
+Use your ChatGPT Plus or Pro subscription instead of API credits. `ResponsesAPIClient` works with the ChatGPT backend endpoint using OAuth tokens from [Codex CLI](https://github.com/openai/codex):
+
+```swift
+// 1. Read stored OAuth tokens (after authenticating via Codex CLI)
+let authData = try Data(contentsOf: homeDir.appendingPathComponent(".codex/auth.json"))
+let auth = try JSONDecoder().decode(CodexAuth.self, from: authData)
+
+// 2. Create client pointing at ChatGPT backend
+let client = ResponsesAPIClient(
+    model: "gpt-5.2",
+    maxOutputTokens: nil,          // not supported on this endpoint
+    baseURL: ResponsesAPIClient.chatGPTBaseURL,
+    additionalHeaders: {
+        [
+            "Authorization": "Bearer \(auth.tokens.accessToken)",
+            "ChatGPT-Account-ID": auth.tokens.accountId,
+        ]
+    },
+    store: false                   // required for ChatGPT backend
+)
+
+// 3. Use it like any other client — streaming only
+let agent = Agent<EmptyContext>(client: client, tools: [myTool])
+for try await event in agent.stream(userMessage: "What is 17 + 25?", context: EmptyContext()) {
+    // ...
+}
+```
+
+The ChatGPT backend enforces specific constraints:
+
+| Constraint | Detail |
+|-----------|--------|
+| `store` | Must be `false` |
+| `stream` | Must be `true` — use `Agent.stream()` or `Chat.stream()`, not `.run()` or `.send()` |
+| `max_output_tokens` | Not supported — set `maxOutputTokens: nil` |
+| `instructions` | Required — always provide a system prompt |
+
+Reasoning models (GPT-5.2, GPT-5.2-codex) work fully, including interleaved thinking with opaque reasoning block echo-back across tool-calling turns.
 
 ### Proxy Mode
 
@@ -721,7 +809,8 @@ The `proxy()` factory omits `Authorization: Bearer` and `model` from requests.
 | Type | Description |
 |------|-------------|
 | `LLMClient` | Protocol for LLM implementations |
-| `OpenAIClient` | OpenAI-compatible client |
+| `OpenAIClient` | Chat Completions client (OpenAI, OpenRouter, Groq, etc.) |
+| `ResponsesAPIClient` | OpenAI Responses API client (GPT-5.2, GPT-5.2-codex) |
 | `ResponseFormat` | Structured output configuration |
 | `RetryPolicy` | Exponential backoff settings |
 | `ReasoningConfig` | Reasoning effort for thinking models |

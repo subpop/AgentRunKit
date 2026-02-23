@@ -1,11 +1,6 @@
 import Foundation
 
 extension OpenAIClient {
-    enum RetryResult {
-        case `continue`
-        case stop(any Error)
-    }
-
     func performStreamRequest(
         messages: [ChatMessage],
         tools: [ToolDefinition],
@@ -15,17 +10,16 @@ extension OpenAIClient {
     ) async throws {
         let request = buildRequest(messages: messages, tools: tools, stream: true, extraFields: extraFields)
         let urlRequest = try buildURLRequest(request)
-
-        try await performStreamWithRetry(urlRequest: urlRequest, onResponse: onResponse) { bytes in
-            if let stallTimeout = self.retryPolicy.streamStallTimeout {
-                try await self.processStreamWithStallDetection(
-                    bytes: bytes,
-                    stallTimeout: stallTimeout,
-                    continuation: continuation
-                )
-            } else {
-                try await self.processStreamLines(bytes: bytes, continuation: continuation)
-            }
+        let (bytes, httpResponse) = try await HTTPRetry.performStream(
+            urlRequest: urlRequest, session: session, retryPolicy: retryPolicy
+        )
+        onResponse?(httpResponse)
+        if let stallTimeout = retryPolicy.streamStallTimeout {
+            try await processStreamWithStallDetection(
+                bytes: bytes, stallTimeout: stallTimeout, continuation: continuation
+            )
+        } else {
+            try await processStreamLines(bytes: bytes, continuation: continuation)
         }
     }
 
@@ -92,59 +86,6 @@ extension OpenAIClient {
         }
     }
 
-    func performWithRetry<T>(
-        urlRequest: URLRequest,
-        onResponse: (@Sendable (HTTPURLResponse) -> Void)? = nil,
-        onSuccess: (Data, HTTPURLResponse) throws -> T
-    ) async throws -> T {
-        var lastError: (any Error)?
-        var sleptForRetryAfter = false
-
-        for attempt in 0 ..< retryPolicy.maxAttempts {
-            try Task.checkCancellation()
-            if attempt > 0, !sleptForRetryAfter {
-                try await Task.sleep(for: retryPolicy.delay(forAttempt: attempt - 1))
-            }
-            sleptForRetryAfter = false
-
-            let data: Data
-            let response: URLResponse
-            do {
-                (data, response) = try await session.data(for: urlRequest)
-            } catch {
-                lastError = TransportError.networkError(error)
-                continue
-            }
-
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw AgentError.llmError(.invalidResponse)
-            }
-
-            if (200 ... 299).contains(httpResponse.statusCode) {
-                onResponse?(httpResponse)
-                return try onSuccess(data, httpResponse)
-            }
-
-            let result = try await handleErrorStatus(
-                httpResponse: httpResponse,
-                errorBody: String(data: data, encoding: .utf8) ?? "",
-                attempt: attempt,
-                sleptForRetryAfter: &sleptForRetryAfter
-            )
-
-            switch result {
-            case .continue: continue
-            case let .stop(error): lastError = error
-            }
-
-            if !retryPolicy.isRetryable(statusCode: httpResponse.statusCode) { break }
-        }
-
-        let transportError = lastError as? TransportError
-            ?? .other(lastError.map { String(describing: $0) } ?? "Unknown error")
-        throw AgentError.llmError(transportError)
-    }
-
     func performUploadWithRetry<T>(
         urlRequest: URLRequest,
         bodyFileURL: URL,
@@ -179,10 +120,11 @@ extension OpenAIClient {
                 return try onSuccess(data, httpResponse)
             }
 
-            let result = try await handleErrorStatus(
+            let result = try await HTTPRetry.handleErrorStatus(
                 httpResponse: httpResponse,
                 errorBody: String(data: data, encoding: .utf8) ?? "",
                 attempt: attempt,
+                retryPolicy: retryPolicy,
                 sleptForRetryAfter: &sleptForRetryAfter
             )
 
@@ -197,111 +139,6 @@ extension OpenAIClient {
         let transportError = lastError as? TransportError
             ?? .other(lastError.map { String(describing: $0) } ?? "Unknown error")
         throw AgentError.llmError(transportError)
-    }
-
-    func performStreamWithRetry(
-        urlRequest: URLRequest,
-        onResponse: (@Sendable (HTTPURLResponse) -> Void)? = nil,
-        onSuccess: (URLSession.AsyncBytes) async throws -> Void
-    ) async throws {
-        var lastError: (any Error)?
-        var sleptForRetryAfter = false
-
-        for attempt in 0 ..< retryPolicy.maxAttempts {
-            try Task.checkCancellation()
-            if attempt > 0, !sleptForRetryAfter {
-                try await Task.sleep(for: retryPolicy.delay(forAttempt: attempt - 1))
-            }
-            sleptForRetryAfter = false
-
-            let bytes: URLSession.AsyncBytes
-            let response: URLResponse
-            do {
-                (bytes, response) = try await session.bytes(for: urlRequest)
-            } catch {
-                lastError = TransportError.networkError(error)
-                continue
-            }
-
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw AgentError.llmError(.invalidResponse)
-            }
-
-            if (200 ... 299).contains(httpResponse.statusCode) {
-                onResponse?(httpResponse)
-                try await onSuccess(bytes)
-                return
-            }
-
-            let errorBody = await collectErrorBody(from: bytes)
-            let result = try await handleErrorStatus(
-                httpResponse: httpResponse,
-                errorBody: errorBody,
-                attempt: attempt,
-                sleptForRetryAfter: &sleptForRetryAfter
-            )
-
-            switch result {
-            case .continue: continue
-            case let .stop(error): lastError = error
-            }
-
-            if !retryPolicy.isRetryable(statusCode: httpResponse.statusCode) { break }
-        }
-
-        let transportError = lastError as? TransportError
-            ?? .other(lastError.map { String(describing: $0) } ?? "Unknown error")
-        throw AgentError.llmError(transportError)
-    }
-
-    func handleErrorStatus(
-        httpResponse: HTTPURLResponse,
-        errorBody: String,
-        attempt: Int,
-        sleptForRetryAfter: inout Bool
-    ) async throws -> RetryResult {
-        let statusCode = httpResponse.statusCode
-        guard statusCode == 429 else {
-            return .stop(TransportError.httpError(statusCode: statusCode, body: errorBody))
-        }
-        let canRetry = attempt + 1 < retryPolicy.maxAttempts
-        guard canRetry, let retryAfter = parseRetryAfter(httpResponse) else {
-            return .stop(TransportError.rateLimited(retryAfter: parseRetryAfter(httpResponse)))
-        }
-        try await Task.sleep(for: retryAfter)
-        sleptForRetryAfter = true
-        return .continue
-    }
-
-    func parseRetryAfter(_ response: HTTPURLResponse) -> Duration? {
-        guard let value = response.value(forHTTPHeaderField: "Retry-After") else { return nil }
-        if let seconds = Int(value) {
-            return .seconds(seconds)
-        }
-        if let date = Self.parseHTTPDate(value) {
-            let seconds = max(0, Int(date.timeIntervalSinceNow.rounded(.up)))
-            return .seconds(seconds)
-        }
-        return nil
-    }
-
-    private static let httpDateFormatters: [DateFormatter] = [
-        "EEE, dd MMM yyyy HH:mm:ss zzz",
-        "EEEE, dd-MMM-yy HH:mm:ss zzz",
-        "EEE MMM d HH:mm:ss yyyy"
-    ].map { format in
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(identifier: "GMT")
-        formatter.dateFormat = format
-        return formatter
-    }
-
-    private static func parseHTTPDate(_ string: String) -> Date? {
-        for formatter in httpDateFormatters {
-            if let date = formatter.date(from: string) { return date }
-        }
-        return nil
     }
 
     static func extractSSEPayload(from line: String) -> String? {
@@ -365,35 +202,6 @@ extension OpenAIClient {
             }
         }
         return deltas
-    }
-
-    func collectErrorBody(from bytes: URLSession.AsyncBytes) async -> String {
-        await withTaskGroup(of: String?.self) { group in
-            group.addTask {
-                var body = ""
-                var lineCount = 0
-                do {
-                    for try await line in bytes.lines {
-                        body += line + "\n"
-                        lineCount += 1
-                        if lineCount >= 100 { break }
-                    }
-                } catch {
-                    return body.isEmpty ? "(error reading body: \(error))" : body
-                }
-                return body
-            }
-            group.addTask {
-                try? await Task.sleep(for: .seconds(5))
-                return nil
-            }
-            if let result = await group.next(), let body = result {
-                group.cancelAll()
-                return body
-            }
-            group.cancelAll()
-            return "(error body read timed out)"
-        }
     }
 }
 

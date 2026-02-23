@@ -30,3 +30,8 @@ private struct ResponseJSONSchema: Sendable, Encodable {
     let strict: Bool
     let schema: JSONSchema
 }
+
+extension ResponseFormat {
+    var schemaName: String { jsonSchema.name }
+    var schema: JSONSchema { jsonSchema.schema }
+}

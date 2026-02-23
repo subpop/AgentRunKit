@@ -46,9 +46,11 @@ public struct OpenAIClient: LLMClient, Sendable {
             extraFields: requestContext?.extraFields ?? [:]
         )
         let urlRequest = try buildURLRequest(request)
-        return try await performWithRetry(urlRequest: urlRequest, onResponse: requestContext?.onResponse) { data, _ in
-            try parseResponse(data)
-        }
+        let (data, httpResponse) = try await HTTPRetry.performData(
+            urlRequest: urlRequest, session: session, retryPolicy: retryPolicy
+        )
+        requestContext?.onResponse?(httpResponse)
+        return try parseResponse(data)
     }
 
     public func stream(
@@ -91,9 +93,10 @@ public struct OpenAIClient: LLMClient, Sendable {
             boundary: UUID().uuidString,
             apiKey: apiKey
         )
-        return try await performWithRetry(urlRequest: request) { data, _ in
-            try parseTranscriptionResponse(data)
-        }
+        let (data, _) = try await HTTPRetry.performData(
+            urlRequest: request, session: session, retryPolicy: retryPolicy
+        )
+        return try parseTranscriptionResponse(data)
     }
 
     public func transcribe(
@@ -155,9 +158,8 @@ extension OpenAIClient {
             urlRequest.setValue(value, forHTTPHeaderField: field)
         }
 
-        let encoder = JSONEncoder()
         do {
-            urlRequest.httpBody = try encoder.encode(request)
+            urlRequest.httpBody = try JSONEncoder().encode(request)
         } catch {
             throw AgentError.llmError(.encodingFailed(error))
         }
