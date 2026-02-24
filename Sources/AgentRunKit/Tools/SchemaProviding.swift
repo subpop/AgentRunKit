@@ -16,7 +16,9 @@ public extension SchemaProviding where Self: Decodable {
         do {
             _ = try SchemaDecoder.decode(Self.self)
         } catch {
-            throw AgentError.schemaInferenceFailed(type: String(describing: Self.self), message: String(describing: error))
+            throw AgentError.schemaInferenceFailed(
+                type: String(describing: Self.self), message: String(describing: error)
+            )
         }
     }
 }

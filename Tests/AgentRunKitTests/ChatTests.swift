@@ -496,7 +496,7 @@ struct ChatAudioStreamingTests {
             .audioTranscript("world"),
             .audioData(Data([1, 2, 3])),
             .audioData(Data([4, 5, 6])),
-            .finished(usage: TokenUsage(input: 10, output: 5)),
+            .finished(usage: TokenUsage(input: 10, output: 5))
         ]
         let client = StreamingMockLLMClient(streamSequences: [deltas])
         let chat = Chat<EmptyContext>(client: client)
@@ -510,7 +510,9 @@ struct ChatAudioStreamingTests {
         #expect(events.contains(.audioTranscript("world")))
         #expect(events.contains(.audioData(Data([1, 2, 3]))))
         #expect(events.contains(.audioData(Data([4, 5, 6]))))
-        #expect(events.contains(.audioFinished(id: "audio_1", expiresAt: 1_700_000_000, data: Data([1, 2, 3, 4, 5, 6]))))
+        #expect(events.contains(.audioFinished(
+            id: "audio_1", expiresAt: 1_700_000_000, data: Data([1, 2, 3, 4, 5, 6])
+        )))
     }
 
     @Test
@@ -519,7 +521,7 @@ struct ChatAudioStreamingTests {
             .audioStarted(id: "audio_1", expiresAt: 1_700_000_000),
             .audioTranscript("Spoken response"),
             .audioData(Data([1, 2])),
-            .finished(usage: TokenUsage(input: 10, output: 5)),
+            .finished(usage: TokenUsage(input: 10, output: 5))
         ]
         let client = StreamingMockLLMClient(streamSequences: [deltas])
         let chat = Chat<EmptyContext>(client: client)
@@ -543,7 +545,7 @@ struct ChatAudioStreamingTests {
         let deltas: [StreamDelta] = [
             .content("Text content"),
             .audioTranscript("Spoken content"),
-            .finished(usage: TokenUsage(input: 10, output: 5)),
+            .finished(usage: TokenUsage(input: 10, output: 5))
         ]
         let client = StreamingMockLLMClient(streamSequences: [deltas])
         let chat = Chat<EmptyContext>(client: client)
@@ -566,7 +568,7 @@ struct ChatAudioStreamingTests {
     func noAudioProducesNoAudioEvents() async throws {
         let deltas: [StreamDelta] = [
             .content("Just text"),
-            .finished(usage: TokenUsage(input: 10, output: 5)),
+            .finished(usage: TokenUsage(input: 10, output: 5))
         ]
         let client = StreamingMockLLMClient(streamSequences: [deltas])
         let chat = Chat<EmptyContext>(client: client)

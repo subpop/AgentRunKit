@@ -248,4 +248,52 @@ struct SubAgentToolTests {
         let result = try await tool.execute(arguments: args, context: ctx)
         #expect(result.content == "factory result")
     }
+
+    @Test
+    func errorFinishReasonSetsIsError() async throws {
+        let finishCall = ToolCall(
+            id: "call_1",
+            name: "finish",
+            arguments: #"{"content": "Something went wrong", "reason": "error"}"#
+        )
+        let childClient = MockLLMClient(responses: [
+            AssistantMessage(content: "", toolCalls: [finishCall])
+        ])
+        let childAgent = Agent<SubAgentContext<EmptyContext>>(client: childClient, tools: [])
+        let tool = try SubAgentTool<QueryParams, EmptyContext>(
+            name: "failing_sub",
+            description: "Sub-agent that finishes with error",
+            agent: childAgent,
+            messageBuilder: { $0.query }
+        )
+        let args = try JSONEncoder().encode(QueryParams(query: "test"))
+        let ctx = SubAgentContext(inner: EmptyContext(), maxDepth: 3)
+        let result = try await tool.execute(arguments: args, context: ctx)
+        #expect(result.isError == true)
+        #expect(result.content == "Something went wrong")
+    }
+
+    @Test
+    func customFinishReasonDoesNotSetIsError() async throws {
+        let finishCall = ToolCall(
+            id: "call_1",
+            name: "finish",
+            arguments: #"{"content": "Partial result", "reason": "partial"}"#
+        )
+        let childClient = MockLLMClient(responses: [
+            AssistantMessage(content: "", toolCalls: [finishCall])
+        ])
+        let childAgent = Agent<SubAgentContext<EmptyContext>>(client: childClient, tools: [])
+        let tool = try SubAgentTool<QueryParams, EmptyContext>(
+            name: "partial_sub",
+            description: "Sub-agent that finishes with a custom reason",
+            agent: childAgent,
+            messageBuilder: { $0.query }
+        )
+        let args = try JSONEncoder().encode(QueryParams(query: "test"))
+        let ctx = SubAgentContext(inner: EmptyContext(), maxDepth: 3)
+        let result = try await tool.execute(arguments: args, context: ctx)
+        #expect(result.isError == false)
+        #expect(result.content == "Partial result")
+    }
 }

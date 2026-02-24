@@ -219,14 +219,12 @@ public actor ResponsesAPIClient: LLMClient {
             case let .reasoning(value):
                 reasoningDetails.append(value)
                 if case let .object(dict) = value,
-                   case let .array(summaryItems) = dict["summary"]
-                {
+                   case let .array(summaryItems) = dict["summary"] {
                     for item in summaryItems {
                         if case let .object(summaryDict) = item,
                            case let .string(sType) = summaryDict["type"],
                            sType == "summary_text",
-                           case let .string(text) = summaryDict["text"]
-                        {
+                           case let .string(text) = summaryDict["text"] {
                             reasoningSummary = reasoningSummary
                                 .map { $0 + "\n" + text } ?? text
                         }

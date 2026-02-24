@@ -617,8 +617,10 @@ struct ReasoningDetailsResponseTests {
                     "role": "assistant",
                     "content": "I'll search for that.",
                     "reasoning_details": [
-                        {"type": "reasoning.summary", "summary": "Planning search...", "id": "rs_001", "format": "anthropic-claude-v1", "index": 0},
-                        {"type": "reasoning.encrypted", "encrypted": "base64blob==", "id": "re_002", "format": "anthropic-claude-v1", "index": 1}
+                        {"type": "reasoning.summary", "summary": "Planning search...",
+                         "id": "rs_001", "format": "anthropic-claude-v1", "index": 0},
+                        {"type": "reasoning.encrypted", "encrypted": "base64blob==",
+                         "id": "re_002", "format": "anthropic-claude-v1", "index": 1}
                     ]
                 },
                 "finish_reason": "stop"
@@ -676,7 +678,8 @@ struct ReasoningDetailsResponseTests {
                     "role": "assistant",
                     "content": "Result",
                     "reasoning_details": [
-                        {"type": "reasoning.text", "reasoning_type": "chain_of_thought", "inner_data": {"nested_key": "value"}}
+                        {"type": "reasoning.text", "reasoning_type": "chain_of_thought",
+                         "inner_data": {"nested_key": "value"}}
                     ]
                 },
                 "finish_reason": "stop"
@@ -723,7 +726,10 @@ struct StreamingAudioChunkTests {
 
     @Test
     func audioStartedChunkWithIdAndExpiresAt() throws {
-        let json = #"{"choices":[{"delta":{"audio":{"id":"audio_123","data":"AQAB","expires_at":1729234747}},"finish_reason":null}]}"#
+        let json = """
+        {"choices":[{"delta":{"audio":{"id":"audio_123","data":"AQAB",\
+        "expires_at":1729234747}},"finish_reason":null}]}
+        """
         let client = OpenAIClient(apiKey: "test", model: "test", baseURL: OpenAIClient.openRouterBaseURL)
         let chunk = try client.parseStreamingChunk(Data(json.utf8))
         let deltas = try client.extractDeltas(from: chunk)

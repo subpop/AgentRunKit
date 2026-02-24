@@ -313,6 +313,96 @@ struct AgentStreamingTests {
         }
         #expect(prompt == "You are helpful.")
     }
+
+    @Test
+    func parallelToolsEmitCompletionEventsInCompletionOrder() async throws {
+        let slowTool = try Tool<EchoParams, EchoOutput, EmptyContext>(
+            name: "slow",
+            description: "Slow tool",
+            executor: { params, _ in
+                try await Task.sleep(for: .milliseconds(100))
+                return EchoOutput(echoed: "slow: \(params.message)")
+            }
+        )
+        let fastTool = try Tool<EchoParams, EchoOutput, EmptyContext>(
+            name: "fast",
+            description: "Fast tool",
+            executor: { params, _ in EchoOutput(echoed: "fast: \(params.message)") }
+        )
+
+        let firstDeltas: [StreamDelta] = [
+            .toolCallStart(index: 0, id: "call_slow", name: "slow"),
+            .toolCallDelta(index: 0, arguments: #"{"message": "a"}"#),
+            .toolCallStart(index: 1, id: "call_fast", name: "fast"),
+            .toolCallDelta(index: 1, arguments: #"{"message": "b"}"#),
+            .finished(usage: nil)
+        ]
+        let secondDeltas: [StreamDelta] = [
+            .toolCallStart(index: 0, id: "call_finish", name: "finish"),
+            .toolCallDelta(index: 0, arguments: #"{"content": "done"}"#),
+            .finished(usage: nil)
+        ]
+
+        let client = StreamingMockLLMClient(streamSequences: [firstDeltas, secondDeltas])
+        let agent = Agent<EmptyContext>(client: client, tools: [slowTool, fastTool])
+
+        var completedNames: [String] = []
+        for try await event in agent.stream(userMessage: "Go", context: EmptyContext()) {
+            if case let .toolCallCompleted(_, name, _) = event {
+                completedNames.append(name)
+            }
+        }
+
+        #expect(completedNames.count == 2)
+        #expect(completedNames[0] == "fast")
+        #expect(completedNames[1] == "slow")
+    }
+
+    @Test
+    func parallelToolsAppendMessagesInDispatchOrder() async throws {
+        let slowTool = try Tool<EchoParams, EchoOutput, EmptyContext>(
+            name: "slow",
+            description: "Slow tool",
+            executor: { _, _ in
+                try await Task.sleep(for: .milliseconds(100))
+                return EchoOutput(echoed: "slow-result")
+            }
+        )
+        let fastTool = try Tool<EchoParams, EchoOutput, EmptyContext>(
+            name: "fast",
+            description: "Fast tool",
+            executor: { _, _ in EchoOutput(echoed: "fast-result") }
+        )
+
+        let firstDeltas: [StreamDelta] = [
+            .toolCallStart(index: 0, id: "id_slow", name: "slow"),
+            .toolCallDelta(index: 0, arguments: #"{"message": "a"}"#),
+            .toolCallStart(index: 1, id: "id_fast", name: "fast"),
+            .toolCallDelta(index: 1, arguments: #"{"message": "b"}"#),
+            .finished(usage: nil)
+        ]
+        let secondDeltas: [StreamDelta] = [
+            .toolCallStart(index: 0, id: "call_finish", name: "finish"),
+            .toolCallDelta(index: 0, arguments: #"{"content": "done"}"#),
+            .finished(usage: nil)
+        ]
+
+        let client = StreamingMockLLMClient(streamSequences: [firstDeltas, secondDeltas])
+        let agent = Agent<EmptyContext>(client: client, tools: [slowTool, fastTool])
+
+        var history: [ChatMessage] = []
+        for try await event in agent.stream(userMessage: "Go", context: EmptyContext()) {
+            if case let .finished(_, _, _, hist) = event { history = hist }
+        }
+
+        let toolMessages = history.compactMap { msg -> (name: String, content: String)? in
+            guard case let .tool(_, name, content) = msg else { return nil }
+            return (name, content)
+        }
+        #expect(toolMessages.count == 2)
+        #expect(toolMessages[0].name == "slow")
+        #expect(toolMessages[1].name == "fast")
+    }
 }
 
 @Suite
@@ -444,30 +534,30 @@ struct StreamingReasoningTests {
                 "text": .string(""),
                 "signature": .string(""),
                 "format": .string("anthropic-claude-v1"),
-                "index": .int(0),
+                "index": .int(0)
             ])]),
             .reasoningDetails([.object([
                 "type": .string("reasoning.text"),
                 "text": .string("Hello"),
                 "format": .string("anthropic-claude-v1"),
-                "index": .int(0),
+                "index": .int(0)
             ])]),
             .reasoningDetails([.object([
                 "type": .string("reasoning.text"),
                 "text": .string(" world"),
                 "format": .string("anthropic-claude-v1"),
-                "index": .int(0),
+                "index": .int(0)
             ])]),
             .reasoningDetails([.object([
                 "type": .string("reasoning.text"),
                 "signature": .string("real_sig"),
                 "format": .string("anthropic-claude-v1"),
-                "index": .int(0),
+                "index": .int(0)
             ])]),
             .content("Answer"),
             .toolCallStart(index: 0, id: "call_1", name: "finish"),
             .toolCallDelta(index: 0, arguments: #"{"content": "Done"}"#),
-            .finished(usage: nil),
+            .finished(usage: nil)
         ]
         let client = StreamingMockLLMClient(streamSequences: [deltas])
         let agent = Agent<EmptyContext>(client: client, tools: [])
@@ -658,7 +748,7 @@ struct AgentAudioStreamingTests {
             .audioData(Data([1, 2, 3])),
             .toolCallStart(index: 0, id: "call_1", name: "finish"),
             .toolCallDelta(index: 0, arguments: #"{"content": "Done"}"#),
-            .finished(usage: TokenUsage(input: 10, output: 5)),
+            .finished(usage: TokenUsage(input: 10, output: 5))
         ]
         let client = StreamingMockLLMClient(streamSequences: [deltas])
         let agent = Agent<EmptyContext>(client: client, tools: [])
@@ -685,7 +775,7 @@ struct AgentAudioStreamingTests {
             .audioData(Data([1, 2, 3])),
             .toolCallStart(index: 0, id: "call_1", name: "finish"),
             .toolCallDelta(index: 0, arguments: #"{"content": "Done"}"#),
-            .finished(usage: TokenUsage(input: 10, output: 5)),
+            .finished(usage: TokenUsage(input: 10, output: 5))
         ]
         let client = StreamingMockLLMClient(streamSequences: [deltas])
         let agent = Agent<EmptyContext>(client: client, tools: [])

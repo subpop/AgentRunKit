@@ -198,12 +198,10 @@ extension ResponsesAPIClient {
         continuation: AsyncThrowingStream<StreamDelta, Error>.Continuation
     ) async throws where S.Element == UInt8 {
         for try await line in UnboundedLines(source: bytes) {
-            if try handleSSELine(
+            guard try !handleSSELine(
                 line, messagesCount: messagesCount,
                 continuation: continuation
-            ) {
-                return
-            }
+            ) else { return }
         }
         continuation.finish()
     }

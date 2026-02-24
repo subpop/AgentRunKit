@@ -34,7 +34,7 @@ private struct AddParams: Codable, SchemaProviding, Sendable {
         .object(
             properties: [
                 "lhs": .integer(description: "First number"),
-                "rhs": .integer(description: "Second number"),
+                "rhs": .integer(description: "Second number")
             ],
             required: ["lhs", "rhs"]
         )
@@ -56,7 +56,7 @@ struct ChatGPTIntegrationTests {
             additionalHeaders: {
                 [
                     "Authorization": "Bearer \(auth.tokens.accessToken)",
-                    "ChatGPT-Account-ID": auth.tokens.accountId,
+                    "ChatGPT-Account-ID": auth.tokens.accountId
                 ]
             },
             store: false

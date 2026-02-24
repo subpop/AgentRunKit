@@ -41,7 +41,7 @@ public struct SubAgentTool<P: Codable & SchemaProviding & Sendable, InnerContext
             context: context.descending(),
             tokenBudget: tokenBudget
         )
-        return ToolResult(content: result.content)
+        return ToolResult(content: result.content, isError: result.finishReason == .error)
     }
 }
 

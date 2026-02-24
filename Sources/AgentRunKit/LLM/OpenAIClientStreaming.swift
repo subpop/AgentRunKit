@@ -49,7 +49,7 @@ extension OpenAIClient {
         continuation: AsyncThrowingStream<StreamDelta, Error>.Continuation
     ) async throws where S.Element == UInt8 {
         for try await line in UnboundedLines(source: bytes) {
-            if try handleSSELine(line, continuation: continuation) { return }
+            guard try !handleSSELine(line, continuation: continuation) else { return }
         }
         continuation.finish()
     }

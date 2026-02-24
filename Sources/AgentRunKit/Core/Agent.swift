@@ -189,22 +189,27 @@ public final class Agent<C: ToolContext>: Sendable {
 
             let executableTools = policy.executableToolCalls(from: iteration.toolCalls)
             if !executableTools.isEmpty {
-                let results = try await executeToolsInParallel(executableTools, context: context)
+                let results = try await executeToolsStreaming(
+                    executableTools, context: context, continuation: continuation
+                )
                 for (call, result) in results {
-                    continuation.yield(.toolCallCompleted(id: call.id, name: call.name, result: result))
                     messages.append(.tool(id: call.id, name: call.name, content: result.content))
                 }
             }
 
             if policy.shouldTerminateAfterIteration(toolCalls: iteration.toolCalls) {
-                let finishEvent = try parseFinishEvent(from: iteration.toolCalls, tokenUsage: totalUsage, history: messages)
+                let finishEvent = try parseFinishEvent(
+                    from: iteration.toolCalls, tokenUsage: totalUsage, history: messages
+                )
                 continuation.yield(finishEvent)
                 continuation.finish()
                 return
             }
 
             if let tokenBudget, totalUsage.total > tokenBudget {
-                continuation.finish(throwing: AgentError.tokenBudgetExceeded(budget: tokenBudget, used: totalUsage.total))
+                continuation.finish(
+                    throwing: AgentError.tokenBudgetExceeded(budget: tokenBudget, used: totalUsage.total)
+                )
                 return
             }
         }
@@ -221,8 +226,10 @@ public final class Agent<C: ToolContext>: Sendable {
         messages.append(userMessage)
         return messages
     }
+}
 
-    private func executeWithTimeout(_ call: ToolCall, context: C) async throws -> ToolResult {
+private extension Agent {
+    func executeWithTimeout(_ call: ToolCall, context: C) async throws -> ToolResult {
         do {
             return try await withThrowingTaskGroup(of: ToolResult.self) { group in
                 group.addTask {
@@ -248,7 +255,29 @@ public final class Agent<C: ToolContext>: Sendable {
         }
     }
 
-    private func executeToolsInParallel(
+    func executeToolsStreaming(
+        _ calls: [ToolCall],
+        context: C,
+        continuation: AsyncThrowingStream<StreamEvent, Error>.Continuation
+    ) async throws -> [(call: ToolCall, result: ToolResult)] {
+        try await withThrowingTaskGroup(of: (Int, ToolCall, ToolResult).self) { group in
+            for (index, call) in calls.enumerated() {
+                group.addTask {
+                    let result = try await self.executeWithTimeout(call, context: context)
+                    return (index, call, result)
+                }
+            }
+
+            var results = [(Int, ToolCall, ToolResult)]()
+            for try await (index, call, result) in group {
+                continuation.yield(.toolCallCompleted(id: call.id, name: call.name, result: result))
+                results.append((index, call, result))
+            }
+            return results.sorted { $0.0 < $1.0 }.map { ($0.1, $0.2) }
+        }
+    }
+
+    func executeToolsInParallel(
         _ calls: [ToolCall],
         context: C
     ) async throws -> [(call: ToolCall, result: ToolResult)] {
@@ -267,9 +296,7 @@ public final class Agent<C: ToolContext>: Sendable {
             return results.sorted { $0.0 < $1.0 }.map { ($0.1, $0.2) }
         }
     }
-}
 
-private extension Agent {
     func executeTool(_ call: ToolCall, context: C) async throws -> ToolResult {
         guard let tool = tools.first(where: { $0.name == call.name }) else {
             throw AgentError.toolNotFound(name: call.name)
@@ -277,7 +304,9 @@ private extension Agent {
         return try await tool.execute(arguments: call.argumentsData, context: context)
     }
 
-    func parseFinishEvent(from toolCalls: [ToolCall], tokenUsage: TokenUsage, history: [ChatMessage]) throws -> StreamEvent {
+    func parseFinishEvent(
+        from toolCalls: [ToolCall], tokenUsage: TokenUsage, history: [ChatMessage]
+    ) throws -> StreamEvent {
         guard let finishCall = toolCalls.first(where: { $0.name == "finish" }) else {
             return .finished(tokenUsage: tokenUsage, content: nil, reason: nil, history: history)
         }

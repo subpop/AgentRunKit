@@ -18,7 +18,7 @@ import Testing
             "text": .string(""),
             "signature": .string(""),
             "format": .string("anthropic-claude-v1"),
-            "index": .int(0),
+            "index": .int(0)
         ])
         acc.append([opening])
 
@@ -26,7 +26,7 @@ import Testing
             "type": .string("reasoning.text"),
             "text": .string("Hello"),
             "format": .string("anthropic-claude-v1"),
-            "index": .int(0),
+            "index": .int(0)
         ])
         acc.append([frag1])
 
@@ -34,7 +34,7 @@ import Testing
             "type": .string("reasoning.text"),
             "text": .string(" world"),
             "format": .string("anthropic-claude-v1"),
-            "index": .int(0),
+            "index": .int(0)
         ])
         acc.append([frag2])
 
@@ -42,7 +42,7 @@ import Testing
             "type": .string("reasoning.text"),
             "signature": .string("EvEB_real_signature"),
             "format": .string("anthropic-claude-v1"),
-            "index": .int(0),
+            "index": .int(0)
         ])
         acc.append([closing])
 
@@ -68,13 +68,13 @@ import Testing
             "type": .string("reasoning.text"),
             "text": .string("Think"),
             "format": .string("unknown"),
-            "index": .int(0),
+            "index": .int(0)
         ])
         let frag2: JSONValue = .object([
             "type": .string("reasoning.text"),
             "text": .string("ing..."),
             "format": .string("unknown"),
-            "index": .int(0),
+            "index": .int(0)
         ])
         acc.append([frag1])
         acc.append([frag2])
@@ -98,7 +98,7 @@ import Testing
             "type": .string("reasoning.text"),
             "text": .string("Analysis"),
             "format": .string("google-gemini-v1"),
-            "index": .int(0),
+            "index": .int(0)
         ])
         acc.append([textFrag])
 
@@ -106,7 +106,7 @@ import Testing
             "type": .string("reasoning.encrypted"),
             "data": .string("encrypted_blob"),
             "format": .string("google-gemini-v1"),
-            "index": .int(0),
+            "index": .int(0)
         ])
         acc.append([encrypted])
 
@@ -137,16 +137,16 @@ import Testing
                 "type": .string("reasoning.text"),
                 "text": .string("Block zero"),
                 "format": .string("unknown"),
-                "index": .int(0),
-            ]),
+                "index": .int(0)
+            ])
         ])
         acc.append([
             .object([
                 "type": .string("reasoning.text"),
                 "text": .string("Block one"),
                 "format": .string("unknown"),
-                "index": .int(1),
-            ]),
+                "index": .int(1)
+            ])
         ])
 
         let result = acc.consolidated()
@@ -185,24 +185,24 @@ import Testing
                 "type": .string("reasoning.text"),
                 "text": .string(""),
                 "format": .string("anthropic-claude-v1"),
-                "index": .int(0),
-            ]),
+                "index": .int(0)
+            ])
         ])
         acc.append([
             .object([
                 "type": .string("reasoning.text"),
                 "text": .string("Real content"),
                 "format": .string("anthropic-claude-v1"),
-                "index": .int(0),
-            ]),
+                "index": .int(0)
+            ])
         ])
         acc.append([
             .object([
                 "type": .string("reasoning.text"),
                 "text": .string(""),
                 "format": .string("anthropic-claude-v1"),
-                "index": .int(0),
-            ]),
+                "index": .int(0)
+            ])
         ])
 
         let result = acc.consolidated()
