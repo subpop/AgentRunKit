@@ -300,6 +300,8 @@ for try await delta in client.stream(messages: messages, tools: []) {
 | `.reasoningDelta(String)` | `.reasoning(String)` |
 | `.toolCallStarted(name:id:)` | `.toolCallStart(index:id:name:)` |
 | `.toolCallCompleted(id:name:result:)` | `.toolCallDelta(index:arguments:)` |
+
+> **Parallel tool execution:** When the LLM calls multiple tools in one turn, they run concurrently. `toolCallCompleted` events fire as each tool finishes — the fastest tool fires first, regardless of dispatch order. Tool results are appended to the LLM context in original dispatch order so the model sees a deterministic conversation.
 | `.audioData(Data)` | `.audioData(Data)` |
 | `.audioTranscript(String)` | `.audioTranscript(String)` |
 | `.audioFinished(id:expiresAt:data:)` | `.audioStarted(id:expiresAt:)` |
@@ -523,6 +525,8 @@ let result = try await orchestrator.run(userMessage: "Write a report on Swift co
 ```
 
 `SubAgentContext` wraps your existing context with depth tracking. Each sub-agent call increments depth automatically — if `currentDepth` reaches `maxDepth`, the call throws `AgentError.maxDepthExceeded`. Token budgets are enforced per sub-agent run, preventing any single child from consuming unbounded tokens.
+
+**Error propagation:** When a child agent calls `finish` with `reason: "error"`, the parent receives a `ToolResult` with `isError == true`. The orchestrator LLM sees this in its context and can decide whether to retry, fall back, or surface the failure. Custom finish reasons (e.g. `"partial"`) pass through as non-error results.
 
 <details>
 <summary><b>Factory Function</b></summary>
@@ -786,7 +790,7 @@ The `proxy()` factory omits `Authorization: Bearer` and `model` from requests.
 | `AnyTool` | Type-erased tool protocol |
 | `ToolContext` | Protocol for dependency injection |
 | `EmptyContext` | Null context for stateless tools |
-| `ToolResult` | Tool execution result |
+| `ToolResult` | Tool execution result (`content: String`, `isError: Bool`) |
 | `SubAgentTool<P, C>` | Tool that delegates to a child agent |
 | `SubAgentContext<C>` | Context wrapper with depth tracking |
 
