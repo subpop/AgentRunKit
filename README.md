@@ -254,6 +254,12 @@ for try await event in agent.stream(userMessage: "Write a poem", context: EmptyC
         print("\n[Executing \(name)...]")
     case .toolCallCompleted(_, let name, _):
         print("[Completed \(name)]")
+    case .subAgentStarted(_, let name):
+        print("\n[Sub-agent \(name) starting]")
+    case .subAgentEvent(_, _, _):
+        break  // child events — inspect recursively if needed
+    case .subAgentCompleted(_, let name, let result):
+        print("[Sub-agent \(name): \(result.isError ? "error" : "ok")]")
     case .audioData(let data):
         audioPlayer.enqueue(data)  // PCM16 chunk for real-time playback
     case .audioTranscript(let text):
@@ -300,12 +306,15 @@ for try await delta in client.stream(messages: messages, tools: []) {
 | `.reasoningDelta(String)` | `.reasoning(String)` |
 | `.toolCallStarted(name:id:)` | `.toolCallStart(index:id:name:)` |
 | `.toolCallCompleted(id:name:result:)` | `.toolCallDelta(index:arguments:)` |
-
-> **Parallel tool execution:** When the LLM calls multiple tools in one turn, they run concurrently. `toolCallCompleted` events fire as each tool finishes — the fastest tool fires first, regardless of dispatch order. Tool results are appended to the LLM context in original dispatch order so the model sees a deterministic conversation.
+| `.subAgentStarted(toolCallId:toolName:)` | — |
+| `.subAgentEvent(toolCallId:toolName:event:)` | — |
+| `.subAgentCompleted(toolCallId:toolName:result:)` | — |
 | `.audioData(Data)` | `.audioData(Data)` |
 | `.audioTranscript(String)` | `.audioTranscript(String)` |
 | `.audioFinished(id:expiresAt:data:)` | `.audioStarted(id:expiresAt:)` |
 | `.finished(tokenUsage:content:reason:history:)` | `.finished(usage:)` |
+
+> **Parallel tool execution:** When the LLM calls multiple tools in one turn, they run concurrently. `toolCallCompleted` events fire as each tool finishes — the fastest tool fires first, regardless of dispatch order. Tool results are appended to the LLM context in original dispatch order so the model sees a deterministic conversation.
 
 </details>
 
@@ -512,6 +521,8 @@ let researchTool = try SubAgentTool<ResearchParams, AppContext>(
     description: "Research a topic using web search",
     agent: researchAgent,
     tokenBudget: 5000,
+    toolTimeout: nil,                          // nil = no deadline (overrides AgentConfiguration.toolTimeout)
+    systemPromptBuilder: { "Research: \($0.query). Be concise." },
     messageBuilder: { $0.query }
 )
 
@@ -526,7 +537,13 @@ let result = try await orchestrator.run(userMessage: "Write a report on Swift co
 
 `SubAgentContext` wraps your existing context with depth tracking. Each sub-agent call increments depth automatically — if `currentDepth` reaches `maxDepth`, the call throws `AgentError.maxDepthExceeded`. Token budgets are enforced per sub-agent run, preventing any single child from consuming unbounded tokens.
 
+**Timeout:** `toolTimeout: nil` (the default) means the sub-agent runs with no deadline, regardless of the parent's `AgentConfiguration.toolTimeout`. Pass a `Duration` to set a specific timeout for that tool.
+
+**System prompt:** `systemPromptBuilder` is called with the decoded params on each invocation and its return value is used as the child agent's system prompt, overriding whatever the child's `AgentConfiguration` specifies.
+
 **Error propagation:** When a child agent calls `finish` with `reason: "error"`, the parent receives a `ToolResult` with `isError == true`. The orchestrator LLM sees this in its context and can decide whether to retry, fall back, or surface the failure. Custom finish reasons (e.g. `"partial"`) pass through as non-error results.
+
+**Streaming visibility:** When using `agent.stream()`, sub-agent execution is fully observable. The parent stream emits `.subAgentStarted` when a child begins, `.subAgentEvent` for every event the child produces (including nested sub-agents, recursively), and `.subAgentCompleted` when it finishes.
 
 <details>
 <summary><b>Factory Function</b></summary>

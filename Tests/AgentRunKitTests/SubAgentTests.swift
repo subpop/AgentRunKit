@@ -16,6 +16,10 @@ private struct NoopParams: Codable, SchemaProviding, Sendable {
 
 private struct NoopOutput: Codable, Sendable {}
 
+private struct TaggedContext: ToolContext, Sendable {
+    let tag: String
+}
+
 @Suite
 struct SubAgentContextTests {
     @Test
@@ -28,8 +32,9 @@ struct SubAgentContextTests {
 
     @Test
     func descendingPreservesInner() {
-        let ctx = SubAgentContext(inner: EmptyContext(), maxDepth: 5, currentDepth: 2)
+        let ctx = SubAgentContext(inner: TaggedContext(tag: "keep-me"), maxDepth: 5, currentDepth: 2)
         let descended = ctx.descending()
+        #expect(descended.inner.tag == "keep-me")
         #expect(descended.currentDepth == 3)
         #expect(descended.maxDepth == 5)
     }
@@ -295,5 +300,45 @@ struct SubAgentToolTests {
         let result = try await tool.execute(arguments: args, context: ctx)
         #expect(result.isError == false)
         #expect(result.content == "Partial result")
+    }
+
+    @Test
+    func nilToolTimeoutBypassesAgentTimeoutInNonStreamingPath() async throws {
+        let delayTool = try Tool<NoopParams, NoopOutput, SubAgentContext<EmptyContext>>(
+            name: "delay",
+            description: "Delays",
+            executor: { _, _ in
+                try await Task.sleep(for: .milliseconds(100))
+                return NoopOutput()
+            }
+        )
+        let childClient = MockLLMClient(responses: [
+            AssistantMessage(content: "", toolCalls: [ToolCall(id: "c0", name: "delay", arguments: "{}")]),
+            AssistantMessage(content: "", toolCalls: [ToolCall(id: "c1", name: "finish", arguments: #"{"content": "slow done"}"#)]),
+        ])
+        let childAgent = Agent<SubAgentContext<EmptyContext>>(client: childClient, tools: [delayTool])
+
+        let tool = try SubAgentTool<QueryParams, EmptyContext>(
+            name: "slow_sub",
+            description: "Slow sub-agent",
+            agent: childAgent,
+            toolTimeout: nil,
+            messageBuilder: { $0.query }
+        )
+
+        let subCall = ToolCall(id: "cs", name: "slow_sub", arguments: #"{"query": "go"}"#)
+        let parentFinish = ToolCall(id: "pf", name: "finish", arguments: #"{"content": "parent done"}"#)
+        let parentClient = MockLLMClient(responses: [
+            AssistantMessage(content: "", toolCalls: [subCall]),
+            AssistantMessage(content: "", toolCalls: [parentFinish]),
+        ])
+        let config = AgentConfiguration(toolTimeout: .milliseconds(1))
+        let parentAgent = Agent<SubAgentContext<EmptyContext>>(
+            client: parentClient, tools: [tool], configuration: config
+        )
+
+        let ctx = SubAgentContext(inner: EmptyContext(), maxDepth: 3)
+        let result = try await parentAgent.run(userMessage: "Go", context: ctx)
+        #expect(result.content == "parent done")
     }
 }

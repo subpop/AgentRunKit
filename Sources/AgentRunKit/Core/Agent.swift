@@ -47,11 +47,8 @@ public final class Agent<C: ToolContext>: Sendable {
         requestContext: RequestContext? = nil
     ) async throws -> AgentResult {
         try await run(
-            userMessage: .user(userMessage),
-            history: history,
-            context: context,
-            tokenBudget: tokenBudget,
-            requestContext: requestContext
+            userMessage: .user(userMessage), history: history, context: context,
+            tokenBudget: tokenBudget, requestContext: requestContext, systemPromptOverride: nil
         )
     }
 
@@ -62,8 +59,36 @@ public final class Agent<C: ToolContext>: Sendable {
         tokenBudget: Int? = nil,
         requestContext: RequestContext? = nil
     ) async throws -> AgentResult {
+        try await run(
+            userMessage: userMessage, history: history, context: context,
+            tokenBudget: tokenBudget, requestContext: requestContext, systemPromptOverride: nil
+        )
+    }
+
+    func run(
+        userMessage: String,
+        context: C,
+        tokenBudget: Int? = nil,
+        systemPromptOverride: String?
+    ) async throws -> AgentResult {
+        try await run(
+            userMessage: .user(userMessage), history: [], context: context,
+            tokenBudget: tokenBudget, requestContext: nil, systemPromptOverride: systemPromptOverride
+        )
+    }
+
+    private func run(
+        userMessage: ChatMessage,
+        history: [ChatMessage],
+        context: C,
+        tokenBudget: Int?,
+        requestContext: RequestContext?,
+        systemPromptOverride: String?
+    ) async throws -> AgentResult {
         if let tokenBudget { precondition(tokenBudget >= 1, "tokenBudget must be at least 1") }
-        var messages = buildInitialMessages(userMessage: userMessage, history: history)
+        var messages = buildInitialMessages(
+            userMessage: userMessage, history: history, systemPromptOverride: systemPromptOverride
+        )
 
         var totalUsage = TokenUsage()
 
@@ -132,16 +157,43 @@ public final class Agent<C: ToolContext>: Sendable {
         tokenBudget: Int? = nil,
         requestContext: RequestContext? = nil
     ) -> AsyncThrowingStream<StreamEvent, Error> {
+        stream(
+            userMessage: userMessage, history: history, context: context,
+            tokenBudget: tokenBudget, requestContext: requestContext, systemPromptOverride: nil
+        )
+    }
+
+    func stream(
+        userMessage: String,
+        context: C,
+        tokenBudget: Int? = nil,
+        systemPromptOverride: String?
+    ) -> AsyncThrowingStream<StreamEvent, Error> {
+        stream(
+            userMessage: .user(userMessage), history: [], context: context,
+            tokenBudget: tokenBudget, requestContext: nil, systemPromptOverride: systemPromptOverride
+        )
+    }
+
+    private func stream(
+        userMessage: ChatMessage,
+        history: [ChatMessage],
+        context: C,
+        tokenBudget: Int?,
+        requestContext: RequestContext?,
+        systemPromptOverride: String?
+    ) -> AsyncThrowingStream<StreamEvent, Error> {
         if let tokenBudget { precondition(tokenBudget >= 1, "tokenBudget must be at least 1") }
         return AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    try await performStream(
+                    try await self.performStream(
                         userMessage: userMessage,
                         history: history,
                         context: context,
                         tokenBudget: tokenBudget,
                         requestContext: requestContext,
+                        systemPromptOverride: systemPromptOverride,
                         continuation: continuation
                     )
                 } catch {
@@ -160,9 +212,12 @@ public final class Agent<C: ToolContext>: Sendable {
         context: C,
         tokenBudget: Int?,
         requestContext: RequestContext?,
+        systemPromptOverride: String?,
         continuation: AsyncThrowingStream<StreamEvent, Error>.Continuation
     ) async throws {
-        var messages = buildInitialMessages(userMessage: userMessage, history: history)
+        var messages = buildInitialMessages(
+            userMessage: userMessage, history: history, systemPromptOverride: systemPromptOverride
+        )
         var totalUsage = TokenUsage()
         let policy = StreamPolicy.agent
         let processor = StreamProcessor(client: client, toolDefinitions: toolDefinitions, policy: policy)
@@ -217,9 +272,13 @@ public final class Agent<C: ToolContext>: Sendable {
         continuation.finish(throwing: AgentError.maxIterationsReached(iterations: configuration.maxIterations))
     }
 
-    private func buildInitialMessages(userMessage: ChatMessage, history: [ChatMessage]) -> [ChatMessage] {
+    private func buildInitialMessages(
+        userMessage: ChatMessage,
+        history: [ChatMessage],
+        systemPromptOverride: String? = nil
+    ) -> [ChatMessage] {
         var messages: [ChatMessage] = []
-        if let systemPrompt = configuration.systemPrompt {
+        if let systemPrompt = systemPromptOverride ?? configuration.systemPrompt {
             messages.append(.system(systemPrompt))
         }
         messages.append(contentsOf: history)
@@ -229,22 +288,40 @@ public final class Agent<C: ToolContext>: Sendable {
 }
 
 private extension Agent {
+    func resolveTimeout(for call: ToolCall) -> Duration? {
+        guard let tool = tools.first(where: { $0.name == call.name }) else {
+            return configuration.toolTimeout
+        }
+        if let overriding = tool as? any TimeoutOverriding {
+            return overriding.toolTimeout
+        }
+        return configuration.toolTimeout
+    }
+
+    func withTimeout<T: Sendable>(
+        _ timeout: Duration?,
+        toolName: String,
+        operation: @Sendable @escaping () async throws -> T
+    ) async throws -> T {
+        guard let timeout else { return try await operation() }
+        return try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask { try await operation() }
+            group.addTask {
+                try await Task.sleep(for: timeout)
+                throw AgentError.toolTimeout(tool: toolName)
+            }
+            guard let result = try await group.next() else {
+                throw AgentError.toolTimeout(tool: toolName)
+            }
+            group.cancelAll()
+            return result
+        }
+    }
+
     func executeWithTimeout(_ call: ToolCall, context: C) async throws -> ToolResult {
         do {
-            return try await withThrowingTaskGroup(of: ToolResult.self) { group in
-                group.addTask {
-                    try await self.executeTool(call, context: context)
-                }
-                group.addTask {
-                    try await Task.sleep(for: self.configuration.toolTimeout)
-                    throw AgentError.toolTimeout(tool: call.name)
-                }
-
-                guard let result = try await group.next() else {
-                    throw AgentError.toolTimeout(tool: call.name)
-                }
-                group.cancelAll()
-                return result
+            return try await withTimeout(resolveTimeout(for: call), toolName: call.name) {
+                try await self.executeTool(call, context: context)
             }
         } catch is CancellationError {
             throw CancellationError()
@@ -255,6 +332,41 @@ private extension Agent {
         }
     }
 
+    func executeStreamableWithTimeout(
+        _ call: ToolCall,
+        tool: any StreamableSubAgentTool<C>,
+        context: C,
+        continuation: AsyncThrowingStream<StreamEvent, Error>.Continuation
+    ) async throws -> ToolResult {
+        continuation.yield(.subAgentStarted(toolCallId: call.id, toolName: call.name))
+
+        var result = ToolResult.error("Sub-agent did not complete")
+        defer {
+            continuation.yield(.subAgentCompleted(toolCallId: call.id, toolName: call.name, result: result))
+        }
+
+        let eventHandler: @Sendable (StreamEvent) -> Void = { event in
+            continuation.yield(.subAgentEvent(toolCallId: call.id, toolName: call.name, event: event))
+        }
+
+        do {
+            result = try await withTimeout(resolveTimeout(for: call), toolName: call.name) {
+                try await tool.executeStreaming(
+                    toolCallId: call.id, arguments: call.argumentsData,
+                    context: context, eventHandler: eventHandler
+                )
+            }
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as AgentError {
+            result = ToolResult.error(error.feedbackMessage)
+        } catch {
+            result = ToolResult.error("Tool failed: \(error)")
+        }
+
+        return result
+    }
+
     func executeToolsStreaming(
         _ calls: [ToolCall],
         context: C,
@@ -263,7 +375,14 @@ private extension Agent {
         try await withThrowingTaskGroup(of: (Int, ToolCall, ToolResult).self) { group in
             for (index, call) in calls.enumerated() {
                 group.addTask {
-                    let result = try await self.executeWithTimeout(call, context: context)
+                    let result: ToolResult = if let streamableTool = self.tools.first(where: { $0.name == call.name })
+                        as? any StreamableSubAgentTool<C> {
+                        try await self.executeStreamableWithTimeout(
+                            call, tool: streamableTool, context: context, continuation: continuation
+                        )
+                    } else {
+                        try await self.executeWithTimeout(call, context: context)
+                    }
                     return (index, call, result)
                 }
             }
