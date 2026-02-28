@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <b>Zero dependencies</b> · <b>Full Sendable</b> · <b>Async/await</b> · <b>Multi-provider</b> · <b>Production-ready</b>
+  <b>Zero dependencies</b> · <b>Full Sendable</b> · <b>Async/await</b> · <b>Multi-provider</b> · <b>MCP</b> · <b>Production-ready</b>
 </p>
 
 ---
@@ -39,6 +39,7 @@
   - [Text-to-Speech](#text-to-speech)
   - [Structured Output](#structured-output)
   - [Sub-Agents](#sub-agents)
+  - [MCP Tools](#mcp-tools)
   - [Error Handling](#error-handling)
 - [Configuration](#configuration)
   - [Agent Configuration](#agent-configuration)
@@ -644,6 +645,114 @@ let tool: any AnyTool<SubAgentContext<AppContext>> = try subAgentTool(
 
 </details>
 
+### MCP Tools
+
+Connect to [Model Context Protocol](https://modelcontextprotocol.io) servers and use their tools as if they were native. `MCPSession` manages the full lifecycle — process launch, protocol handshake, tool discovery, and graceful shutdown:
+
+```swift
+let config = MCPServerConfiguration(
+    name: "filesystem",
+    command: "/usr/local/bin/mcp-filesystem",
+    arguments: ["--root", "/tmp"]
+)
+
+let session = MCPSession(configurations: [config])
+let result = try await session.withTools { (tools: [any AnyTool<EmptyContext>]) in
+    let agent = Agent<EmptyContext>(client: client, tools: tools)
+    return try await agent.run(
+        userMessage: "List the files in /tmp",
+        context: EmptyContext()
+    )
+}
+```
+
+Multiple servers connect in parallel. Tool names must be unique across servers:
+
+```swift
+let session = MCPSession(configurations: [filesystemConfig, gitConfig, databaseConfig])
+try await session.withTools { tools in
+    // tools contains all tools from all three servers
+    let agent = Agent<EmptyContext>(client: client, tools: tools)
+    return try await agent.run(userMessage: "...", context: EmptyContext())
+}
+```
+
+MCP tools work with streaming, sub-agents, and any `ToolContext` — they're indistinguishable from native `Tool<P, O, C>` at the agent level.
+
+<details>
+<summary><b>Configuration Options</b></summary>
+
+```swift
+let config = MCPServerConfiguration(
+    name: "my-server",              // Display name (must be non-empty)
+    command: "/path/to/server",     // Executable path (must be non-empty)
+    arguments: ["--flag", "value"], // Command-line arguments
+    environment: ["API_KEY": key],  // Environment variables (nil = inherit parent)
+    workingDirectory: "/tmp",       // Working directory (nil = inherit parent)
+    initializationTimeout: .seconds(30),  // Handshake + tool discovery timeout
+    toolCallTimeout: .seconds(60)         // Per-tool-call timeout
+)
+```
+
+</details>
+
+<details>
+<summary><b>Error Handling</b></summary>
+
+MCP errors are surfaced as `MCPError`:
+
+```swift
+do {
+    try await session.withTools { tools in ... }
+} catch let error as MCPError {
+    switch error {
+    case .connectionFailed(let reason):
+        print("Server failed to start: \(reason)")
+    case .protocolVersionMismatch(let requested, let supported):
+        print("Version mismatch: wanted \(requested), got \(supported)")
+    case .requestTimeout(let method):
+        print("RPC \(method) timed out")
+    case .duplicateToolName(let tool, let servers):
+        print("Tool '\(tool)' exists on multiple servers: \(servers)")
+    case .jsonRPCError(let code, let message):
+        print("Server error \(code): \(message)")
+    case .transportClosed:
+        print("Connection lost")
+    default:
+        print("MCP error: \(error)")
+    }
+}
+```
+
+When an MCP tool fails during agent execution, the error is wrapped as `AgentError.toolExecutionFailed` and fed back to the LLM for recovery, just like native tool errors.
+
+</details>
+
+<details>
+<summary><b>Custom Transport</b></summary>
+
+`MCPTransport` is a protocol — implement it for non-stdio transports (HTTP/SSE, WebSocket, in-process):
+
+```swift
+public protocol MCPTransport: Sendable {
+    func connect() async throws
+    func disconnect() async
+    func send(_ data: Data) async throws
+    func messages() -> AsyncThrowingStream<Data, Error>
+}
+```
+
+Inject a custom transport via the internal initializer:
+
+```swift
+let session = MCPSession(
+    configurations: configs,
+    transportFactory: { config in MyCustomTransport(config: config) }
+)
+```
+
+</details>
+
 ### Error Handling
 
 ```swift
@@ -955,12 +1064,31 @@ The `proxy()` factory omits `Authorization: Bearer` and `model` from requests.
 </details>
 
 <details>
+<summary><b>MCP Types</b></summary>
+
+| Type | Description |
+|------|-------------|
+| `MCPSession` | Scoped MCP server lifecycle manager (`withTools` pattern) |
+| `MCPServerConfiguration` | Server command, arguments, environment, and timeouts |
+| `MCPClient` | Actor managing a single MCP server connection |
+| `MCPTool<C>` | `AnyTool` adapter that delegates `execute` to an MCP server |
+| `MCPToolInfo` | Tool name, description, and input schema from `tools/list` |
+| `MCPContent` | MCP content types: text, image, audio, resource link, embedded resource |
+| `MCPCallResult` | Tool call result with content array and optional structured content |
+| `MCPError` | MCP-specific errors (connection, timeout, protocol, transport) |
+| `MCPTransport` | Protocol for MCP transport implementations |
+| `StdioMCPTransport` | Stdio transport (macOS only) — launches process, communicates via stdin/stdout |
+
+</details>
+
+<details>
 <summary><b>Error Types</b></summary>
 
 | Type | Description |
 |------|-------------|
 | `AgentError` | Typed agent framework errors |
 | `TransportError` | HTTP and network errors |
+| `MCPError` | MCP connection, protocol, and transport errors |
 | `TTSError` | TTS chunk and configuration errors |
 
 </details>

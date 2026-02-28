@@ -66,3 +66,47 @@ extension JSONSchema: Encodable {
         case `enum`
     }
 }
+
+extension JSONSchema: Decodable {
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        if let schemas = try container.decodeIfPresent([JSONSchema].self, forKey: .anyOf) {
+            self = .anyOf(schemas)
+            return
+        }
+
+        guard let type = try container.decodeIfPresent(String.self, forKey: .type) else {
+            self = .object(properties: [:], required: [])
+            return
+        }
+
+        let description = try container.decodeIfPresent(String.self, forKey: .description)
+
+        switch type {
+        case "string":
+            let enumValues = try container.decodeIfPresent([String].self, forKey: .enum)
+            self = .string(description: description, enumValues: enumValues)
+        case "integer":
+            self = .integer(description: description)
+        case "number":
+            self = .number(description: description)
+        case "boolean":
+            self = .boolean(description: description)
+        case "null":
+            self = .null
+        case "array":
+            let items = try container.decode(JSONSchema.self, forKey: .items)
+            self = .array(items: items, description: description)
+        case "object":
+            let properties = try container.decodeIfPresent([String: JSONSchema].self, forKey: .properties) ?? [:]
+            let required = try container.decodeIfPresent([String].self, forKey: .required) ?? []
+            self = .object(properties: properties, required: required, description: description)
+        default:
+            throw DecodingError.dataCorruptedError(
+                forKey: .type, in: container,
+                debugDescription: "Unknown JSON Schema type: '\(type)'"
+            )
+        }
+    }
+}
