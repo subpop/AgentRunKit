@@ -729,21 +729,70 @@ private struct TestResponsesOutput: SchemaProviding {
 
 @Suite
 struct ResponsesExtraFieldsTests {
-    @Test
-    func extraFieldsMergedIntoRequestBody() async throws {
-        let client = ResponsesAPIClient(
+    private func makeClient() -> ResponsesAPIClient {
+        ResponsesAPIClient(
             apiKey: "test-key", model: "gpt-4.1",
             baseURL: ResponsesAPIClient.openAIBaseURL, store: false
         )
-        let request = try await client.buildRequest(
-            messages: [.user("Hi")], tools: [],
-            extraFields: ["custom_field": .string("custom_value"), "temperature": .double(0.7)]
-        )
-        let data = try JSONEncoder().encode(request)
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+    }
 
-        #expect(json["custom_field"] as? String == "custom_value")
+    @Test
+    func validExtraFieldsEncodeIntoRequestBody() async throws {
+        let request = try await makeClient().buildRequest(
+            messages: [.user("Hi")], tools: [],
+            extraFields: ["temperature": .double(0.7), "top_p": .double(0.9)]
+        )
+        let json = try encodeRequest(request)
+
         #expect(json["temperature"] as? Double == 0.7)
+        #expect(json["top_p"] as? Double == 0.9)
+    }
+
+    @Test
+    func invalidExtraFieldThrowsEncodingError() async throws {
+        let request = try await makeClient().buildRequest(
+            messages: [.user("Hi")], tools: [],
+            extraFields: ["custom_field": .string("bad"), "temperature": .double(0.7)]
+        )
+
+        do {
+            _ = try JSONEncoder().encode(request)
+            Issue.record("Expected EncodingError")
+        } catch let EncodingError.invalidValue(_, context) {
+            #expect(context.debugDescription.contains("custom_field"))
+        } catch {
+            Issue.record("Expected EncodingError.invalidValue, got \(error)")
+        }
+    }
+
+    @Test
+    func firstClassPropertyKeysRejectedAsExtraFields() async throws {
+        let request = try await makeClient().buildRequest(
+            messages: [.user("Hi")], tools: [],
+            extraFields: ["model": .string("override")]
+        )
+
+        do {
+            _ = try JSONEncoder().encode(request)
+            Issue.record("Expected EncodingError")
+        } catch let EncodingError.invalidValue(_, context) {
+            #expect(context.debugDescription.contains("model"))
+        } catch {
+            Issue.record("Expected EncodingError.invalidValue, got \(error)")
+        }
+    }
+
+    @Test
+    func emptyExtraFieldsEncodesNormally() async throws {
+        let request = try await makeClient().buildRequest(
+            messages: [.user("Hi")], tools: [],
+            extraFields: [:]
+        )
+        let json = try encodeRequest(request)
+
+        let expectedKeys: Set<String> = ["model", "input", "store", "include"]
+        let actualKeys = Set(json.keys)
+        #expect(actualKeys == expectedKeys)
     }
 }
 

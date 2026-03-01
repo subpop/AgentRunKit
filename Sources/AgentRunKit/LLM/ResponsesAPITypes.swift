@@ -14,6 +14,11 @@ struct ResponsesRequest: Encodable, Sendable {
     let previousResponseId: String?
     let extraFields: [String: JSONValue]
 
+    private static let validExtraFields: Set<String> = [
+        "temperature", "top_p", "metadata", "truncation",
+        "user", "service_tier", "tool_choice", "parallel_tool_calls"
+    ]
+
     enum CodingKeys: String, CodingKey {
         case model, instructions, input, tools, stream, text, store, reasoning, include
         case maxOutputTokens = "max_output_tokens"
@@ -35,6 +40,17 @@ struct ResponsesRequest: Encodable, Sendable {
         try container.encodeIfPresent(previousResponseId, forKey: .previousResponseId)
 
         if !extraFields.isEmpty {
+            let invalidKeys = extraFields.keys.filter { !Self.validExtraFields.contains($0) }
+            if !invalidKeys.isEmpty {
+                throw EncodingError.invalidValue(
+                    extraFields,
+                    EncodingError.Context(
+                        codingPath: encoder.codingPath,
+                        debugDescription: "Invalid extraFields for Responses API: "
+                            + invalidKeys.sorted().joined(separator: ", ")
+                    )
+                )
+            }
             var dynamicContainer = encoder.container(keyedBy: DynamicCodingKey.self)
             for (key, value) in extraFields {
                 try dynamicContainer.encode(value, forKey: DynamicCodingKey(key))
