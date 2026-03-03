@@ -604,8 +604,8 @@ struct ResponsesStreamingTests {
         let controlled = ControlledByteStream(stream: byteStream)
         let streamPair = AsyncThrowingStream<StreamDelta, Error>.makeStream()
 
-        try await client.processStreamLines(
-            bytes: controlled, messagesCount: 0,
+        try await client.processTestStream(
+            byteStream: controlled, messagesCount: 0,
             continuation: streamPair.continuation
         )
 
@@ -934,5 +934,24 @@ struct ResponsesMultiTurnRoundTripTests {
         #expect(turn2Input?.count == 1)
         #expect(turn2Input?[0]["type"] as? String == "function_call_output")
         #expect(turn2Input?[0]["call_id"] as? String == "call_weather")
+    }
+}
+
+extension ResponsesAPIClient {
+    func processTestStream(
+        byteStream: ControlledByteStream,
+        messagesCount: Int,
+        continuation: AsyncThrowingStream<StreamDelta, Error>.Continuation
+    ) async throws {
+        try await processSSEStream(
+            bytes: byteStream,
+            stallTimeout: nil
+        ) { [self] line in
+            try await handleSSELine(
+                line, messagesCount: messagesCount,
+                continuation: continuation
+            )
+        }
+        continuation.finish()
     }
 }

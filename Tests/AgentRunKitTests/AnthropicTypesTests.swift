@@ -1,0 +1,397 @@
+import Foundation
+import Testing
+
+@testable import AgentRunKit
+
+@Suite
+struct AnthropicResponseParsingTests {
+    private func makeClient() -> AnthropicClient {
+        AnthropicClient(apiKey: "test-key", model: "claude-sonnet-4-6")
+    }
+
+    @Test
+    func textResponse() throws {
+        let json = """
+        {
+            "id": "msg_001",
+            "type": "message",
+            "role": "assistant",
+            "content": [{"type": "text", "text": "Hello there!"}],
+            "stop_reason": "end_turn",
+            "usage": {"input_tokens": 100, "output_tokens": 50}
+        }
+        """
+        let msg = try makeClient().parseResponse(Data(json.utf8))
+        #expect(msg.content == "Hello there!")
+        #expect(msg.toolCalls.isEmpty)
+        #expect(msg.tokenUsage?.input == 100)
+        #expect(msg.tokenUsage?.output == 50)
+    }
+
+    @Test
+    func toolUseResponse() throws {
+        let json = """
+        {
+            "id": "msg_002",
+            "type": "message",
+            "role": "assistant",
+            "content": [
+                {"type": "text", "text": "Let me check."},
+                {"type": "tool_use", "id": "toolu_01", "name": "get_weather",
+                 "input": {"city": "NYC"}}
+            ],
+            "stop_reason": "tool_use",
+            "usage": {"input_tokens": 50, "output_tokens": 30}
+        }
+        """
+        let msg = try makeClient().parseResponse(Data(json.utf8))
+        #expect(msg.content == "Let me check.")
+        #expect(msg.toolCalls.count == 1)
+        #expect(msg.toolCalls[0].id == "toolu_01")
+        #expect(msg.toolCalls[0].name == "get_weather")
+        #expect(msg.toolCalls[0].arguments.contains("NYC"))
+    }
+
+    @Test
+    func thinkingResponse() throws {
+        let json = """
+        {
+            "id": "msg_003",
+            "type": "message",
+            "role": "assistant",
+            "content": [
+                {"type": "thinking", "thinking": "Let me reason...", "signature": "sig123"},
+                {"type": "text", "text": "The answer is 42."}
+            ],
+            "stop_reason": "end_turn",
+            "usage": {"input_tokens": 100, "output_tokens": 200}
+        }
+        """
+        let msg = try makeClient().parseResponse(Data(json.utf8))
+        #expect(msg.content == "The answer is 42.")
+        #expect(msg.reasoning?.content == "Let me reason...")
+        #expect(msg.reasoningDetails?.count == 1)
+        if case let .object(dict) = msg.reasoningDetails?[0] {
+            #expect(dict["type"] == .string("thinking"))
+            #expect(dict["thinking"] == .string("Let me reason..."))
+            #expect(dict["signature"] == .string("sig123"))
+        } else {
+            Issue.record("Expected object in reasoning details")
+        }
+    }
+
+    @Test
+    func interleavedThinkingAndToolUse() throws {
+        let json = """
+        {
+            "id": "msg_004",
+            "type": "message",
+            "role": "assistant",
+            "content": [
+                {"type": "thinking", "thinking": "Think first", "signature": "s1"},
+                {"type": "text", "text": "Checking."},
+                {"type": "tool_use", "id": "toolu_02", "name": "search",
+                 "input": {"q": "test"}},
+                {"type": "thinking", "thinking": "Think again", "signature": "s2"},
+                {"type": "text", "text": "More text."}
+            ],
+            "stop_reason": "tool_use",
+            "usage": {"input_tokens": 80, "output_tokens": 120}
+        }
+        """
+        let msg = try makeClient().parseResponse(Data(json.utf8))
+        #expect(msg.content == "Checking.More text.")
+        #expect(msg.toolCalls.count == 1)
+        #expect(msg.reasoning?.content == "Think first\nThink again")
+        #expect(msg.reasoningDetails?.count == 2)
+    }
+
+    @Test
+    func errorResponse() throws {
+        let json = """
+        {
+            "type": "error",
+            "error": {"type": "invalid_request_error", "message": "Bad input"}
+        }
+        """
+        do {
+            _ = try makeClient().parseResponse(Data(json.utf8))
+            Issue.record("Expected error")
+        } catch let error as AgentError {
+            guard case let .llmError(transport) = error,
+                  case let .other(msg) = transport
+            else {
+                Issue.record("Expected .other, got \(error)")
+                return
+            }
+            #expect(msg.contains("invalid_request_error"))
+            #expect(msg.contains("Bad input"))
+        }
+    }
+
+    @Test
+    func usageMapping() throws {
+        let json = """
+        {
+            "id": "msg_005",
+            "type": "message",
+            "role": "assistant",
+            "content": [{"type": "text", "text": "Hi"}],
+            "stop_reason": "end_turn",
+            "usage": {"input_tokens": 200, "output_tokens": 100}
+        }
+        """
+        let msg = try makeClient().parseResponse(Data(json.utf8))
+        #expect(msg.tokenUsage == TokenUsage(input: 200, output: 100))
+    }
+
+    @Test
+    func emptyContentParsesToEmptyString() throws {
+        let json = """
+        {
+            "id": "msg_006",
+            "type": "message",
+            "role": "assistant",
+            "content": [],
+            "stop_reason": "end_turn",
+            "usage": {"input_tokens": 10, "output_tokens": 0}
+        }
+        """
+        let msg = try makeClient().parseResponse(Data(json.utf8))
+        #expect(msg.content == "")
+        #expect(msg.toolCalls.isEmpty)
+    }
+
+    @Test
+    func multipleToolUseParsesAll() throws {
+        let json = """
+        {
+            "id": "msg_007",
+            "type": "message",
+            "role": "assistant",
+            "content": [
+                {"type": "tool_use", "id": "toolu_a", "name": "search",
+                 "input": {"q": "first"}},
+                {"type": "tool_use", "id": "toolu_b", "name": "lookup",
+                 "input": {"id": 42}}
+            ],
+            "stop_reason": "tool_use",
+            "usage": {"input_tokens": 50, "output_tokens": 30}
+        }
+        """
+        let msg = try makeClient().parseResponse(Data(json.utf8))
+        #expect(msg.toolCalls.count == 2)
+        #expect(msg.toolCalls[0].id == "toolu_a")
+        #expect(msg.toolCalls[1].id == "toolu_b")
+    }
+
+    @Test
+    func toolCallArgumentsRoundTripAsJSONObject() throws {
+        let json = """
+        {
+            "id": "msg_008",
+            "type": "message",
+            "role": "assistant",
+            "content": [
+                {"type": "tool_use", "id": "toolu_rt", "name": "get_weather",
+                 "input": {"city": "NYC", "units": "celsius"}}
+            ],
+            "stop_reason": "tool_use",
+            "usage": {"input_tokens": 40, "output_tokens": 20}
+        }
+        """
+        let msg = try makeClient().parseResponse(Data(json.utf8))
+        #expect(msg.toolCalls.count == 1)
+        #expect(msg.toolCalls[0].id == "toolu_rt")
+        #expect(msg.toolCalls[0].name == "get_weather")
+
+        let parsedArgs = try JSONDecoder().decode(
+            [String: String].self, from: Data(msg.toolCalls[0].arguments.utf8)
+        )
+        #expect(parsedArgs["city"] == "NYC")
+        #expect(parsedArgs["units"] == "celsius")
+
+        let (_, mapped) = try AnthropicMessageMapper.mapMessages([.assistant(msg)])
+        guard case let .blocks(blocks) = mapped[0].content else {
+            Issue.record("Expected blocks content")
+            return
+        }
+        let toolBlock = blocks.first { if case .toolUse = $0 { return true }; return false }
+        guard case let .toolUse(id, name, input) = toolBlock else {
+            Issue.record("Expected toolUse block")
+            return
+        }
+        #expect(id == "toolu_rt")
+        #expect(name == "get_weather")
+        guard case let .object(inputDict) = input else {
+            Issue.record("Expected input to be a JSON object, not a string")
+            return
+        }
+        #expect(inputDict["city"] == .string("NYC"))
+        #expect(inputDict["units"] == .string("celsius"))
+    }
+}
+
+@Suite
+struct AnthropicMessageTranslationTests {
+    @Test
+    func toolResultsMergedIntoSingleUserMessage() throws {
+        let messages: [ChatMessage] = [
+            .tool(id: "call_1", name: "search", content: "result1"),
+            .tool(id: "call_2", name: "lookup", content: "result2")
+        ]
+        let (_, mapped) = try AnthropicMessageMapper.mapMessages(messages)
+
+        #expect(mapped.count == 1)
+        #expect(mapped[0].role == .user)
+        guard case let .blocks(blocks) = mapped[0].content else {
+            Issue.record("Expected blocks content")
+            return
+        }
+        #expect(blocks.count == 2)
+        if case let .toolResult(id1, content1, isError1) = blocks[0] {
+            #expect(id1 == "call_1")
+            #expect(content1 == "result1")
+            #expect(!isError1)
+        } else {
+            Issue.record("Expected toolResult block at index 0")
+        }
+        if case let .toolResult(id2, content2, isError2) = blocks[1] {
+            #expect(id2 == "call_2")
+            #expect(content2 == "result2")
+            #expect(!isError2)
+        } else {
+            Issue.record("Expected toolResult block at index 1")
+        }
+    }
+
+    @Test
+    func assistantWithReasoningDetailsRoundTrips() throws {
+        let details: [JSONValue] = [
+            .object([
+                "type": .string("thinking"),
+                "thinking": .string("reasoning text"),
+                "signature": .string("sig_abc")
+            ])
+        ]
+        let msg = AssistantMessage(content: "Answer", reasoningDetails: details)
+        let (_, mapped) = try AnthropicMessageMapper.mapMessages([.assistant(msg)])
+
+        #expect(mapped.count == 1)
+        #expect(mapped[0].role == .assistant)
+        guard case let .blocks(blocks) = mapped[0].content else {
+            Issue.record("Expected blocks content")
+            return
+        }
+        #expect(blocks.count == 2)
+        if case let .thinking(thinking, signature) = blocks[0] {
+            #expect(thinking == "reasoning text")
+            #expect(signature == "sig_abc")
+        } else {
+            Issue.record("Expected thinking block at index 0")
+        }
+        if case let .text(text) = blocks[1] {
+            #expect(text == "Answer")
+        } else {
+            Issue.record("Expected text block at index 1")
+        }
+    }
+
+    @Test
+    func assistantFallbackToReasoningContent() throws {
+        let reasoning = ReasoningContent(content: "thinking", signature: "sig_xyz")
+        let msg = AssistantMessage(content: "Answer", reasoning: reasoning)
+        let (_, mapped) = try AnthropicMessageMapper.mapMessages([.assistant(msg)])
+
+        #expect(mapped[0].role == .assistant)
+        guard case let .blocks(blocks) = mapped[0].content else {
+            Issue.record("Expected blocks content")
+            return
+        }
+        #expect(blocks.count == 2)
+        if case let .thinking(thinking, signature) = blocks[0] {
+            #expect(thinking == "thinking")
+            #expect(signature == "sig_xyz")
+        } else {
+            Issue.record("Expected thinking block at index 0")
+        }
+        if case let .text(text) = blocks[1] {
+            #expect(text == "Answer")
+        } else {
+            Issue.record("Expected text block at index 1")
+        }
+    }
+
+    @Test
+    func reasoningWithoutSignatureOmitted() throws {
+        let reasoning = ReasoningContent(content: "thinking")
+        let msg = AssistantMessage(content: "Answer", reasoning: reasoning)
+        let (_, mapped) = try AnthropicMessageMapper.mapMessages([.assistant(msg)])
+
+        guard case let .blocks(blocks) = mapped[0].content else {
+            Issue.record("Expected blocks content")
+            return
+        }
+        #expect(blocks.count == 1)
+        if case let .text(text) = blocks[0] {
+            #expect(text == "Answer")
+        } else {
+            Issue.record("Expected text block, got \(blocks[0])")
+        }
+    }
+
+    @Test
+    func multimodalThrows() {
+        do {
+            _ = try AnthropicMessageMapper.mapMessages([
+                .userMultimodal([.text("Hi"), .imageURL("https://example.com/img.png")])
+            ])
+            Issue.record("Expected error")
+        } catch let error as AgentError {
+            guard case let .llmError(transport) = error,
+                  case let .other(msg) = transport
+            else {
+                Issue.record("Expected .other, got \(error)")
+                return
+            }
+            #expect(msg.contains("multimodal"))
+        } catch {
+            Issue.record("Expected AgentError, got \(error)")
+        }
+    }
+
+    @Test
+    func mixedConversation() throws {
+        let toolCall = ToolCall(id: "call_1", name: "search", arguments: "{\"q\":\"test\"}")
+        let messages: [ChatMessage] = [
+            .system("Be helpful"),
+            .user("Search for test"),
+            .assistant(AssistantMessage(content: "", toolCalls: [toolCall])),
+            .tool(id: "call_1", name: "search", content: "found it")
+        ]
+        let (system, mapped) = try AnthropicMessageMapper.mapMessages(messages)
+
+        #expect(system?.count == 1)
+        #expect(mapped.count == 3)
+        #expect(mapped[0].role == .user)
+        #expect(mapped[1].role == .assistant)
+        #expect(mapped[2].role == .user)
+    }
+
+    @Test
+    func emptyAssistantGetsEmptyTextBlock() throws {
+        let msg = AssistantMessage(content: "")
+        let (_, mapped) = try AnthropicMessageMapper.mapMessages([.assistant(msg)])
+
+        if case let .blocks(blocks) = mapped[0].content {
+            #expect(blocks.count == 1)
+            if case let .text(text) = blocks[0] {
+                #expect(text == "")
+            } else {
+                Issue.record("Expected text block")
+            }
+        } else {
+            Issue.record("Expected blocks content")
+        }
+    }
+}

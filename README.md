@@ -46,6 +46,7 @@
   - [Retry Policy](#retry-policy)
   - [Per-Request Customization](#per-request-customization)
 - [LLM Providers](#llm-providers)
+  - [Anthropic Messages API](#anthropic-messages-api)
   - [OpenAI Responses API](#openai-responses-api)
   - [ChatGPT Subscription (OAuth)](#chatgpt-subscription-oauth)
   - [Proxy Mode](#proxy-mode)
@@ -325,12 +326,20 @@ for try await delta in client.stream(messages: messages, tools: []) {
 For models with extended thinking:
 
 ```swift
+// Via Anthropic Messages API (native thinking with Claude)
+let client = AnthropicClient(
+    apiKey: apiKey,
+    model: "claude-sonnet-4-6",
+    maxTokens: 16384,
+    reasoningConfig: .high  // .xhigh, .high, .medium, .low, .minimal, .none
+)
+
 // Via OpenRouter / Chat Completions
 let client = OpenAIClient(
     apiKey: apiKey,
     model: "deepseek/deepseek-r1",
     baseURL: OpenAIClient.openRouterBaseURL,
-    reasoningConfig: .high  // .xhigh, .high, .medium, .low, .minimal, .none
+    reasoningConfig: .high
 )
 
 // Via OpenAI Responses API (native reasoning with GPT-5.2)
@@ -372,8 +381,9 @@ let client = OpenAIClient(
 
 Reasoning models return opaque reasoning blocks alongside their responses. When the model makes tool calls, these reasoning blocks must be echoed back verbatim on the next request to maintain thinking continuity.
 
-AgentRunKit handles this automatically for both clients:
+AgentRunKit handles this automatically for all clients:
 
+- **`AnthropicClient`** — Thinking blocks with cryptographic signatures are extracted from streaming events, stored on `AssistantMessage.reasoningDetails`, and echoed back as `thinking` content blocks on subsequent requests. The `anthropic-beta: interleaved-thinking-2025-05-14` header is set automatically when `interleavedThinking: true`.
 - **`OpenAIClient`** — `reasoning_details` are extracted from Chat Completions responses, stored on `AssistantMessage`, and included in subsequent requests.
 - **`ResponsesAPIClient`** — Reasoning output items (including `encrypted_content` when `store: false`) are captured as raw JSON, accumulated across streaming fragments, and echoed back as input items on the next turn.
 
@@ -885,6 +895,84 @@ let client = OpenAIClient(
 )
 ```
 
+### Anthropic Messages API
+
+`AnthropicClient` speaks the [Anthropic Messages API](https://docs.anthropic.com/en/api/messages) natively — extended thinking, interleaved thinking, and streaming with full content block lifecycle.
+
+```swift
+let client = AnthropicClient(
+    apiKey: ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"]!,
+    model: "claude-sonnet-4-6",
+    maxTokens: 16384,
+    reasoningConfig: .high,
+    interleavedThinking: true
+)
+
+let agent = Agent<EmptyContext>(client: client, tools: [myTool])
+let result = try await agent.run(userMessage: "Analyze this problem", context: EmptyContext())
+```
+
+Both `Agent` and `Chat` work identically with `AnthropicClient` — just swap the client at construction time. Streaming, tool calling, sub-agents, and MCP tools all work unchanged.
+
+<details>
+<summary><b>Extended Thinking</b></summary>
+
+Extended thinking is configured via `ReasoningConfig`. Effort levels map to token budgets automatically:
+
+```swift
+// Effort-based (recommended)
+let client = AnthropicClient(
+    apiKey: apiKey,
+    model: "claude-sonnet-4-6",
+    maxTokens: 16384,
+    reasoningConfig: .high  // .xhigh, .high, .medium, .low, .minimal
+)
+
+// Explicit budget
+let client = AnthropicClient(
+    apiKey: apiKey,
+    model: "claude-sonnet-4-6",
+    maxTokens: 65536,
+    reasoningConfig: .budget(10000)
+)
+```
+
+When `interleavedThinking` is `true` (the default), the client sets the `anthropic-beta: interleaved-thinking-2025-05-14` header and allows thinking budgets to exceed `maxTokens`. When `false`, the budget is capped to `maxTokens - 1` per Anthropic's requirements.
+
+</details>
+
+<details>
+<summary><b>Custom Base URL</b></summary>
+
+Point at a proxy, gateway, or alternative endpoint:
+
+```swift
+let client = AnthropicClient(
+    apiKey: apiKey,
+    model: "claude-sonnet-4-6",
+    baseURL: URL(string: "https://api.myproxy.com/v1")!
+)
+```
+
+</details>
+
+<details>
+<summary><b>Additional Headers</b></summary>
+
+Inject custom headers per request. Core headers (`x-api-key`, `anthropic-version`, `anthropic-beta`) cannot be overridden:
+
+```swift
+let client = AnthropicClient(
+    apiKey: apiKey,
+    model: "claude-sonnet-4-6",
+    additionalHeaders: { ["X-Request-Source": "my-app"] }
+)
+```
+
+The header closure is evaluated per request, enabling dynamic values.
+
+</details>
+
 ### OpenAI Responses API
 
 `ResponsesAPIClient` speaks OpenAI's [Responses API](https://platform.openai.com/docs/api-reference/responses) — a newer endpoint with native support for reasoning models, server-side conversation state, and structured tool calling.
@@ -1022,6 +1110,7 @@ The `proxy()` factory omits `Authorization: Bearer` and `model` from requests.
 | Type | Description |
 |------|-------------|
 | `LLMClient` | Protocol for LLM implementations |
+| `AnthropicClient` | Anthropic Messages API client (Claude Sonnet, Opus, Haiku) |
 | `OpenAIClient` | Chat Completions client (OpenAI, OpenRouter, Groq, etc.) |
 | `ResponsesAPIClient` | OpenAI Responses API client (GPT-5.2, GPT-5.2-codex) |
 | `ResponseFormat` | Structured output configuration |

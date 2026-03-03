@@ -20,29 +20,25 @@ extension ResponsesAPIClient {
         )
         onResponse?(httpResponse)
         let messagesCount = messages.count
-        if let stallTimeout = retryPolicy.streamStallTimeout {
-            try await processStreamWithStallDetection(
-                bytes: bytes,
-                stallTimeout: stallTimeout,
-                messagesCount: messagesCount,
-                continuation: continuation
-            )
-        } else {
-            try await processStreamLines(
-                bytes: bytes,
-                messagesCount: messagesCount,
+        try await processSSEStream(
+            bytes: bytes,
+            stallTimeout: retryPolicy.streamStallTimeout
+        ) { [self] line in
+            try await handleSSELine(
+                line, messagesCount: messagesCount,
                 continuation: continuation
             )
         }
+        continuation.finish()
     }
 
-    private func handleSSELine(
+    func handleSSELine(
         _ line: String,
         messagesCount: Int,
         continuation: AsyncThrowingStream<StreamDelta, Error>.Continuation
     ) throws -> Bool {
         try Task.checkCancellation()
-        guard let payload = OpenAIClient.extractSSEPayload(from: line)
+        guard let payload = extractSSEPayload(from: line)
         else { return false }
 
         let data = Data(payload.utf8)
@@ -178,7 +174,6 @@ extension ResponsesAPIClient {
             )
         }
         continuation.yield(.finished(usage: usage))
-        continuation.finish()
         return true
     }
 
@@ -190,56 +185,6 @@ extension ResponsesAPIClient {
         throw AgentError.llmError(
             .other("\(error.code): \(error.message)")
         )
-    }
-
-    func processStreamLines<S: AsyncSequence>(
-        bytes: S,
-        messagesCount: Int,
-        continuation: AsyncThrowingStream<StreamDelta, Error>.Continuation
-    ) async throws where S.Element == UInt8 {
-        for try await line in UnboundedLines(source: bytes) {
-            guard try !handleSSELine(
-                line, messagesCount: messagesCount,
-                continuation: continuation
-            ) else { return }
-        }
-        continuation.finish()
-    }
-
-    func processStreamWithStallDetection<S: AsyncSequence & Sendable>(
-        bytes: S,
-        stallTimeout: Duration,
-        messagesCount: Int,
-        continuation: AsyncThrowingStream<StreamDelta, Error>.Continuation
-    ) async throws where S.Element == UInt8 {
-        try await withThrowingTaskGroup(of: Void.self) { group in
-            let watchdog = StallWatchdog()
-
-            group.addTask {
-                while !Task.isCancelled {
-                    let snapshot = await watchdog.lastActivity
-                    try await Task.sleep(for: stallTimeout)
-                    let current = await watchdog.lastActivity
-                    if current == snapshot {
-                        throw AgentError.llmError(.streamStalled)
-                    }
-                }
-            }
-
-            group.addTask { [self] in
-                for try await line in UnboundedLines(source: bytes) {
-                    await watchdog.recordActivity()
-                    if try await handleSSELine(
-                        line, messagesCount: messagesCount,
-                        continuation: continuation
-                    ) { return }
-                }
-                continuation.finish()
-            }
-
-            try await group.next()
-            group.cancelAll()
-        }
     }
 }
 

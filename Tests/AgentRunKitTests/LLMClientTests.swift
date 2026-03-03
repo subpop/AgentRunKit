@@ -808,12 +808,13 @@ struct ControlledByteStream: AsyncSequence, Sendable {
     }
 }
 
+private actor LineCounter {
+    private(set) var count = 0
+    func increment() { count += 1 }
+}
+
 @Suite
 struct StreamStallDetectionTests {
-    private func makeClient() -> OpenAIClient {
-        OpenAIClient.proxy(baseURL: URL(string: "http://localhost:8080")!)
-    }
-
     private func sseChunk(_ json: String) -> [UInt8] {
         Array("data: \(json)\n\n".utf8)
     }
@@ -826,13 +827,8 @@ struct StreamStallDetectionTests {
     {"choices":[{"delta":{"content":"hello"},"index":0}]}
     """
 
-    private let finishChunkJSON = """
-    {"choices":[{"delta":{},"index":0,"finish_reason":"stop"}]}
-    """
-
     @Test
     func stalledStreamThrowsError() async throws {
-        let client = makeClient()
         let (byteStream, continuation) = AsyncStream<UInt8>.makeStream()
 
         for byte in sseChunk(minimalChunkJSON) {
@@ -840,14 +836,12 @@ struct StreamStallDetectionTests {
         }
 
         let controlled = ControlledByteStream(stream: byteStream)
-        let (deltaStream, deltaContinuation) = AsyncThrowingStream<StreamDelta, Error>.makeStream()
 
         do {
-            try await client.processStreamWithStallDetection(
+            try await processSSEStream(
                 bytes: controlled,
-                stallTimeout: .milliseconds(100),
-                continuation: deltaContinuation
-            )
+                stallTimeout: .milliseconds(100)
+            ) { _ in false }
             Issue.record("Expected streamStalled error")
         } catch let error as AgentError {
             guard case let .llmError(transport) = error else {
@@ -856,13 +850,10 @@ struct StreamStallDetectionTests {
             }
             #expect(transport == .streamStalled)
         }
-
-        _ = deltaStream
     }
 
     @Test
     func healthyStreamCompletesWithStallDetection() async throws {
-        let client = makeClient()
         let (byteStream, byteContinuation) = AsyncStream<UInt8>.makeStream()
 
         for byte in sseChunk(minimalChunkJSON) + sseDone() {
@@ -871,18 +862,19 @@ struct StreamStallDetectionTests {
         byteContinuation.finish()
 
         let controlled = ControlledByteStream(stream: byteStream)
-        let (deltaStream, deltaContinuation) = AsyncThrowingStream<StreamDelta, Error>.makeStream()
+        let counter = LineCounter()
 
-        try await client.processStreamWithStallDetection(
+        try await processSSEStream(
             bytes: controlled,
-            stallTimeout: .seconds(5),
-            continuation: deltaContinuation
-        )
-
-        var collected: [StreamDelta] = []
-        for try await delta in deltaStream {
-            collected.append(delta)
+            stallTimeout: .seconds(5)
+        ) { line in
+            if extractSSEPayload(from: line) != nil {
+                await counter.increment()
+            }
+            return extractSSEPayload(from: line) == "[DONE]"
         }
-        #expect(collected.contains { if case .content("hello") = $0 { return true }; return false })
+
+        let total = await counter.count
+        #expect(total >= 2)
     }
 }

@@ -436,40 +436,40 @@ struct OrphanedStreamDeltaTests {
 struct SSEPayloadExtractionTests {
     @Test
     func extractsPayloadWithSpace() {
-        let payload = OpenAIClient.extractSSEPayload(from: "data: {\"content\":\"hello\"}")
+        let payload = extractSSEPayload(from: "data: {\"content\":\"hello\"}")
         #expect(payload == "{\"content\":\"hello\"}")
     }
 
     @Test
     func extractsPayloadWithoutSpace() {
-        let payload = OpenAIClient.extractSSEPayload(from: "data:{\"content\":\"hello\"}")
+        let payload = extractSSEPayload(from: "data:{\"content\":\"hello\"}")
         #expect(payload == "{\"content\":\"hello\"}")
     }
 
     @Test
     func extractsDoneMarkerWithSpace() {
-        let payload = OpenAIClient.extractSSEPayload(from: "data: [DONE]")
+        let payload = extractSSEPayload(from: "data: [DONE]")
         #expect(payload == "[DONE]")
     }
 
     @Test
     func extractsDoneMarkerWithoutSpace() {
-        let payload = OpenAIClient.extractSSEPayload(from: "data:[DONE]")
+        let payload = extractSSEPayload(from: "data:[DONE]")
         #expect(payload == "[DONE]")
     }
 
     @Test
     func returnsNilForNonDataLines() {
-        #expect(OpenAIClient.extractSSEPayload(from: ": comment") == nil)
-        #expect(OpenAIClient.extractSSEPayload(from: "event: message") == nil)
-        #expect(OpenAIClient.extractSSEPayload(from: "") == nil)
-        #expect(OpenAIClient.extractSSEPayload(from: "id: 123") == nil)
+        #expect(extractSSEPayload(from: ": comment") == nil)
+        #expect(extractSSEPayload(from: "event: message") == nil)
+        #expect(extractSSEPayload(from: "") == nil)
+        #expect(extractSSEPayload(from: "id: 123") == nil)
     }
 
     @Test
     func handlesEmptyPayload() {
-        let withSpace = OpenAIClient.extractSSEPayload(from: "data: ")
-        let withoutSpace = OpenAIClient.extractSSEPayload(from: "data:")
+        let withSpace = extractSSEPayload(from: "data: ")
+        let withoutSpace = extractSSEPayload(from: "data:")
         #expect(withSpace == "")
         #expect(withoutSpace == "")
     }

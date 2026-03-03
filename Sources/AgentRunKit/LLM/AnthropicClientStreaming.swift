@@ -1,0 +1,331 @@
+import Foundation
+
+extension AnthropicClient {
+    func performStreamRequest(
+        messages: [ChatMessage],
+        tools: [ToolDefinition],
+        extraFields: [String: JSONValue],
+        onResponse: (@Sendable (HTTPURLResponse) -> Void)?,
+        continuation: AsyncThrowingStream<StreamDelta, Error>.Continuation
+    ) async throws {
+        let request = try buildRequest(
+            messages: messages, tools: tools,
+            stream: true, extraFields: extraFields
+        )
+        let urlRequest = try buildURLRequest(request)
+        let (bytes, httpResponse) = try await HTTPRetry.performStream(
+            urlRequest: urlRequest, session: session, retryPolicy: retryPolicy
+        )
+        onResponse?(httpResponse)
+
+        let state = AnthropicStreamState()
+
+        try await processSSEStream(
+            bytes: bytes,
+            stallTimeout: retryPolicy.streamStallTimeout
+        ) { line in
+            try await self.handleSSELine(
+                line, state: state, continuation: continuation
+            )
+        }
+        continuation.finish()
+    }
+
+    func handleSSELine(
+        _ line: String,
+        state: AnthropicStreamState,
+        continuation: AsyncThrowingStream<StreamDelta, Error>.Continuation
+    ) async throws -> Bool {
+        try Task.checkCancellation()
+        guard let payload = extractSSEPayload(from: line) else { return false }
+        let event = try decodeEvent(AnthropicEventTypeOnly.self, from: Data(payload.utf8))
+        guard let eventType = event.type else { return false }
+
+        return try await dispatchEvent(
+            eventType, data: Data(payload.utf8),
+            state: state, continuation: continuation
+        )
+    }
+
+    private func dispatchEvent(
+        _ type: AnthropicSSEEvent,
+        data: Data,
+        state: AnthropicStreamState,
+        continuation: AsyncThrowingStream<StreamDelta, Error>.Continuation
+    ) async throws -> Bool {
+        switch type {
+        case .messageStart, .ping:
+            break
+        case .contentBlockStart:
+            try await handleBlockStart(
+                data: data, state: state, continuation: continuation
+            )
+        case .contentBlockDelta:
+            try await handleBlockDelta(
+                data: data, state: state, continuation: continuation
+            )
+        case .contentBlockStop:
+            try await handleBlockStop(
+                data: data, state: state, continuation: continuation
+            )
+        case .messageDelta:
+            try handleMessageDelta(data: data, continuation: continuation)
+        case .messageStop:
+            return true
+        case .error:
+            try handleError(data: data)
+        }
+        return false
+    }
+
+    private func handleBlockStart(
+        data: Data,
+        state: AnthropicStreamState,
+        continuation: AsyncThrowingStream<StreamDelta, Error>.Continuation
+    ) async throws {
+        let event = try decodeEvent(AnthropicBlockStartEvent.self, from: data)
+        let block = event.contentBlock
+        guard let blockKind = block.kind else { return }
+
+        switch blockKind {
+        case .thinking:
+            await state.setBlockType(event.index, .thinking)
+        case .text:
+            await state.setBlockType(event.index, .text)
+        case .toolUse:
+            let toolIndex = await state.incrementToolCallCount()
+            await state.setBlockType(event.index, .toolUse)
+            if let id = block.id, let name = block.name {
+                continuation.yield(.toolCallStart(
+                    index: toolIndex, id: id, name: name
+                ))
+            }
+        }
+    }
+
+    private func handleBlockDelta(
+        data: Data,
+        state: AnthropicStreamState,
+        continuation: AsyncThrowingStream<StreamDelta, Error>.Continuation
+    ) async throws {
+        let event = try decodeEvent(AnthropicBlockDeltaEvent.self, from: data)
+        let delta = event.delta
+        guard let deltaKind = delta.kind else { return }
+
+        switch deltaKind {
+        case .thinkingDelta:
+            if let text = delta.thinking, !text.isEmpty {
+                await state.appendThinking(event.index, text)
+                continuation.yield(.reasoning(text))
+            }
+        case .textDelta:
+            if let text = delta.text, !text.isEmpty {
+                continuation.yield(.content(text))
+            }
+        case .inputJsonDelta:
+            if let json = delta.partialJson, !json.isEmpty {
+                let toolIndex = await state.toolCallCount - 1
+                precondition(toolIndex >= 0, "input_json_delta before any tool_use block_start")
+                continuation.yield(.toolCallDelta(
+                    index: toolIndex, arguments: json
+                ))
+            }
+        case .signatureDelta:
+            if let sig = delta.signature {
+                await state.appendSignature(event.index, sig)
+            }
+        }
+    }
+
+    private func handleBlockStop(
+        data: Data,
+        state: AnthropicStreamState,
+        continuation: AsyncThrowingStream<StreamDelta, Error>.Continuation
+    ) async throws {
+        let event = try decodeEvent(AnthropicBlockStopEvent.self, from: data)
+        let blockType = await state.blockType(for: event.index)
+
+        if blockType == .thinking {
+            let thinking = await state.thinking(for: event.index)
+            let signature = await state.signature(for: event.index)
+            if let thinking, let signature {
+                continuation.yield(.reasoningDetails([
+                    .object([
+                        "type": .string("thinking"),
+                        "thinking": .string(thinking),
+                        "signature": .string(signature)
+                    ])
+                ]))
+            }
+        }
+    }
+
+    private func handleMessageDelta(
+        data: Data,
+        continuation: AsyncThrowingStream<StreamDelta, Error>.Continuation
+    ) throws {
+        let event = try decodeEvent(AnthropicMessageDeltaEvent.self, from: data)
+        let usage = event.usage.map { TokenUsage(input: 0, output: $0.outputTokens) }
+        continuation.yield(.finished(usage: usage))
+    }
+
+    private func handleError(data: Data) throws {
+        let event = try decodeEvent(AnthropicStreamErrorEvent.self, from: data)
+        throw AgentError.llmError(
+            .other("\(event.error.type): \(event.error.message)")
+        )
+    }
+
+    private func decodeEvent<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
+        do {
+            return try JSONDecoder().decode(type, from: data)
+        } catch {
+            throw AgentError.llmError(.decodingFailed(error))
+        }
+    }
+}
+
+actor AnthropicStreamState {
+    enum BlockType { case thinking, text, toolUse }
+
+    private var blockTypes: [Int: BlockType] = [:]
+    private var thinkingText: [Int: String] = [:]
+    private var signatures: [Int: String] = [:]
+    private(set) var toolCallCount: Int = 0
+
+    func setBlockType(_ index: Int, _ type: BlockType) {
+        blockTypes[index] = type
+    }
+
+    func blockType(for index: Int) -> BlockType? {
+        blockTypes[index]
+    }
+
+    func incrementToolCallCount() -> Int {
+        defer { toolCallCount += 1 }
+        return toolCallCount
+    }
+
+    func appendThinking(_ index: Int, _ text: String) {
+        thinkingText[index, default: ""] += text
+    }
+
+    func appendSignature(_ index: Int, _ sig: String) {
+        signatures[index, default: ""] += sig
+    }
+
+    func thinking(for index: Int) -> String? {
+        thinkingText[index]
+    }
+
+    func signature(for index: Int) -> String? {
+        signatures[index]
+    }
+}
+
+private enum AnthropicSSEEvent: String {
+    case messageStart = "message_start"
+    case contentBlockStart = "content_block_start"
+    case contentBlockDelta = "content_block_delta"
+    case contentBlockStop = "content_block_stop"
+    case messageDelta = "message_delta"
+    case messageStop = "message_stop"
+    case ping, error
+}
+
+private enum AnthropicBlockKind: String {
+    case thinking, text
+    case toolUse = "tool_use"
+}
+
+private enum AnthropicDeltaKind: String {
+    case thinkingDelta = "thinking_delta"
+    case textDelta = "text_delta"
+    case inputJsonDelta = "input_json_delta"
+    case signatureDelta = "signature_delta"
+}
+
+private struct AnthropicEventTypeOnly: Decodable {
+    let type: AnthropicSSEEvent?
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        type = try AnthropicSSEEvent(rawValue: container.decode(String.self, forKey: .type))
+    }
+
+    private enum CodingKeys: String, CodingKey { case type }
+}
+
+private struct AnthropicBlockStartEvent: Decodable {
+    let index: Int
+    let contentBlock: AnthropicBlockStartContent
+
+    enum CodingKeys: String, CodingKey {
+        case index
+        case contentBlock = "content_block"
+    }
+}
+
+private struct AnthropicBlockStartContent: Decodable {
+    let kind: AnthropicBlockKind?
+    let id: String?
+    let name: String?
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        kind = try AnthropicBlockKind(rawValue: container.decode(String.self, forKey: .type))
+        id = try container.decodeIfPresent(String.self, forKey: .id)
+        name = try container.decodeIfPresent(String.self, forKey: .name)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case type, id, name
+    }
+}
+
+private struct AnthropicBlockDeltaEvent: Decodable {
+    let index: Int
+    let delta: AnthropicDeltaContent
+}
+
+private struct AnthropicDeltaContent: Decodable {
+    let kind: AnthropicDeltaKind?
+    let text: String?
+    let thinking: String?
+    let partialJson: String?
+    let signature: String?
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        kind = try AnthropicDeltaKind(rawValue: container.decode(String.self, forKey: .type))
+        text = try container.decodeIfPresent(String.self, forKey: .text)
+        thinking = try container.decodeIfPresent(String.self, forKey: .thinking)
+        partialJson = try container.decodeIfPresent(String.self, forKey: .partialJson)
+        signature = try container.decodeIfPresent(String.self, forKey: .signature)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case type, text, thinking, signature
+        case partialJson = "partial_json"
+    }
+}
+
+private struct AnthropicBlockStopEvent: Decodable {
+    let index: Int
+}
+
+private struct AnthropicMessageDeltaEvent: Decodable {
+    let usage: AnthropicDeltaUsage?
+}
+
+private struct AnthropicDeltaUsage: Decodable {
+    let outputTokens: Int
+
+    enum CodingKeys: String, CodingKey {
+        case outputTokens = "output_tokens"
+    }
+}
+
+private struct AnthropicStreamErrorEvent: Decodable {
+    let error: AnthropicErrorDetail
+}

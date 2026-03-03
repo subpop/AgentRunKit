@@ -14,13 +14,13 @@ extension OpenAIClient {
             urlRequest: urlRequest, session: session, retryPolicy: retryPolicy
         )
         onResponse?(httpResponse)
-        if let stallTimeout = retryPolicy.streamStallTimeout {
-            try await processStreamWithStallDetection(
-                bytes: bytes, stallTimeout: stallTimeout, continuation: continuation
-            )
-        } else {
-            try await processStreamLines(bytes: bytes, continuation: continuation)
+        try await processSSEStream(
+            bytes: bytes,
+            stallTimeout: retryPolicy.streamStallTimeout
+        ) { [self] line in
+            try handleSSELine(line, continuation: continuation)
         }
+        continuation.finish()
     }
 
     private func handleSSELine(
@@ -28,9 +28,8 @@ extension OpenAIClient {
         continuation: AsyncThrowingStream<StreamDelta, Error>.Continuation
     ) throws -> Bool {
         try Task.checkCancellation()
-        guard let payload = Self.extractSSEPayload(from: line) else { return false }
+        guard let payload = extractSSEPayload(from: line) else { return false }
         if payload == "[DONE]" {
-            continuation.finish()
             return true
         }
         let chunkData = Data(payload.utf8)
@@ -42,48 +41,6 @@ extension OpenAIClient {
             continuation.yield(delta)
         }
         return false
-    }
-
-    func processStreamLines<S: AsyncSequence>(
-        bytes: S,
-        continuation: AsyncThrowingStream<StreamDelta, Error>.Continuation
-    ) async throws where S.Element == UInt8 {
-        for try await line in UnboundedLines(source: bytes) {
-            guard try !handleSSELine(line, continuation: continuation) else { return }
-        }
-        continuation.finish()
-    }
-
-    func processStreamWithStallDetection<S: AsyncSequence & Sendable>(
-        bytes: S,
-        stallTimeout: Duration,
-        continuation: AsyncThrowingStream<StreamDelta, Error>.Continuation
-    ) async throws where S.Element == UInt8 {
-        try await withThrowingTaskGroup(of: Void.self) { group in
-            let watchdog = StallWatchdog()
-
-            group.addTask {
-                while !Task.isCancelled {
-                    let snapshot = await watchdog.lastActivity
-                    try await Task.sleep(for: stallTimeout)
-                    let current = await watchdog.lastActivity
-                    if current == snapshot {
-                        throw AgentError.llmError(.streamStalled)
-                    }
-                }
-            }
-
-            group.addTask { [self] in
-                for try await line in UnboundedLines(source: bytes) {
-                    await watchdog.recordActivity()
-                    if try handleSSELine(line, continuation: continuation) { return }
-                }
-                continuation.finish()
-            }
-
-            try await group.next()
-            group.cancelAll()
-        }
     }
 
     func performUploadWithRetry<T>(
@@ -141,13 +98,6 @@ extension OpenAIClient {
         throw AgentError.llmError(transportError)
     }
 
-    static func extractSSEPayload(from line: String) -> String? {
-        guard line.hasPrefix("data:") else { return nil }
-        return line.hasPrefix("data: ")
-            ? String(line.dropFirst(6))
-            : String(line.dropFirst(5))
-    }
-
     func parseStreamingChunk(_ data: Data) throws -> StreamingChunk {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
@@ -202,49 +152,5 @@ extension OpenAIClient {
             }
         }
         return deltas
-    }
-}
-
-actor StallWatchdog {
-    private(set) var lastActivity: ContinuousClock.Instant = .now
-
-    func recordActivity() {
-        lastActivity = .now
-    }
-}
-
-struct UnboundedLines<Source: AsyncSequence>: AsyncSequence where Source.Element == UInt8 {
-    typealias Element = String
-    let source: Source
-
-    func makeAsyncIterator() -> AsyncIterator {
-        AsyncIterator(sourceIterator: source.makeAsyncIterator())
-    }
-
-    struct AsyncIterator: AsyncIteratorProtocol {
-        var sourceIterator: Source.AsyncIterator
-        var buffer = Data(capacity: 4096)
-
-        mutating func next() async throws -> String? {
-            while true {
-                guard let byte = try await sourceIterator.next() else {
-                    if buffer.isEmpty { return nil }
-                    return try decodeAndClear()
-                }
-                if byte == 0x0A {
-                    return try decodeAndClear()
-                }
-                buffer.append(byte)
-            }
-        }
-
-        private mutating func decodeAndClear() throws -> String {
-            defer { buffer.removeAll(keepingCapacity: true) }
-            if buffer.last == 0x0D { buffer.removeLast() }
-            guard let line = String(data: buffer, encoding: .utf8) else {
-                throw AgentError.llmError(.decodingFailed(description: "Invalid UTF-8 in SSE stream"))
-            }
-            return line
-        }
     }
 }
