@@ -467,6 +467,117 @@ struct AnthropicCachingRequestTests {
     }
 }
 
+@Suite
+struct AnthropicConversationCachingTests {
+    @Test
+    func conversationCachingMarksSecondToLastUserMessage() throws {
+        let client = AnthropicClient(apiKey: "k", model: "m", cachingEnabled: true)
+        let messages: [ChatMessage] = [
+            .system("Be helpful"),
+            .user("First question"),
+            .assistant(AssistantMessage(content: "First answer")),
+            .user("Second question"),
+        ]
+        let request = try client.buildRequest(messages: messages, tools: [])
+        let json = try encodeRequest(request)
+
+        let msgs = json["messages"] as? [[String: Any]]
+        #expect(msgs?.count == 3)
+
+        let firstUser = msgs?[0]["content"]
+        #expect(firstUser is [[String: Any]])
+        let blocks = firstUser as? [[String: Any]]
+        #expect(blocks?.count == 1)
+        #expect(blocks?[0]["text"] as? String == "First question")
+        let cacheControl = blocks?[0]["cache_control"] as? [String: Any]
+        #expect(cacheControl?["type"] as? String == "ephemeral")
+
+        #expect(msgs?[2]["content"] as? String == "Second question")
+    }
+
+    @Test
+    func conversationCachingSkippedWithOneUserMessage() throws {
+        let client = AnthropicClient(apiKey: "k", model: "m", cachingEnabled: true)
+        let request = try client.buildRequest(messages: [.user("Only one")], tools: [])
+        let json = try encodeRequest(request)
+
+        let msgs = json["messages"] as? [[String: Any]]
+        #expect(msgs?.count == 1)
+        #expect(msgs?[0]["content"] as? String == "Only one")
+    }
+
+    @Test
+    func conversationCachingSkippedWhenDisabled() throws {
+        let client = AnthropicClient(apiKey: "k", model: "m", cachingEnabled: false)
+        let messages: [ChatMessage] = [
+            .user("First"),
+            .assistant(AssistantMessage(content: "Reply")),
+            .user("Second"),
+        ]
+        let request = try client.buildRequest(messages: messages, tools: [])
+        let json = try encodeRequest(request)
+
+        let msgs = json["messages"] as? [[String: Any]]
+        #expect(msgs?[0]["content"] as? String == "First")
+        #expect(msgs?[2]["content"] as? String == "Second")
+    }
+
+    @Test
+    func conversationCachingWithMultipleExchanges() throws {
+        let client = AnthropicClient(apiKey: "k", model: "m", cachingEnabled: true)
+        let messages: [ChatMessage] = [
+            .user("user1"),
+            .assistant(AssistantMessage(content: "asst1")),
+            .user("user2"),
+            .assistant(AssistantMessage(content: "asst2")),
+            .user("user3"),
+        ]
+        let request = try client.buildRequest(messages: messages, tools: [])
+        let json = try encodeRequest(request)
+
+        let msgs = json["messages"] as? [[String: Any]]
+        #expect(msgs?.count == 5)
+
+        #expect(msgs?[0]["content"] as? String == "user1")
+
+        let user2Content = msgs?[2]["content"] as? [[String: Any]]
+        #expect(user2Content?.count == 1)
+        #expect(user2Content?[0]["text"] as? String == "user2")
+        let cacheControl = user2Content?[0]["cache_control"] as? [String: Any]
+        #expect(cacheControl?["type"] as? String == "ephemeral")
+
+        #expect(msgs?[4]["content"] as? String == "user3")
+    }
+
+    @Test
+    func conversationCachingIgnoresToolResultUserMessages() throws {
+        let client = AnthropicClient(apiKey: "k", model: "m", cachingEnabled: true)
+        let assistant = AssistantMessage(
+            content: "Let me search",
+            toolCalls: [ToolCall(id: "tc_1", name: "search", arguments: "{\"q\":\"test\"}")]
+        )
+        let messages: [ChatMessage] = [
+            .user("Find info"),
+            .assistant(assistant),
+            .tool(id: "tc_1", name: "search", content: "Result data"),
+            .user("Thanks"),
+        ]
+        let request = try client.buildRequest(messages: messages, tools: [])
+        let json = try encodeRequest(request)
+
+        let msgs = json["messages"] as? [[String: Any]]
+        #expect(msgs?.count == 4)
+
+        #expect(msgs?[0]["content"] as? String == "Find info")
+
+        let toolResultUser = msgs?[2]["content"] as? [[String: Any]]
+        #expect(toolResultUser?[0]["type"] as? String == "tool_result")
+        #expect(toolResultUser?[0]["cache_control"] == nil)
+
+        #expect(msgs?[3]["content"] as? String == "Thanks")
+    }
+}
+
 private enum TestAnthropicOutput: SchemaProviding {
     static var jsonSchema: JSONSchema { .object(properties: ["value": .string()], required: ["value"]) }
 }

@@ -81,7 +81,7 @@ struct AgentStreamingTests {
         #expect(tokenUsage.input == 30)
         #expect(tokenUsage.output == 15)
         #expect(content == "Echoed successfully")
-        #expect(history.count >= 4)
+        #expect(history.count == 4)
     }
 
     @Test
@@ -649,6 +649,118 @@ private struct NoopOutput: Codable, Sendable {}
 
 private enum TestToolError: Error, Sendable {
     case intentional
+}
+
+@Suite
+struct AgentIterationCompletedTests {
+    @Test
+    func iterationCompletedEmittedAfterEachLLMCall() async throws {
+        let echoTool = try Tool<EchoParams, EchoOutput, EmptyContext>(
+            name: "echo",
+            description: "Echoes input",
+            executor: { params, _ in EchoOutput(echoed: "Echo: \(params.message)") }
+        )
+
+        let iteration1: [StreamDelta] = [
+            .toolCallStart(index: 0, id: "call_1", name: "echo"),
+            .toolCallDelta(index: 0, arguments: #"{"message": "first"}"#),
+            .finished(usage: TokenUsage(input: 10, output: 5))
+        ]
+        let iteration2: [StreamDelta] = [
+            .toolCallStart(index: 0, id: "call_2", name: "finish"),
+            .toolCallDelta(index: 0, arguments: #"{"content": "done"}"#),
+            .finished(usage: TokenUsage(input: 20, output: 10))
+        ]
+
+        let client = StreamingMockLLMClient(streamSequences: [iteration1, iteration2])
+        let agent = Agent<EmptyContext>(client: client, tools: [echoTool])
+
+        var iterationEvents: [(usage: TokenUsage, iteration: Int)] = []
+        for try await event in agent.stream(userMessage: "Go", context: EmptyContext()) {
+            if case let .iterationCompleted(usage, iteration) = event {
+                iterationEvents.append((usage, iteration))
+            }
+        }
+
+        #expect(iterationEvents.count == 2)
+        #expect(iterationEvents[0].iteration == 1)
+        #expect(iterationEvents[1].iteration == 2)
+    }
+
+    @Test
+    func iterationCompletedCarriesPerTurnUsage() async throws {
+        let echoTool = try Tool<EchoParams, EchoOutput, EmptyContext>(
+            name: "echo",
+            description: "Echoes input",
+            executor: { params, _ in EchoOutput(echoed: params.message) }
+        )
+
+        let iteration1: [StreamDelta] = [
+            .toolCallStart(index: 0, id: "call_1", name: "echo"),
+            .toolCallDelta(index: 0, arguments: #"{"message": "x"}"#),
+            .finished(usage: TokenUsage(input: 10, output: 5))
+        ]
+        let iteration2: [StreamDelta] = [
+            .toolCallStart(index: 0, id: "call_2", name: "finish"),
+            .toolCallDelta(index: 0, arguments: #"{"content": "done"}"#),
+            .finished(usage: TokenUsage(input: 20, output: 10))
+        ]
+
+        let client = StreamingMockLLMClient(streamSequences: [iteration1, iteration2])
+        let agent = Agent<EmptyContext>(client: client, tools: [echoTool])
+
+        var iterationEvents: [(usage: TokenUsage, iteration: Int)] = []
+        for try await event in agent.stream(userMessage: "Go", context: EmptyContext()) {
+            if case let .iterationCompleted(usage, iteration) = event {
+                iterationEvents.append((usage, iteration))
+            }
+        }
+
+        #expect(iterationEvents[0].usage == TokenUsage(input: 10, output: 5))
+        #expect(iterationEvents[1].usage == TokenUsage(input: 20, output: 10))
+    }
+
+    @Test
+    func iterationCompletedNotEmittedWhenUsageNil() async throws {
+        let deltas: [StreamDelta] = [
+            .toolCallStart(index: 0, id: "call_1", name: "finish"),
+            .toolCallDelta(index: 0, arguments: #"{"content": "done"}"#),
+            .finished(usage: nil)
+        ]
+
+        let client = StreamingMockLLMClient(streamSequences: [deltas])
+        let agent = Agent<EmptyContext>(client: client, tools: [])
+
+        var iterationEvents: [StreamEvent] = []
+        for try await event in agent.stream(userMessage: "Go", context: EmptyContext()) {
+            if case .iterationCompleted = event {
+                iterationEvents.append(event)
+            }
+        }
+
+        #expect(iterationEvents.isEmpty)
+    }
+
+    @Test
+    func singleIterationEmitsOneIterationCompleted() async throws {
+        let deltas: [StreamDelta] = [
+            .toolCallStart(index: 0, id: "call_1", name: "finish"),
+            .toolCallDelta(index: 0, arguments: #"{"content": "done"}"#),
+            .finished(usage: TokenUsage(input: 10, output: 5))
+        ]
+
+        let client = StreamingMockLLMClient(streamSequences: [deltas])
+        let agent = Agent<EmptyContext>(client: client, tools: [])
+
+        var iterationCount = 0
+        for try await event in agent.stream(userMessage: "Go", context: EmptyContext()) {
+            if case .iterationCompleted = event {
+                iterationCount += 1
+            }
+        }
+
+        #expect(iterationCount == 1)
+    }
 }
 
 @Suite

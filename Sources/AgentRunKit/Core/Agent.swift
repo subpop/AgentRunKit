@@ -226,7 +226,7 @@ public final class Agent<C: ToolContext>: Sendable {
         let policy = StreamPolicy.agent
         let processor = StreamProcessor(client: client, toolDefinitions: toolDefinitions, policy: policy)
 
-        for _ in 1 ... configuration.maxIterations {
+        for iterationNumber in 1 ... configuration.maxIterations {
             try Task.checkCancellation()
 
             let truncatedMessages = truncateIfNeeded(messages)
@@ -236,6 +236,10 @@ public final class Agent<C: ToolContext>: Sendable {
                 continuation: continuation,
                 requestContext: requestContext
             )
+
+            if let usage = iteration.usage {
+                continuation.yield(.iterationCompleted(usage: usage, iteration: iterationNumber))
+            }
 
             let reasoning = iteration.reasoning.isEmpty ? nil : ReasoningContent(content: iteration.reasoning)
             let details = iteration.reasoningDetails.isEmpty ? nil : iteration.reasoningDetails

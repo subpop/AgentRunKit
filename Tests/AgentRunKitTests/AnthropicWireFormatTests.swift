@@ -137,8 +137,10 @@ struct AnthropicCacheControlWireFormatTests {
         toolDef.cacheControl = CacheControl()
         let json = try encodeToDict(toolDef)
 
+        #expect(json.count == 4)
         #expect(json["name"] as? String == "search")
         #expect(json["description"] as? String == "Search")
+        #expect(json["input_schema"] != nil)
         let cacheControl = json["cache_control"] as? [String: Any]
         #expect(cacheControl?["type"] as? String == "ephemeral")
     }
@@ -153,6 +155,24 @@ struct AnthropicCacheControlWireFormatTests {
         let json = try encodeToDict(toolDef)
 
         #expect(json["cache_control"] == nil)
+    }
+}
+
+@Suite
+struct AnthropicMessageContentEncodingTests {
+    @Test
+    func textWithCacheControlEncodesAsBlockArray() throws {
+        let content = AnthropicMessageContent.textWithCacheControl("Hi")
+        let data = try JSONEncoder().encode(content)
+        let array = try JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+
+        #expect(array?.count == 1)
+        let block = array?[0]
+        #expect(block?["type"] as? String == "text")
+        #expect(block?["text"] as? String == "Hi")
+        let cacheControl = block?["cache_control"] as? [String: Any]
+        #expect(cacheControl?["type"] as? String == "ephemeral")
+        #expect(block?.count == 3)
     }
 }
 

@@ -374,6 +374,7 @@ Available properties:
 | `finishReason` | `FinishReason?` | How the agent finished |
 | `history` | `[ChatMessage]` | Conversation history for multi-turn |
 | `toolCalls` | `[ToolCallInfo]` | Tool call states (`.running`, `.completed`, `.failed`) |
+| `iterationUsages` | `[TokenUsage]` | Per-iteration token usage in agent loops |
 
 ### Reasoning Models
 
@@ -982,7 +983,7 @@ let client = AnthropicClient(
 )
 ```
 
-When enabled, `buildRequest` marks the last system block and the last tool definition with `cache_control`. Cache token usage is reported on `TokenUsage`:
+When enabled, `buildRequest` marks the last system block, the last tool definition, and the second-to-last user message with `cache_control`. This creates a sliding cache window — as conversation grows, the stable prefix gets cached across agent loop iterations. By iteration 5, 80%+ of input tokens hit cache. Cache token usage is reported on `TokenUsage`:
 
 ```swift
 let result = try await agent.run(userMessage: "...", context: EmptyContext())

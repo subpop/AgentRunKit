@@ -94,10 +94,9 @@ extension AnthropicClient {
         stream: Bool = false,
         extraFields: [String: JSONValue] = [:]
     ) throws -> AnthropicRequest {
-        let (system, anthropicMessages) = try AnthropicMessageMapper.mapMessages(messages)
+        var (systemBlocks, anthropicMessages) = try AnthropicMessageMapper.mapMessages(messages)
         var toolDefs: [AnthropicToolDefinition]? = tools.isEmpty ? nil : tools.map(AnthropicToolDefinition.init)
 
-        var systemBlocks = system
         if cachingEnabled {
             if var last = systemBlocks?.popLast() {
                 last.cacheControl = CacheControl()
@@ -107,6 +106,7 @@ extension AnthropicClient {
                 last.cacheControl = CacheControl()
                 toolDefs?.append(last)
             }
+            markSecondToLastUserMessage(&anthropicMessages)
         }
 
         return try AnthropicRequest(
@@ -119,6 +119,20 @@ extension AnthropicClient {
             thinking: buildThinkingConfig(),
             extraFields: extraFields
         )
+    }
+
+    private func markSecondToLastUserMessage(_ messages: inout [AnthropicMessage]) {
+        var textUserIndices: [Int] = []
+        for (index, msg) in messages.enumerated() where msg.role == .user {
+            if case .text = msg.content {
+                textUserIndices.append(index)
+            }
+        }
+        guard textUserIndices.count >= 2 else { return }
+        let targetIndex = textUserIndices[textUserIndices.count - 2]
+        if case let .text(string) = messages[targetIndex].content {
+            messages[targetIndex].content = .textWithCacheControl(string)
+        }
     }
 
     func buildThinkingConfig() throws -> AnthropicThinkingConfig? {

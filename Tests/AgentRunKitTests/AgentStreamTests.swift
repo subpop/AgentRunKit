@@ -132,8 +132,8 @@ struct AgentStreamTests {
 
         let failCall = stream.toolCalls.first { $0.name == "fail_tool" }
         #expect(failCall != nil)
-        if case .failed = failCall?.state {
-            // expected
+        if case let .failed(message) = failCall?.state {
+            #expect(!message.isEmpty)
         } else {
             Issue.record("Expected failed state for fail_tool")
         }
@@ -202,6 +202,7 @@ struct AgentStreamTests {
         await awaitCompletion(stream)
 
         #expect(!stream.isStreaming)
+        #expect(stream.content.isEmpty)
     }
 
     @MainActor @Test
@@ -264,6 +265,65 @@ struct AgentStreamTests {
         await awaitCompletion(stream)
 
         #expect(stream.content == "From deltas")
+    }
+
+    @MainActor @Test
+    func iterationUsagesAccumulatedInAgentStream() async throws {
+        let echoTool = try Tool<EchoParams, EchoOutput, EmptyContext>(
+            name: "echo",
+            description: "Echoes input",
+            executor: { params, _ in EchoOutput(echoed: params.message) }
+        )
+
+        let firstDeltas: [StreamDelta] = [
+            .toolCallStart(index: 0, id: "call_1", name: "echo"),
+            .toolCallDelta(index: 0, arguments: #"{"message": "hi"}"#),
+            .finished(usage: TokenUsage(input: 10, output: 5)),
+        ]
+        let secondDeltas: [StreamDelta] = [
+            .toolCallStart(index: 0, id: "call_2", name: "finish"),
+            .toolCallDelta(index: 0, arguments: #"{"content": "done"}"#),
+            .finished(usage: TokenUsage(input: 20, output: 10)),
+        ]
+
+        let stream = makeStreamWithTools(
+            streamSequences: [firstDeltas, secondDeltas],
+            tools: [echoTool]
+        )
+
+        stream.send("Go", context: EmptyContext())
+        await awaitCompletion(stream)
+
+        #expect(stream.iterationUsages.count == 2)
+        #expect(stream.iterationUsages[0] == TokenUsage(input: 10, output: 5))
+        #expect(stream.iterationUsages[1] == TokenUsage(input: 20, output: 10))
+    }
+
+    @MainActor @Test
+    func iterationUsagesResetOnNewSend() async throws {
+        let deltas1: [StreamDelta] = [
+            .toolCallStart(index: 0, id: "call_1", name: "finish"),
+            .toolCallDelta(index: 0, arguments: #"{"content": "done1"}"#),
+            .finished(usage: TokenUsage(input: 10, output: 5)),
+        ]
+        let deltas2: [StreamDelta] = [
+            .toolCallStart(index: 0, id: "call_2", name: "finish"),
+            .toolCallDelta(index: 0, arguments: #"{"content": "done2"}"#),
+            .finished(usage: TokenUsage(input: 20, output: 10)),
+        ]
+
+        let client = StreamingMockLLMClient(streamSequences: [deltas1, deltas2])
+        let agent = Agent<EmptyContext>(client: client, tools: [])
+        let stream = AgentStream(agent: agent)
+
+        stream.send("First", context: EmptyContext())
+        await awaitCompletion(stream)
+        #expect(stream.iterationUsages.count == 1)
+
+        stream.send("Second", context: EmptyContext())
+        await awaitCompletion(stream)
+        #expect(stream.iterationUsages.count == 1)
+        #expect(stream.iterationUsages[0] == TokenUsage(input: 20, output: 10))
     }
 }
 

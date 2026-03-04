@@ -24,6 +24,7 @@ public final class AgentStream<C: ToolContext> {
     public private(set) var finishReason: FinishReason?
     public private(set) var history: [ChatMessage] = []
     public private(set) var toolCalls: [ToolCallInfo] = []
+    public private(set) var iterationUsages: [TokenUsage] = []
 
     private let agent: Agent<C>
     private var activeTask: Task<Void, Never>?
@@ -69,7 +70,9 @@ public final class AgentStream<C: ToolContext> {
                     self.handle(event)
                 }
             } catch is CancellationError {
+                return
             } catch {
+                guard !Task.isCancelled else { return }
                 self.error = error
             }
             self.isStreaming = false
@@ -89,6 +92,7 @@ public final class AgentStream<C: ToolContext> {
         finishReason = nil
         history = []
         toolCalls = []
+        iterationUsages = []
     }
 
     private func handle(_ event: StreamEvent) {
@@ -116,6 +120,8 @@ public final class AgentStream<C: ToolContext> {
             }
         case .subAgentStarted, .subAgentEvent, .subAgentCompleted:
             break
+        case let .iterationCompleted(usage, _):
+            iterationUsages.append(usage)
         }
     }
 }

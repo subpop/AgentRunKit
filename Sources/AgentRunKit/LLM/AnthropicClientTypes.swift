@@ -55,12 +55,13 @@ enum AnthropicRole: String, Encodable, Sendable {
 
 struct AnthropicMessage: Encodable, Sendable {
     let role: AnthropicRole
-    let content: AnthropicMessageContent
+    var content: AnthropicMessageContent
 }
 
 enum AnthropicMessageContent: Encodable, Sendable {
     case text(String)
     case blocks([AnthropicContentBlock])
+    case textWithCacheControl(String)
 
     func encode(to encoder: any Encoder) throws {
         var container = encoder.singleValueContainer()
@@ -69,6 +70,8 @@ enum AnthropicMessageContent: Encodable, Sendable {
             try container.encode(string)
         case let .blocks(blocks):
             try container.encode(blocks)
+        case let .textWithCacheControl(string):
+            try container.encode([AnthropicSystemBlock(text: string, cacheControl: CacheControl())])
         }
     }
 }

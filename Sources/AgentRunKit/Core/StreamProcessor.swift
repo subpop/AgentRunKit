@@ -51,6 +51,7 @@ struct StreamIteration: Sendable {
     let reasoning: String
     let reasoningDetails: [JSONValue]
     let audioTranscript: String
+    let usage: TokenUsage?
 
     var effectiveContent: String {
         content.isEmpty && !audioTranscript.isEmpty ? audioTranscript : content
@@ -77,6 +78,7 @@ struct StreamProcessor: Sendable {
         var audioTranscriptBuffer = ""
         var audioId: String?
         var audioExpiresAt = 0
+        var iterationUsage: TokenUsage?
 
         for try await delta in client.stream(
             messages: messages,
@@ -126,7 +128,10 @@ struct StreamProcessor: Sendable {
                 continuation.yield(.audioTranscript(text))
 
             case let .finished(usage):
-                if let usage { totalUsage += usage }
+                if let usage {
+                    totalUsage += usage
+                    iterationUsage = usage
+                }
             }
         }
 
@@ -146,7 +151,8 @@ struct StreamProcessor: Sendable {
             toolCalls: toolCalls,
             reasoning: reasoningBuffer,
             reasoningDetails: reasoningDetailAccumulator.consolidated(),
-            audioTranscript: audioTranscriptBuffer
+            audioTranscript: audioTranscriptBuffer,
+            usage: iterationUsage
         )
     }
 }
