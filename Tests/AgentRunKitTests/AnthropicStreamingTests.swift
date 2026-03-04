@@ -228,6 +228,40 @@ struct AnthropicStreamingTests {
     }
 
     @Test
+    func emptyInputToolCallProducesValidJSON() async throws {
+        let toolStart = #"{"type":"content_block_start","index":0,"content_block":"#
+            + #"{"type":"tool_use","id":"toolu_01","name":"list_items"}}"#
+        let emptyDelta = #"{"type":"content_block_delta","index":0,"delta":"#
+            + #"{"type":"input_json_delta","partial_json":""}}"#
+        let lines = [
+            sseLine(toolStart),
+            sseLine(emptyDelta),
+            sseLine(#"{"type":"content_block_stop","index":0}"#),
+            sseLine(#"{"type":"message_delta","usage":{"output_tokens":5}}"#),
+            sseLine(#"{"type":"message_stop"}"#)
+        ]
+        let deltas = try await collectStreamDeltas(client: makeClient(), lines: lines)
+
+        let starts = deltas.filter { if case .toolCallStart = $0 { return true }; return false }
+        #expect(starts.count == 1)
+        #expect(starts[0] == .toolCallStart(index: 0, id: "toolu_01", name: "list_items"))
+
+        let argDeltas = deltas.filter { if case .toolCallDelta = $0 { return true }; return false }
+        #expect(argDeltas.isEmpty)
+    }
+
+    @Test
+    func emptyInputToolCallAccumulatesToValidJSON() async throws {
+        var accumulator = ToolCallAccumulator(id: "toolu_01", name: "list_items")
+        let toolCall = accumulator.toToolCall()
+        #expect(toolCall.arguments == "{}")
+
+        accumulator.arguments = ""
+        let toolCall2 = accumulator.toToolCall()
+        #expect(toolCall2.arguments == "{}")
+    }
+
+    @Test
     func multipleToolCallsHaveCorrectIndices() async throws {
         let startA = #"{"type":"content_block_start","index":0,"content_block":"#
             + #"{"type":"tool_use","id":"toolu_a","name":"search"}}"#

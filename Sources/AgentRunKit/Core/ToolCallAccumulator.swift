@@ -6,6 +6,6 @@ struct ToolCallAccumulator: Sendable {
     var arguments: String = ""
 
     func toToolCall() -> ToolCall {
-        ToolCall(id: id, name: name, arguments: arguments)
+        ToolCall(id: id, name: name, arguments: arguments.isEmpty ? "{}" : arguments)
     }
 }
