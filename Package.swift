@@ -9,10 +9,23 @@ let package = Package(
         .macOS(.v15)
     ],
     products: [
-        .library(name: "AgentRunKit", targets: ["AgentRunKit"])
+        .library(name: "AgentRunKit", targets: ["AgentRunKit"]),
+        .library(name: "AgentRunKitMLX", targets: ["AgentRunKitMLX"])
+    ],
+    dependencies: [
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm", .upToNextMinor(from: "2.30.0"))
     ],
     targets: [
         .target(name: "AgentRunKit"),
-        .testTarget(name: "AgentRunKitTests", dependencies: ["AgentRunKit"])
+        .testTarget(name: "AgentRunKitTests", dependencies: ["AgentRunKit"]),
+        .target(
+            name: "AgentRunKitMLX",
+            dependencies: [
+                "AgentRunKit",
+                .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
+                .product(name: "MLXLLM", package: "mlx-swift-lm")
+            ]
+        ),
+        .testTarget(name: "AgentRunKitMLXTests", dependencies: ["AgentRunKitMLX"])
     ]
 )
