@@ -7,12 +7,12 @@ struct SchemaUnkeyedContainer: UnkeyedDecodingContainer {
     var isAtEnd: Bool { currentIndex >= 1 }
     var currentIndex: Int = 0
 
-    mutating func decodeNil() throws -> Bool {
+    mutating func decodeNil() -> Bool {
         decoder.pendingNullable = true
         return false
     }
 
-    mutating func decode(_: Bool.Type) throws -> Bool {
+    mutating func decode(_: Bool.Type) -> Bool {
         let schema: JSONSchema = decoder.pendingNullable ? .boolean().optional() : .boolean()
         decoder.pendingNullable = false
         decoder.schema = .array(items: schema)
@@ -20,7 +20,7 @@ struct SchemaUnkeyedContainer: UnkeyedDecodingContainer {
         return false
     }
 
-    mutating func decode(_: String.Type) throws -> String {
+    mutating func decode(_: String.Type) -> String {
         let schema: JSONSchema = decoder.pendingNullable ? .string().optional() : .string()
         decoder.pendingNullable = false
         decoder.schema = .array(items: schema)
@@ -28,7 +28,7 @@ struct SchemaUnkeyedContainer: UnkeyedDecodingContainer {
         return ""
     }
 
-    mutating func decode(_: Double.Type) throws -> Double {
+    mutating func decode(_: Double.Type) -> Double {
         let schema: JSONSchema = decoder.pendingNullable ? .number().optional() : .number()
         decoder.pendingNullable = false
         decoder.schema = .array(items: schema)
@@ -36,7 +36,7 @@ struct SchemaUnkeyedContainer: UnkeyedDecodingContainer {
         return 0
     }
 
-    mutating func decode(_: Float.Type) throws -> Float {
+    mutating func decode(_: Float.Type) -> Float {
         let schema: JSONSchema = decoder.pendingNullable ? .number().optional() : .number()
         decoder.pendingNullable = false
         decoder.schema = .array(items: schema)
@@ -44,7 +44,7 @@ struct SchemaUnkeyedContainer: UnkeyedDecodingContainer {
         return 0
     }
 
-    mutating func decode(_: Int.Type) throws -> Int {
+    mutating func decode(_: Int.Type) -> Int {
         let schema: JSONSchema = decoder.pendingNullable ? .integer().optional() : .integer()
         decoder.pendingNullable = false
         decoder.schema = .array(items: schema)
@@ -52,7 +52,7 @@ struct SchemaUnkeyedContainer: UnkeyedDecodingContainer {
         return 0
     }
 
-    mutating func decode(_: Int8.Type) throws -> Int8 {
+    mutating func decode(_: Int8.Type) -> Int8 {
         let schema: JSONSchema = decoder.pendingNullable ? .integer().optional() : .integer()
         decoder.pendingNullable = false
         decoder.schema = .array(items: schema)
@@ -60,7 +60,7 @@ struct SchemaUnkeyedContainer: UnkeyedDecodingContainer {
         return 0
     }
 
-    mutating func decode(_: Int16.Type) throws -> Int16 {
+    mutating func decode(_: Int16.Type) -> Int16 {
         let schema: JSONSchema = decoder.pendingNullable ? .integer().optional() : .integer()
         decoder.pendingNullable = false
         decoder.schema = .array(items: schema)
@@ -68,7 +68,7 @@ struct SchemaUnkeyedContainer: UnkeyedDecodingContainer {
         return 0
     }
 
-    mutating func decode(_: Int32.Type) throws -> Int32 {
+    mutating func decode(_: Int32.Type) -> Int32 {
         let schema: JSONSchema = decoder.pendingNullable ? .integer().optional() : .integer()
         decoder.pendingNullable = false
         decoder.schema = .array(items: schema)
@@ -76,7 +76,7 @@ struct SchemaUnkeyedContainer: UnkeyedDecodingContainer {
         return 0
     }
 
-    mutating func decode(_: Int64.Type) throws -> Int64 {
+    mutating func decode(_: Int64.Type) -> Int64 {
         let schema: JSONSchema = decoder.pendingNullable ? .integer().optional() : .integer()
         decoder.pendingNullable = false
         decoder.schema = .array(items: schema)
@@ -84,7 +84,7 @@ struct SchemaUnkeyedContainer: UnkeyedDecodingContainer {
         return 0
     }
 
-    mutating func decode(_: UInt.Type) throws -> UInt {
+    mutating func decode(_: UInt.Type) -> UInt {
         let schema: JSONSchema = decoder.pendingNullable ? .integer().optional() : .integer()
         decoder.pendingNullable = false
         decoder.schema = .array(items: schema)
@@ -92,7 +92,7 @@ struct SchemaUnkeyedContainer: UnkeyedDecodingContainer {
         return 0
     }
 
-    mutating func decode(_: UInt8.Type) throws -> UInt8 {
+    mutating func decode(_: UInt8.Type) -> UInt8 {
         let schema: JSONSchema = decoder.pendingNullable ? .integer().optional() : .integer()
         decoder.pendingNullable = false
         decoder.schema = .array(items: schema)
@@ -100,7 +100,7 @@ struct SchemaUnkeyedContainer: UnkeyedDecodingContainer {
         return 0
     }
 
-    mutating func decode(_: UInt16.Type) throws -> UInt16 {
+    mutating func decode(_: UInt16.Type) -> UInt16 {
         let schema: JSONSchema = decoder.pendingNullable ? .integer().optional() : .integer()
         decoder.pendingNullable = false
         decoder.schema = .array(items: schema)
@@ -108,7 +108,7 @@ struct SchemaUnkeyedContainer: UnkeyedDecodingContainer {
         return 0
     }
 
-    mutating func decode(_: UInt32.Type) throws -> UInt32 {
+    mutating func decode(_: UInt32.Type) -> UInt32 {
         let schema: JSONSchema = decoder.pendingNullable ? .integer().optional() : .integer()
         decoder.pendingNullable = false
         decoder.schema = .array(items: schema)
@@ -116,7 +116,7 @@ struct SchemaUnkeyedContainer: UnkeyedDecodingContainer {
         return 0
     }
 
-    mutating func decode(_: UInt64.Type) throws -> UInt64 {
+    mutating func decode(_: UInt64.Type) -> UInt64 {
         let schema: JSONSchema = decoder.pendingNullable ? .integer().optional() : .integer()
         decoder.pendingNullable = false
         decoder.schema = .array(items: schema)
@@ -139,16 +139,16 @@ struct SchemaUnkeyedContainer: UnkeyedDecodingContainer {
 
     mutating func nestedContainer<NestedKey: CodingKey>(
         keyedBy _: NestedKey.Type
-    ) throws -> KeyedDecodingContainer<NestedKey> {
+    ) -> KeyedDecodingContainer<NestedKey> {
         let container = SchemaKeyedContainer<NestedKey>(decoder: decoder, codingPath: codingPath)
         return KeyedDecodingContainer(container)
     }
 
-    mutating func nestedUnkeyedContainer() throws -> any UnkeyedDecodingContainer {
+    mutating func nestedUnkeyedContainer() -> any UnkeyedDecodingContainer {
         SchemaUnkeyedContainer(decoder: decoder, codingPath: codingPath)
     }
 
-    mutating func superDecoder() throws -> any Decoder {
+    mutating func superDecoder() -> any Decoder {
         decoder
     }
 }
@@ -162,85 +162,85 @@ struct SchemaSingleValueContainer: SingleValueDecodingContainer {
         return false
     }
 
-    func decode(_: Bool.Type) throws -> Bool {
+    func decode(_: Bool.Type) -> Bool {
         decoder.schema = decoder.pendingNullable ? .boolean().optional() : .boolean()
         decoder.pendingNullable = false
         return false
     }
 
-    func decode(_: String.Type) throws -> String {
+    func decode(_: String.Type) -> String {
         decoder.schema = decoder.pendingNullable ? .string().optional() : .string()
         decoder.pendingNullable = false
         return ""
     }
 
-    func decode(_: Double.Type) throws -> Double {
+    func decode(_: Double.Type) -> Double {
         decoder.schema = decoder.pendingNullable ? .number().optional() : .number()
         decoder.pendingNullable = false
         return 0
     }
 
-    func decode(_: Float.Type) throws -> Float {
+    func decode(_: Float.Type) -> Float {
         decoder.schema = decoder.pendingNullable ? .number().optional() : .number()
         decoder.pendingNullable = false
         return 0
     }
 
-    func decode(_: Int.Type) throws -> Int {
+    func decode(_: Int.Type) -> Int {
         decoder.schema = decoder.pendingNullable ? .integer().optional() : .integer()
         decoder.pendingNullable = false
         return 0
     }
 
-    func decode(_: Int8.Type) throws -> Int8 {
+    func decode(_: Int8.Type) -> Int8 {
         decoder.schema = decoder.pendingNullable ? .integer().optional() : .integer()
         decoder.pendingNullable = false
         return 0
     }
 
-    func decode(_: Int16.Type) throws -> Int16 {
+    func decode(_: Int16.Type) -> Int16 {
         decoder.schema = decoder.pendingNullable ? .integer().optional() : .integer()
         decoder.pendingNullable = false
         return 0
     }
 
-    func decode(_: Int32.Type) throws -> Int32 {
+    func decode(_: Int32.Type) -> Int32 {
         decoder.schema = decoder.pendingNullable ? .integer().optional() : .integer()
         decoder.pendingNullable = false
         return 0
     }
 
-    func decode(_: Int64.Type) throws -> Int64 {
+    func decode(_: Int64.Type) -> Int64 {
         decoder.schema = decoder.pendingNullable ? .integer().optional() : .integer()
         decoder.pendingNullable = false
         return 0
     }
 
-    func decode(_: UInt.Type) throws -> UInt {
+    func decode(_: UInt.Type) -> UInt {
         decoder.schema = decoder.pendingNullable ? .integer().optional() : .integer()
         decoder.pendingNullable = false
         return 0
     }
 
-    func decode(_: UInt8.Type) throws -> UInt8 {
+    func decode(_: UInt8.Type) -> UInt8 {
         decoder.schema = decoder.pendingNullable ? .integer().optional() : .integer()
         decoder.pendingNullable = false
         return 0
     }
 
-    func decode(_: UInt16.Type) throws -> UInt16 {
+    func decode(_: UInt16.Type) -> UInt16 {
         decoder.schema = decoder.pendingNullable ? .integer().optional() : .integer()
         decoder.pendingNullable = false
         return 0
     }
 
-    func decode(_: UInt32.Type) throws -> UInt32 {
+    func decode(_: UInt32.Type) -> UInt32 {
         decoder.schema = decoder.pendingNullable ? .integer().optional() : .integer()
         decoder.pendingNullable = false
         return 0
     }
 
-    func decode(_: UInt64.Type) throws -> UInt64 {
+    func decode(_: UInt64.Type) -> UInt64 {
         decoder.schema = decoder.pendingNullable ? .integer().optional() : .integer()
         decoder.pendingNullable = false
         return 0

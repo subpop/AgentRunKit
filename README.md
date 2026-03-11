@@ -104,7 +104,7 @@ Add to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/Tom-Ryder/AgentRunKit.git", from: "1.0.0")
+    .package(url: "https://github.com/Tom-Ryder/AgentRunKit.git", from: "1.20.1")
 ]
 ```
 
@@ -117,7 +117,7 @@ For local inference, add the MLX dependency:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/Tom-Ryder/AgentRunKit.git", from: "1.0.0"),
+    .package(url: "https://github.com/Tom-Ryder/AgentRunKit.git", from: "1.20.1"),
     .package(url: "https://github.com/ml-explore/mlx-swift-lm", .upToNextMinor(from: "2.30.0"))
 ]
 ```

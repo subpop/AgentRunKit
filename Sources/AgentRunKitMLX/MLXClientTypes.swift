@@ -96,39 +96,73 @@ enum MLXMessageMapper {
     private static func schemaDict(_ schema: JSONSchema) -> [String: any Sendable] {
         switch schema {
         case let .string(description, enumValues):
-            var dict: [String: any Sendable] = ["type": "string"]
-            if let description { dict["description"] = description }
-            if let enumValues { dict["enum"] = enumValues }
-            return dict
+            stringSchemaDict(description: description, enumValues: enumValues)
         case let .integer(description):
-            var dict: [String: any Sendable] = ["type": "integer"]
-            if let description { dict["description"] = description }
-            return dict
+            scalarSchemaDict(type: "integer", description: description)
         case let .number(description):
-            var dict: [String: any Sendable] = ["type": "number"]
-            if let description { dict["description"] = description }
-            return dict
+            scalarSchemaDict(type: "number", description: description)
         case let .boolean(description):
-            var dict: [String: any Sendable] = ["type": "boolean"]
-            if let description { dict["description"] = description }
-            return dict
+            scalarSchemaDict(type: "boolean", description: description)
         case .null:
-            return ["type": "null"]
+            ["type": "null"]
         case let .array(items, description):
-            var dict: [String: any Sendable] = ["type": "array", "items": schemaDict(items)]
-            if let description { dict["description"] = description }
-            return dict
+            arraySchemaDict(items: items, description: description)
         case let .object(properties, required, description):
-            var dict: [String: any Sendable] = [
-                "type": "object",
-                "properties": properties.mapValues { schemaDict($0) } as [String: any Sendable],
-                "additionalProperties": false
-            ]
-            if !required.isEmpty { dict["required"] = required }
-            if let description { dict["description"] = description }
-            return dict
+            objectSchemaDict(properties: properties, required: required, description: description)
         case let .anyOf(schemas):
-            return ["anyOf": schemas.map { schemaDict($0) }]
+            ["anyOf": schemas.map { schemaDict($0) }]
         }
+    }
+
+    private static func stringSchemaDict(
+        description: String?,
+        enumValues: [String]?
+    ) -> [String: any Sendable] {
+        var dict = scalarSchemaDict(type: "string", description: description)
+        if let enumValues {
+            dict["enum"] = enumValues
+        }
+        return dict
+    }
+
+    private static func scalarSchemaDict(
+        type: String,
+        description: String?
+    ) -> [String: any Sendable] {
+        var dict: [String: any Sendable] = ["type": type]
+        if let description {
+            dict["description"] = description
+        }
+        return dict
+    }
+
+    private static func arraySchemaDict(
+        items: JSONSchema,
+        description: String?
+    ) -> [String: any Sendable] {
+        var dict: [String: any Sendable] = ["type": "array", "items": schemaDict(items)]
+        if let description {
+            dict["description"] = description
+        }
+        return dict
+    }
+
+    private static func objectSchemaDict(
+        properties: [String: JSONSchema],
+        required: [String],
+        description: String?
+    ) -> [String: any Sendable] {
+        var dict: [String: any Sendable] = [
+            "type": "object",
+            "properties": properties.mapValues { schemaDict($0) } as [String: any Sendable],
+            "additionalProperties": false
+        ]
+        if !required.isEmpty {
+            dict["required"] = required
+        }
+        if let description {
+            dict["description"] = description
+        }
+        return dict
     }
 }

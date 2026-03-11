@@ -3,6 +3,12 @@ import Foundation
 
 // swiftlint:disable force_try
 enum MCPTestHelpers {
+    struct MockTool: Sendable {
+        let name: String
+        let description: String
+        let schema: JSONValue
+    }
+
     static func encodeResponse(id: Int, result: JSONValue) -> Data {
         let response = JSONRPCResponse(
             jsonrpc: "2.0",
@@ -34,13 +40,13 @@ enum MCPTestHelpers {
             "capabilities": .object([:]),
             "serverInfo": .object([
                 "name": .string("test-server"),
-                "version": .string("1.0.0"),
+                "version": .string("1.20.1"),
             ]),
         ])
     }
 
     static func toolsListResult(
-        tools: [(name: String, description: String, schema: JSONValue)],
+        tools: [MockTool],
         nextCursor: String? = nil
     ) -> JSONValue {
         var dict: [String: JSONValue] = [

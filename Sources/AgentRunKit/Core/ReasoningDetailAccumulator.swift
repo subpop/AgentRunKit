@@ -1,7 +1,24 @@
 import Foundation
 
 struct ReasoningDetailAccumulator: Sendable {
-    private var textBlocks: [Int: (template: [String: JSONValue], text: String, signature: String)] = [:]
+    private struct TextBlock: Sendable {
+        let template: [String: JSONValue]
+        var text = ""
+        var signature = ""
+
+        var consolidatedValue: JSONValue {
+            var object = template
+            object["text"] = .string(text)
+            if signature.isEmpty {
+                object.removeValue(forKey: "signature")
+            } else {
+                object["signature"] = .string(signature)
+            }
+            return .object(object)
+        }
+    }
+
+    private var textBlocks: [Int: TextBlock] = [:]
     private var otherBlocks: [JSONValue] = []
 
     var isEmpty: Bool { textBlocks.isEmpty && otherBlocks.isEmpty }
@@ -17,7 +34,7 @@ struct ReasoningDetailAccumulator: Sendable {
             let index: Int = if case let .int(idx) = dict["index"] { idx } else { 0 }
 
             if textBlocks[index] == nil {
-                textBlocks[index] = (template: dict, text: "", signature: "")
+                textBlocks[index] = TextBlock(template: dict)
             }
             if case let .string(text) = dict["text"], !text.isEmpty {
                 textBlocks[index]?.text += text
@@ -31,15 +48,8 @@ struct ReasoningDetailAccumulator: Sendable {
     func consolidated() -> [JSONValue] {
         var result: [JSONValue] = []
         for index in textBlocks.keys.sorted() {
-            guard let (template, text, signature) = textBlocks[index] else { continue }
-            var obj = template
-            obj["text"] = .string(text)
-            if signature.isEmpty {
-                obj.removeValue(forKey: "signature")
-            } else {
-                obj["signature"] = .string(signature)
-            }
-            result.append(.object(obj))
+            guard let block = textBlocks[index] else { continue }
+            result.append(block.consolidatedValue)
         }
         result.append(contentsOf: otherBlocks)
         return result

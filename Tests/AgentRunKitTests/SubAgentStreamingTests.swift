@@ -88,8 +88,8 @@ struct SubAgentStreamingLifecycleTests {
         let startedIdx = events.firstIndex { if case .subAgentStarted = $0 { return true }; return false }
         let completedIdx = events.firstIndex { if case .subAgentCompleted = $0 { return true }; return false }
         let toolCompletedIdx = events.firstIndex { if case .toolCallCompleted = $0 { return true }; return false }
-        #expect(startedIdx! < completedIdx!)
-        #expect(completedIdx! < toolCompletedIdx!)
+        #expect(try #require(startedIdx) < #require(completedIdx))
+        #expect(try #require(completedIdx) < #require(toolCompletedIdx))
     }
 
     @Test
@@ -368,7 +368,11 @@ struct SubAgentTimeoutTests {
 
         await childClient.setStreamStartedHandler {
             Task {
-                try await Task.sleep(for: .milliseconds(200))
+                do {
+                    try await Task.sleep(for: .milliseconds(200))
+                } catch {
+                    return
+                }
                 await childClient.yieldDelta(.toolCallStart(index: 0, id: "cf", name: "finish"))
                 await childClient.yieldDelta(.toolCallDelta(index: 0, arguments: #"{"content": "slow result"}"#))
                 await childClient.yieldDelta(.finished(usage: nil))

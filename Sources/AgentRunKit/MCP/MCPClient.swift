@@ -3,7 +3,7 @@ import Foundation
 private enum MCPConstants {
     static let protocolVersion = "2025-06-18"
     static let clientName = "AgentRunKit"
-    static let clientVersion = "1.0.0"
+    static let clientVersion = "1.20.1"
 }
 
 private struct MCPInitializeResult: Decodable, Sendable {
@@ -90,8 +90,8 @@ public actor MCPClient {
                 "capabilities": .object([:]),
                 "clientInfo": .object([
                     "name": .string(MCPConstants.clientName),
-                    "version": .string(MCPConstants.clientVersion),
-                ]),
+                    "version": .string(MCPConstants.clientVersion)
+                ])
             ]),
             timeout: initializationTimeout
         )
@@ -147,7 +147,7 @@ public actor MCPClient {
             method: "tools/call",
             params: .object([
                 "name": .string(name),
-                "arguments": argumentsValue,
+                "arguments": argumentsValue
             ]),
             timeout: toolCallTimeout
         )
@@ -181,20 +181,20 @@ public actor MCPClient {
 
         // Register continuation BEFORE sending to prevent the actor reentrancy race
         // where a fast response arrives before registration.
-        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<JSONRPCResponse, Error>) in
+        return try await withCheckedThrowingContinuation { continuation in
             pendingRequests[id] = continuation
 
             Task {
                 do {
                     try await self.transport.send(data)
                 } catch {
-                    await self.failRequest(id: id, error: error)
+                    self.failRequest(id: id, error: error)
                 }
             }
 
             timeoutTasks[id] = Task {
                 do { try await Task.sleep(for: timeout) } catch { return }
-                await self.expireRequest(id: id, method: method)
+                self.expireRequest(id: id, method: method)
             }
         }
     }

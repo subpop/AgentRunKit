@@ -117,40 +117,42 @@ extension OpenAIClient {
             if let content = choice.delta.content, !content.isEmpty {
                 deltas.append(.content(content))
             }
-            if let toolCalls = choice.delta.toolCalls {
-                for call in toolCalls {
-                    if let id = call.id, !id.isEmpty, let name = call.function?.name, !name.isEmpty {
-                        deltas.append(.toolCallStart(index: call.index, id: id, name: name))
-                    }
-                    if let args = call.function?.arguments, !args.isEmpty {
-                        deltas.append(.toolCallDelta(index: call.index, arguments: args))
-                    }
-                }
-            }
-            if let audio = choice.delta.audio {
-                if let id = audio.id, !id.isEmpty {
-                    deltas.append(.audioStarted(id: id, expiresAt: audio.expiresAt ?? 0))
-                }
-                if let base64 = audio.data, !base64.isEmpty {
-                    guard let decoded = Data(base64Encoded: base64) else {
-                        throw AgentError.llmError(.decodingFailed(
-                            description: "Invalid base64 in audio data"
-                        ))
-                    }
-                    deltas.append(.audioData(decoded))
-                }
-                if let transcript = audio.transcript, !transcript.isEmpty {
-                    deltas.append(.audioTranscript(transcript))
-                }
-            }
+            extractToolCallDeltas(from: choice.delta, into: &deltas)
+            try extractAudioDeltas(from: choice.delta, into: &deltas)
             if choice.finishReason != nil {
-                deltas.append(.finished(usage: chunk.usage.map { usage in
-                    let reasoning = usage.completionTokensDetails?.reasoningTokens ?? 0
-                    let output = max(0, usage.completionTokens - reasoning)
-                    return TokenUsage(input: usage.promptTokens, output: output, reasoning: reasoning)
-                }))
+                deltas.append(.finished(usage: chunk.usage.map(\.tokenUsage)))
             }
         }
         return deltas
+    }
+
+    private func extractToolCallDeltas(from delta: StreamingDelta, into deltas: inout [StreamDelta]) {
+        guard let toolCalls = delta.toolCalls else { return }
+        for call in toolCalls {
+            if let id = call.id, !id.isEmpty, let name = call.function?.name, !name.isEmpty {
+                deltas.append(.toolCallStart(index: call.index, id: id, name: name))
+            }
+            if let args = call.function?.arguments, !args.isEmpty {
+                deltas.append(.toolCallDelta(index: call.index, arguments: args))
+            }
+        }
+    }
+
+    private func extractAudioDeltas(from delta: StreamingDelta, into deltas: inout [StreamDelta]) throws {
+        guard let audio = delta.audio else { return }
+        if let id = audio.id, !id.isEmpty {
+            deltas.append(.audioStarted(id: id, expiresAt: audio.expiresAt ?? 0))
+        }
+        if let base64 = audio.data, !base64.isEmpty {
+            guard let decoded = Data(base64Encoded: base64) else {
+                throw AgentError.llmError(.decodingFailed(
+                    description: "Invalid base64 in audio data"
+                ))
+            }
+            deltas.append(.audioData(decoded))
+        }
+        if let transcript = audio.transcript, !transcript.isEmpty {
+            deltas.append(.audioTranscript(transcript))
+        }
     }
 }

@@ -29,7 +29,7 @@ private func standardHandler(
 @Suite
 struct MCPClientTests {
     private func makeInitAndToolsResponses(
-        tools: [(name: String, description: String, schema: JSONValue)] = []
+        tools: [MCPTestHelpers.MockTool] = []
     ) -> [Data] {
         [
             MCPTestHelpers.encodeResponse(id: 1, result: MCPTestHelpers.initializeResult()),
@@ -50,7 +50,10 @@ struct MCPClientTests {
     @Test
     func initializeVersionMismatch() async throws {
         let transport = ScriptedMCPTransport(responses: [
-            MCPTestHelpers.encodeResponse(id: 1, result: MCPTestHelpers.initializeResult(protocolVersion: "1999-01-01")),
+            MCPTestHelpers.encodeResponse(
+                id: 1,
+                result: MCPTestHelpers.initializeResult(protocolVersion: "1999-01-01")
+            ),
         ])
         let client = MCPClient(serverName: "test", transport: transport)
         do {
@@ -74,7 +77,7 @@ struct MCPClientTests {
             required: ["query"]
         )
         let transport = ScriptedMCPTransport(responses: makeInitAndToolsResponses(
-            tools: [("search", "Search stuff", schema)]
+            tools: [.init(name: "search", description: "Search stuff", schema: schema)]
         ))
         let client = MCPClient(serverName: "test", transport: transport)
         try await client.connectAndInitialize()
@@ -98,13 +101,15 @@ struct MCPClientTests {
                 if case let .object(params) = request.params, params["cursor"] != nil {
                     return MCPTestHelpers.encodeResponse(
                         id: idValue,
-                        result: MCPTestHelpers.toolsListResult(tools: [("tool_b", "B", schema)])
+                        result: MCPTestHelpers.toolsListResult(
+                            tools: [.init(name: "tool_b", description: "B", schema: schema)]
+                        )
                     )
                 }
                 return MCPTestHelpers.encodeResponse(
                     id: idValue,
                     result: MCPTestHelpers.toolsListResult(
-                        tools: [("tool_a", "A", schema)],
+                        tools: [.init(name: "tool_a", description: "A", schema: schema)],
                         nextCursor: "page2"
                     )
                 )
@@ -219,9 +224,9 @@ struct MCPClientTests {
         let client = MCPClient(serverName: "test", transport: transport)
         try await client.connectAndInitialize()
 
-        async let r1 = client.callTool(name: "slow", arguments: Data("{}".utf8))
-        async let r2 = client.callTool(name: "fast", arguments: Data("{}".utf8))
-        let (slowResult, fastResult) = try await (r1, r2)
+        async let slowCall = client.callTool(name: "slow", arguments: Data("{}".utf8))
+        async let fastCall = client.callTool(name: "fast", arguments: Data("{}".utf8))
+        let (slowResult, fastResult) = try await (slowCall, fastCall)
 
         guard case let .text(slowText) = slowResult.content.first else {
             Issue.record("Expected text content for slow call")

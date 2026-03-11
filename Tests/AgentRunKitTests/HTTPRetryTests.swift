@@ -5,48 +5,49 @@ import Testing
 
 @Suite
 struct ParseRetryAfterTests {
-    private func makeResponse(headers: [String: String] = [:]) -> HTTPURLResponse {
-        HTTPURLResponse(
-            url: URL(string: "https://example.com")!,
+    private func makeResponse(headers: [String: String] = [:]) throws -> HTTPURLResponse {
+        let url = try #require(URL(string: "https://example.com"))
+        return try #require(HTTPURLResponse(
+            url: url,
             statusCode: 429,
             httpVersion: nil,
             headerFields: headers
-        )!
+        ))
     }
 
     @Test
-    func integerSeconds() {
-        let duration = HTTPRetry.parseRetryAfter(makeResponse(headers: ["Retry-After": "30"]))
+    func integerSeconds() throws {
+        let duration = try HTTPRetry.parseRetryAfter(makeResponse(headers: ["Retry-After": "30"]))
         #expect(duration == .seconds(30))
     }
 
     @Test
-    func zeroSeconds() {
-        let duration = HTTPRetry.parseRetryAfter(makeResponse(headers: ["Retry-After": "0"]))
+    func zeroSeconds() throws {
+        let duration = try HTTPRetry.parseRetryAfter(makeResponse(headers: ["Retry-After": "0"]))
         #expect(duration == .seconds(0))
     }
 
     @Test
-    func missingHeaderReturnsNil() {
-        let duration = HTTPRetry.parseRetryAfter(makeResponse())
+    func missingHeaderReturnsNil() throws {
+        let duration = try HTTPRetry.parseRetryAfter(makeResponse())
         #expect(duration == nil)
     }
 
     @Test
-    func malformedValueReturnsNil() {
-        let duration = HTTPRetry.parseRetryAfter(makeResponse(headers: ["Retry-After": "abc"]))
+    func malformedValueReturnsNil() throws {
+        let duration = try HTTPRetry.parseRetryAfter(makeResponse(headers: ["Retry-After": "abc"]))
         #expect(duration == nil)
     }
 
     @Test
-    func futureHTTPDateReturnsDuration() {
+    func futureHTTPDateReturnsDuration() throws {
         let futureDate = Date().addingTimeInterval(60)
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(identifier: "GMT")
         formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
 
-        let response = makeResponse(headers: ["Retry-After": formatter.string(from: futureDate)])
+        let response = try makeResponse(headers: ["Retry-After": formatter.string(from: futureDate)])
         let duration = HTTPRetry.parseRetryAfter(response)
         #expect(duration != nil)
         if let duration {
@@ -56,14 +57,14 @@ struct ParseRetryAfterTests {
     }
 
     @Test
-    func pastHTTPDateReturnsZero() {
+    func pastHTTPDateReturnsZero() throws {
         let pastDate = Date().addingTimeInterval(-60)
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(identifier: "GMT")
         formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
 
-        let response = makeResponse(headers: ["Retry-After": formatter.string(from: pastDate)])
+        let response = try makeResponse(headers: ["Retry-After": formatter.string(from: pastDate)])
         let duration = HTTPRetry.parseRetryAfter(response)
         #expect(duration == .seconds(0))
     }
@@ -106,12 +107,13 @@ struct ParseHTTPDateTests {
 struct HandleErrorStatusTests {
     @Test
     func nonRateLimitReturnsStop() async throws {
-        let response = HTTPURLResponse(
-            url: URL(string: "https://example.com")!,
+        let url = try #require(URL(string: "https://example.com"))
+        let response = try #require(HTTPURLResponse(
+            url: url,
             statusCode: 500,
             httpVersion: nil,
             headerFields: [:]
-        )!
+        ))
         var slept = false
         let result = try await HTTPRetry.handleErrorStatus(
             httpResponse: response,
@@ -134,12 +136,13 @@ struct HandleErrorStatusTests {
 
     @Test
     func rateLimitOnLastAttemptReturnsStop() async throws {
-        let response = HTTPURLResponse(
-            url: URL(string: "https://example.com")!,
+        let url = try #require(URL(string: "https://example.com"))
+        let response = try #require(HTTPURLResponse(
+            url: url,
             statusCode: 429,
             httpVersion: nil,
             headerFields: [:]
-        )!
+        ))
         let policy = RetryPolicy(maxAttempts: 3)
         var slept = false
         let result = try await HTTPRetry.handleErrorStatus(

@@ -184,12 +184,16 @@ actor ControllableStreamingMockLLMClient: LLMClient {
     ) -> AsyncThrowingStream<StreamDelta, Error> {
         AsyncThrowingStream { continuation in
             Task {
-                let stream = await self.prepareStream()
-                for await delta in stream {
-                    try Task.checkCancellation()
-                    continuation.yield(delta)
+                do {
+                    let stream = await self.prepareStream()
+                    for await delta in stream {
+                        try Task.checkCancellation()
+                        continuation.yield(delta)
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
                 }
-                continuation.finish()
             }
         }
     }

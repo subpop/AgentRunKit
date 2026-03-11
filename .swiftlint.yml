@@ -1,4 +1,48 @@
 excluded:
   - .build
+  - .claude
   - _reference
   - Spike
+
+opt_in_rules:
+  - contains_over_filter_count
+  - contains_over_filter_is_empty
+  - contains_over_first_not_nil
+  - contains_over_range_nil_comparison
+  - empty_count
+  - first_where
+  - flatmap_over_map_reduce
+  - identical_operands
+  - last_where
+  - reduce_into
+  - return_value_from_void_function
+  - shorthand_optional_binding
+  - sorted_first_last
+  - superfluous_else
+  - unneeded_escaping
+
+disabled_rules:
+  - trailing_comma
+
+file_length:
+  warning: 500
+  error: 1000
+
+type_body_length:
+  warning: 250
+  error: 500
+
+function_body_length:
+  warning: 70
+  error: 120
+
+function_parameter_count:
+  warning: 7
+  error: 10
+
+cyclomatic_complexity:
+  warning: 14
+  error: 25
+
+trailing_whitespace:
+  ignores_empty_lines: true

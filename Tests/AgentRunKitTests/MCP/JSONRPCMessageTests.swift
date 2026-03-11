@@ -114,7 +114,11 @@ struct JSONRPCMessageTests {
 
     @Test
     func errorWithDataField() throws {
-        let errorObj = JSONRPCErrorObject(code: -32000, message: "Server error", data: .object(["detail": .string("info")]))
+        let errorObj = JSONRPCErrorObject(
+            code: -32000,
+            message: "Server error",
+            data: .object(["detail": .string("info")])
+        )
         let response = JSONRPCResponse(jsonrpc: "2.0", id: .int(1), result: nil, error: errorObj)
         let data = try JSONEncoder().encode(response)
         let decoded = try JSONDecoder().decode(JSONRPCResponse.self, from: data)
@@ -152,7 +156,7 @@ struct JSONRPCMessageTests {
                 "capabilities": .object([:]),
                 "clientInfo": .object([
                     "name": .string("AgentRunKit"),
-                    "version": .string("1.0.0"),
+                    "version": .string("1.20.1"),
                 ]),
             ])
         )
@@ -204,12 +208,12 @@ struct JSONRPCMessageTests {
         """
         let response = try JSONDecoder().decode(JSONRPCResponse.self, from: Data(json.utf8))
         guard case let .object(result) = response.result,
-              case let .object(sc) = result["structuredContent"]
+              case let .object(structuredContent) = result["structuredContent"]
         else {
             Issue.record("Expected structuredContent")
             return
         }
-        #expect(sc["key"] == .string("value"))
+        #expect(structuredContent["key"] == .string("value"))
     }
 
     @Test

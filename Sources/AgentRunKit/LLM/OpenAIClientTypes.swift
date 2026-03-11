@@ -356,6 +356,12 @@ struct ResponseUsage: Decodable, Sendable {
     let promptTokens: Int
     let completionTokens: Int
     let completionTokensDetails: CompletionTokensDetails?
+
+    var tokenUsage: TokenUsage {
+        let reasoning = completionTokensDetails?.reasoningTokens ?? 0
+        let output = max(0, completionTokens - reasoning)
+        return TokenUsage(input: promptTokens, output: output, reasoning: reasoning)
+    }
 }
 
 struct CompletionTokensDetails: Decodable, Sendable {

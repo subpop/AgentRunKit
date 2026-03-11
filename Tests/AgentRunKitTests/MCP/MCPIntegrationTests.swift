@@ -4,7 +4,7 @@ import Testing
 @testable import AgentRunKit
 
 private func makeStandardTransport(
-    tools: [(name: String, description: String, schema: JSONValue)] = [],
+    tools: [MCPTestHelpers.MockTool] = [],
     toolCallHandler: (@Sendable (String) async throws -> String)? = nil
 ) -> DynamicMCPTransport {
     DynamicMCPTransport { data in
@@ -47,7 +47,9 @@ struct MCPIntegrationTests {
             properties: ["query": .object(["type": .string("string")])],
             required: ["query"]
         )
-        let transport = makeStandardTransport(tools: [("search", "Search tool", schema)])
+        let transport = makeStandardTransport(
+            tools: [.init(name: "search", description: "Search tool", schema: schema)]
+        )
         let client = MCPClient(serverName: "test", transport: transport)
         try await client.connectAndInitialize()
 
@@ -72,7 +74,7 @@ struct MCPIntegrationTests {
         let schema = MCPTestHelpers.toolSchema(properties: [:])
         let config = MCPServerConfiguration(name: "server1", command: "/bin/test")
         let session = MCPSession(configurations: [config]) { _ in
-            makeStandardTransport(tools: [("remote_tool", "Remote", schema)]) { _ in
+            makeStandardTransport(tools: [.init(name: "remote_tool", description: "Remote", schema: schema)]) { _ in
                 "remote result"
             }
         }
@@ -108,7 +110,9 @@ struct MCPIntegrationTests {
                 case "tools/list":
                     return MCPTestHelpers.encodeResponse(
                         id: idValue,
-                        result: MCPTestHelpers.toolsListResult(tools: [("error_tool", "Error", schema)])
+                        result: MCPTestHelpers.toolsListResult(
+                            tools: [.init(name: "error_tool", description: "Error", schema: schema)]
+                        )
                     )
                 case "tools/call":
                     return MCPTestHelpers.encodeResponse(
@@ -160,7 +164,9 @@ struct MCPIntegrationTests {
         let schema = MCPTestHelpers.toolSchema(properties: [:])
         let config = MCPServerConfiguration(name: "server1", command: "/bin/test")
         let session = MCPSession(configurations: [config]) { _ in
-            makeStandardTransport(tools: [("remote_fetch", "Fetches data", schema)]) { _ in
+            makeStandardTransport(
+                tools: [.init(name: "remote_fetch", description: "Fetches data", schema: schema)]
+            ) { _ in
                 "fetched data"
             }
         }
@@ -190,8 +196,8 @@ struct MCPIntegrationTests {
         let config = MCPServerConfiguration(name: "server1", command: "/bin/test")
         let session = MCPSession(configurations: [config]) { _ in
             makeStandardTransport(tools: [
-                ("tool_a", "A", schema),
-                ("tool_b", "B", schema),
+                .init(name: "tool_a", description: "A", schema: schema),
+                .init(name: "tool_b", description: "B", schema: schema)
             ]) { name in
                 "result_\(name)"
             }
@@ -233,7 +239,9 @@ struct MCPIntegrationTests {
                 case "tools/list":
                     return MCPTestHelpers.encodeResponse(
                         id: idValue,
-                        result: MCPTestHelpers.toolsListResult(tools: [("slow_tool", "Slow", schema)])
+                        result: MCPTestHelpers.toolsListResult(
+                            tools: [.init(name: "slow_tool", description: "Slow", schema: schema)]
+                        )
                     )
                 case "tools/call":
                     return nil

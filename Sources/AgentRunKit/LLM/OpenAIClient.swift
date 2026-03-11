@@ -281,15 +281,7 @@ extension OpenAIClient {
             ToolCall(id: call.id, name: call.function.name, arguments: call.function.arguments)
         }
 
-        let tokenUsage = response.usage.map { usage in
-            let reasoningTokens = usage.completionTokensDetails?.reasoningTokens ?? 0
-            let outputMinusReasoning = max(0, usage.completionTokens - reasoningTokens)
-            return TokenUsage(
-                input: usage.promptTokens,
-                output: outputMinusReasoning,
-                reasoning: reasoningTokens
-            )
-        }
+        let tokenUsage = response.usage.map(\.tokenUsage)
 
         let reasoning = (choice.message.reasoning ?? choice.message.reasoningContent)
             .flatMap { $0.isEmpty ? nil : ReasoningContent(content: $0) }

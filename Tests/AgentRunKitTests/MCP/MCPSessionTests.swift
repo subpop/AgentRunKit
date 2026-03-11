@@ -4,7 +4,7 @@ import Testing
 @testable import AgentRunKit
 
 private func makeStandardTransport(
-    tools: [(name: String, description: String, schema: JSONValue)] = []
+    tools: [MCPTestHelpers.MockTool] = []
 ) -> DynamicMCPTransport {
     DynamicMCPTransport { data in
         guard let request = try? JSONDecoder().decode(JSONRPCRequest.self, from: data) else { return nil }
@@ -38,7 +38,7 @@ struct MCPSessionTests {
         let schema = MCPTestHelpers.toolSchema(properties: [:])
         let config = MCPServerConfiguration(name: "server1", command: "/bin/test")
         let session = MCPSession(configurations: [config]) { _ in
-            makeStandardTransport(tools: [("tool_a", "Tool A", schema)])
+            makeStandardTransport(tools: [.init(name: "tool_a", description: "Tool A", schema: schema)])
         }
 
         let result: String = try await session.withTools { (tools: [any AnyTool<EmptyContext>]) in
@@ -58,9 +58,9 @@ struct MCPSessionTests {
         ]
         let session = MCPSession(configurations: configs) { config in
             if config.name == "server1" {
-                return makeStandardTransport(tools: [("tool_a", "A", schema)])
+                return makeStandardTransport(tools: [.init(name: "tool_a", description: "A", schema: schema)])
             }
-            return makeStandardTransport(tools: [("tool_b", "B", schema)])
+            return makeStandardTransport(tools: [.init(name: "tool_b", description: "B", schema: schema)])
         }
 
         try await session.withTools { (tools: [any AnyTool<EmptyContext>]) in
@@ -79,7 +79,7 @@ struct MCPSessionTests {
             MCPServerConfiguration(name: "server2", command: "/bin/test2"),
         ]
         let session = MCPSession(configurations: configs) { _ in
-            makeStandardTransport(tools: [("same_tool", "Tool", schema)])
+            makeStandardTransport(tools: [.init(name: "same_tool", description: "Tool", schema: schema)])
         }
 
         do {
@@ -166,7 +166,7 @@ struct MCPSessionTests {
         let schema = MCPTestHelpers.toolSchema(properties: [:])
         let config = MCPServerConfiguration(name: "server1", command: "/bin/test")
         let session = MCPSession(configurations: [config]) { _ in
-            makeStandardTransport(tools: [("tool_a", "A", schema)])
+            makeStandardTransport(tools: [.init(name: "tool_a", description: "A", schema: schema)])
         }
 
         try await session.withTools { (tools: [any AnyTool<EmptyContext>]) in

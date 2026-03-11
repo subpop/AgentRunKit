@@ -368,7 +368,10 @@ struct SubAgentToolTests {
         )
         let childClient = MockLLMClient(responses: [
             AssistantMessage(content: "", toolCalls: [ToolCall(id: "c0", name: "delay", arguments: "{}")]),
-            AssistantMessage(content: "", toolCalls: [ToolCall(id: "c1", name: "finish", arguments: #"{"content": "slow done"}"#)]),
+            AssistantMessage(
+                content: "",
+                toolCalls: [ToolCall(id: "c1", name: "finish", arguments: #"{"content": "slow done"}"#)]
+            ),
         ])
         let childAgent = Agent<SubAgentContext<EmptyContext>>(client: childClient, tools: [delayTool])
 

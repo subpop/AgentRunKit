@@ -45,7 +45,11 @@ struct MCPToolTests {
     @Test
     func namePassthrough() async throws {
         let client = try await makeReadyClient()
-        let info = MCPToolInfo(name: "my_tool", description: "Does stuff", inputSchema: .object(properties: [:], required: []))
+        let info = MCPToolInfo(
+            name: "my_tool",
+            description: "Does stuff",
+            inputSchema: .object(properties: [:], required: [])
+        )
         let tool = MCPTool<EmptyContext>(info: info, client: client)
         #expect(tool.name == "my_tool")
         await client.shutdown()
@@ -229,7 +233,9 @@ struct MCPToolTests {
 
     @Test
     func embeddedResourceWithText() {
-        let result = MCPCallResult(content: [.embeddedResource(uri: "file:///doc.md", mimeType: "text/markdown", text: "# Hello")])
+        let result = MCPCallResult(content: [
+            .embeddedResource(uri: "file:///doc.md", mimeType: "text/markdown", text: "# Hello")
+        ])
         let toolResult = result.toToolResult()
         #expect(toolResult.content == "# Hello")
     }
@@ -255,9 +261,17 @@ private func callResultToJSONValue(_ result: MCPCallResult) -> JSONValue {
         case let .text(text):
             .object(["type": .string("text"), "text": .string(text)])
         case let .image(data, mimeType):
-            .object(["type": .string("image"), "data": .string(data.base64EncodedString()), "mimeType": .string(mimeType)])
+            .object([
+                "type": .string("image"),
+                "data": .string(data.base64EncodedString()),
+                "mimeType": .string(mimeType)
+            ])
         case let .audio(data, mimeType):
-            .object(["type": .string("audio"), "data": .string(data.base64EncodedString()), "mimeType": .string(mimeType)])
+            .object([
+                "type": .string("audio"),
+                "data": .string(data.base64EncodedString()),
+                "mimeType": .string(mimeType)
+            ])
         case let .resourceLink(uri, name):
             .object(["type": .string("resource"), "resource": .object(
                 ["uri": .string(uri)].merging(name.map { ["name": .string($0)] } ?? [:]) { _, new in new }
@@ -274,7 +288,8 @@ private func callResultToJSONValue(_ result: MCPCallResult) -> JSONValue {
         "content": .array(contentValues),
         "isError": .bool(result.isError),
     ]
-    if let sc = result.structuredContent, let value = try? JSONDecoder().decode(JSONValue.self, from: sc) {
+    if let structuredContent = result.structuredContent,
+       let value = try? JSONDecoder().decode(JSONValue.self, from: structuredContent) {
         dict["structuredContent"] = value
     }
     return .object(dict)

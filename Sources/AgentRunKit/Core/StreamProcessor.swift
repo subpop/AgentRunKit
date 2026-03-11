@@ -58,6 +58,110 @@ struct StreamIteration: Sendable {
     }
 }
 
+private struct AudioAccumulator: Sendable {
+    var id: String?
+    var expiresAt = 0
+    var data = Data()
+    var transcript = ""
+
+    var finishedEvent: StreamEvent? {
+        guard let id else { return nil }
+        return .audioFinished(id: id, expiresAt: expiresAt, data: data)
+    }
+}
+
+private struct StreamAccumulation {
+    var content = ""
+    var reasoning = ""
+    var reasoningDetails = ReasoningDetailAccumulator()
+    var toolCalls: [Int: ToolCallAccumulator] = [:]
+    var pendingArguments: [Int: String] = [:]
+    var audio = AudioAccumulator()
+    var usage: TokenUsage?
+
+    mutating func apply(
+        _ delta: StreamDelta,
+        policy: StreamPolicy,
+        totalUsage: inout TokenUsage,
+        continuation: AsyncThrowingStream<StreamEvent, Error>.Continuation
+    ) {
+        switch delta {
+        case let .content(text):
+            content += text
+            continuation.yield(.delta(text))
+        case let .reasoning(text):
+            reasoning += text
+            continuation.yield(.reasoningDelta(text))
+        case let .reasoningDetails(details):
+            reasoningDetails.append(details)
+        case let .toolCallStart(index, id, name):
+            startToolCall(index: index, id: id, name: name, policy: policy, continuation: continuation)
+        case let .toolCallDelta(index, arguments):
+            appendToolCallDelta(index: index, arguments: arguments)
+        case let .audioStarted(id, expiresAt):
+            audio.id = id
+            audio.expiresAt = expiresAt
+        case let .audioData(data):
+            audio.data.append(data)
+            continuation.yield(.audioData(data))
+        case let .audioTranscript(text):
+            audio.transcript += text
+            continuation.yield(.audioTranscript(text))
+        case let .finished(iterationUsage):
+            guard let iterationUsage else { return }
+            totalUsage += iterationUsage
+            usage = iterationUsage
+        }
+    }
+
+    func finishAudio(
+        continuation: AsyncThrowingStream<StreamEvent, Error>.Continuation
+    ) {
+        if let event = audio.finishedEvent {
+            continuation.yield(event)
+        }
+    }
+
+    var iteration: StreamIteration {
+        let finalizedToolCalls = toolCalls.keys.sorted().compactMap { index in
+            toolCalls[index]?.toToolCall()
+        }
+        return StreamIteration(
+            content: content,
+            toolCalls: finalizedToolCalls,
+            reasoning: reasoning,
+            reasoningDetails: reasoningDetails.consolidated(),
+            audioTranscript: audio.transcript,
+            usage: usage
+        )
+    }
+
+    private mutating func startToolCall(
+        index: Int,
+        id: String,
+        name: String,
+        policy: StreamPolicy,
+        continuation: AsyncThrowingStream<StreamEvent, Error>.Continuation
+    ) {
+        var accumulator = ToolCallAccumulator(id: id, name: name)
+        if let buffered = pendingArguments.removeValue(forKey: index) {
+            accumulator.arguments = buffered
+        }
+        toolCalls[index] = accumulator
+        if policy.shouldEmitToolStart(name: name) {
+            continuation.yield(.toolCallStarted(name: name, id: id))
+        }
+    }
+
+    private mutating func appendToolCallDelta(index: Int, arguments: String) {
+        if toolCalls[index] != nil {
+            toolCalls[index]?.arguments += arguments
+        } else {
+            pendingArguments[index, default: ""] += arguments
+        }
+    }
+}
+
 struct StreamProcessor: Sendable {
     let client: any LLMClient
     let toolDefinitions: [ToolDefinition]
@@ -69,16 +173,7 @@ struct StreamProcessor: Sendable {
         continuation: AsyncThrowingStream<StreamEvent, Error>.Continuation,
         requestContext: RequestContext? = nil
     ) async throws -> StreamIteration {
-        var contentBuffer = ""
-        var reasoningBuffer = ""
-        var reasoningDetailAccumulator = ReasoningDetailAccumulator()
-        var accumulators: [Int: ToolCallAccumulator] = [:]
-        var pendingArguments: [Int: String] = [:]
-        var audioDataBuffer = Data()
-        var audioTranscriptBuffer = ""
-        var audioId: String?
-        var audioExpiresAt = 0
-        var iterationUsage: TokenUsage?
+        var state = StreamAccumulation()
 
         for try await delta in client.stream(
             messages: messages,
@@ -86,73 +181,14 @@ struct StreamProcessor: Sendable {
             requestContext: requestContext
         ) {
             try Task.checkCancellation()
-            switch delta {
-            case let .content(text):
-                contentBuffer += text
-                continuation.yield(.delta(text))
-
-            case let .reasoning(text):
-                reasoningBuffer += text
-                continuation.yield(.reasoningDelta(text))
-
-            case let .reasoningDetails(details):
-                reasoningDetailAccumulator.append(details)
-
-            case let .toolCallStart(index, id, name):
-                var accumulator = ToolCallAccumulator(id: id, name: name)
-                if let buffered = pendingArguments.removeValue(forKey: index) {
-                    accumulator.arguments = buffered
-                }
-                accumulators[index] = accumulator
-                if policy.shouldEmitToolStart(name: name) {
-                    continuation.yield(.toolCallStarted(name: name, id: id))
-                }
-
-            case let .toolCallDelta(index, arguments):
-                if accumulators[index] != nil {
-                    accumulators[index]?.arguments += arguments
-                } else {
-                    pendingArguments[index, default: ""] += arguments
-                }
-
-            case let .audioStarted(id, expiresAt):
-                audioId = id
-                audioExpiresAt = expiresAt
-
-            case let .audioData(data):
-                audioDataBuffer.append(data)
-                continuation.yield(.audioData(data))
-
-            case let .audioTranscript(text):
-                audioTranscriptBuffer += text
-                continuation.yield(.audioTranscript(text))
-
-            case let .finished(usage):
-                if let usage {
-                    totalUsage += usage
-                    iterationUsage = usage
-                }
-            }
+            state.apply(delta, policy: policy, totalUsage: &totalUsage, continuation: continuation)
         }
 
-        guard pendingArguments.isEmpty else {
-            throw AgentError.malformedStream(.orphanedToolCallArguments(indices: pendingArguments.keys.sorted()))
+        guard state.pendingArguments.isEmpty else {
+            throw AgentError.malformedStream(.orphanedToolCallArguments(indices: state.pendingArguments.keys.sorted()))
         }
 
-        if let audioId {
-            continuation.yield(.audioFinished(id: audioId, expiresAt: audioExpiresAt, data: audioDataBuffer))
-        }
-
-        let toolCalls = accumulators.keys.sorted().compactMap { index in
-            accumulators[index]?.toToolCall()
-        }
-        return StreamIteration(
-            content: contentBuffer,
-            toolCalls: toolCalls,
-            reasoning: reasoningBuffer,
-            reasoningDetails: reasoningDetailAccumulator.consolidated(),
-            audioTranscript: audioTranscriptBuffer,
-            usage: iterationUsage
-        )
+        state.finishAudio(continuation: continuation)
+        return state.iteration
     }
 }

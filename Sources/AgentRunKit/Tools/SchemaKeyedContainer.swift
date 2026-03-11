@@ -15,74 +15,74 @@ final class SchemaKeyedContainer<Key: CodingKey>: KeyedDecodingContainerProtocol
 
     func contains(_: Key) -> Bool { true }
 
-    func decodeNil(forKey _: Key) throws -> Bool { false }
+    func decodeNil(forKey _: Key) -> Bool { false }
 
-    func decode(_: Bool.Type, forKey key: Key) throws -> Bool {
+    func decode(_: Bool.Type, forKey key: Key) -> Bool {
         record(key: key, schema: .boolean())
         return false
     }
 
-    func decode(_: String.Type, forKey key: Key) throws -> String {
+    func decode(_: String.Type, forKey key: Key) -> String {
         record(key: key, schema: .string())
         return ""
     }
 
-    func decode(_: Double.Type, forKey key: Key) throws -> Double {
+    func decode(_: Double.Type, forKey key: Key) -> Double {
         record(key: key, schema: .number())
         return 0
     }
 
-    func decode(_: Float.Type, forKey key: Key) throws -> Float {
+    func decode(_: Float.Type, forKey key: Key) -> Float {
         record(key: key, schema: .number())
         return 0
     }
 
-    func decode(_: Int.Type, forKey key: Key) throws -> Int {
+    func decode(_: Int.Type, forKey key: Key) -> Int {
         record(key: key, schema: .integer())
         return 0
     }
 
-    func decode(_: Int8.Type, forKey key: Key) throws -> Int8 {
+    func decode(_: Int8.Type, forKey key: Key) -> Int8 {
         record(key: key, schema: .integer())
         return 0
     }
 
-    func decode(_: Int16.Type, forKey key: Key) throws -> Int16 {
+    func decode(_: Int16.Type, forKey key: Key) -> Int16 {
         record(key: key, schema: .integer())
         return 0
     }
 
-    func decode(_: Int32.Type, forKey key: Key) throws -> Int32 {
+    func decode(_: Int32.Type, forKey key: Key) -> Int32 {
         record(key: key, schema: .integer())
         return 0
     }
 
-    func decode(_: Int64.Type, forKey key: Key) throws -> Int64 {
+    func decode(_: Int64.Type, forKey key: Key) -> Int64 {
         record(key: key, schema: .integer())
         return 0
     }
 
-    func decode(_: UInt.Type, forKey key: Key) throws -> UInt {
+    func decode(_: UInt.Type, forKey key: Key) -> UInt {
         record(key: key, schema: .integer())
         return 0
     }
 
-    func decode(_: UInt8.Type, forKey key: Key) throws -> UInt8 {
+    func decode(_: UInt8.Type, forKey key: Key) -> UInt8 {
         record(key: key, schema: .integer())
         return 0
     }
 
-    func decode(_: UInt16.Type, forKey key: Key) throws -> UInt16 {
+    func decode(_: UInt16.Type, forKey key: Key) -> UInt16 {
         record(key: key, schema: .integer())
         return 0
     }
 
-    func decode(_: UInt32.Type, forKey key: Key) throws -> UInt32 {
+    func decode(_: UInt32.Type, forKey key: Key) -> UInt32 {
         record(key: key, schema: .integer())
         return 0
     }
 
-    func decode(_: UInt64.Type, forKey key: Key) throws -> UInt64 {
+    func decode(_: UInt64.Type, forKey key: Key) -> UInt64 {
         record(key: key, schema: .integer())
         return 0
     }
@@ -97,72 +97,72 @@ final class SchemaKeyedContainer<Key: CodingKey>: KeyedDecodingContainerProtocol
         return value
     }
 
-    func decodeIfPresent(_: Bool.Type, forKey key: Key) throws -> Bool? {
+    func decodeIfPresent(_: Bool.Type, forKey key: Key) -> Bool? {
         recordOptional(key: key, schema: .boolean())
         return nil
     }
 
-    func decodeIfPresent(_: String.Type, forKey key: Key) throws -> String? {
+    func decodeIfPresent(_: String.Type, forKey key: Key) -> String? {
         recordOptional(key: key, schema: .string())
         return nil
     }
 
-    func decodeIfPresent(_: Double.Type, forKey key: Key) throws -> Double? {
+    func decodeIfPresent(_: Double.Type, forKey key: Key) -> Double? {
         recordOptional(key: key, schema: .number())
         return nil
     }
 
-    func decodeIfPresent(_: Float.Type, forKey key: Key) throws -> Float? {
+    func decodeIfPresent(_: Float.Type, forKey key: Key) -> Float? {
         recordOptional(key: key, schema: .number())
         return nil
     }
 
-    func decodeIfPresent(_: Int.Type, forKey key: Key) throws -> Int? {
+    func decodeIfPresent(_: Int.Type, forKey key: Key) -> Int? {
         recordOptional(key: key, schema: .integer())
         return nil
     }
 
-    func decodeIfPresent(_: Int8.Type, forKey key: Key) throws -> Int8? {
+    func decodeIfPresent(_: Int8.Type, forKey key: Key) -> Int8? {
         recordOptional(key: key, schema: .integer())
         return nil
     }
 
-    func decodeIfPresent(_: Int16.Type, forKey key: Key) throws -> Int16? {
+    func decodeIfPresent(_: Int16.Type, forKey key: Key) -> Int16? {
         recordOptional(key: key, schema: .integer())
         return nil
     }
 
-    func decodeIfPresent(_: Int32.Type, forKey key: Key) throws -> Int32? {
+    func decodeIfPresent(_: Int32.Type, forKey key: Key) -> Int32? {
         recordOptional(key: key, schema: .integer())
         return nil
     }
 
-    func decodeIfPresent(_: Int64.Type, forKey key: Key) throws -> Int64? {
+    func decodeIfPresent(_: Int64.Type, forKey key: Key) -> Int64? {
         recordOptional(key: key, schema: .integer())
         return nil
     }
 
-    func decodeIfPresent(_: UInt.Type, forKey key: Key) throws -> UInt? {
+    func decodeIfPresent(_: UInt.Type, forKey key: Key) -> UInt? {
         recordOptional(key: key, schema: .integer())
         return nil
     }
 
-    func decodeIfPresent(_: UInt8.Type, forKey key: Key) throws -> UInt8? {
+    func decodeIfPresent(_: UInt8.Type, forKey key: Key) -> UInt8? {
         recordOptional(key: key, schema: .integer())
         return nil
     }
 
-    func decodeIfPresent(_: UInt16.Type, forKey key: Key) throws -> UInt16? {
+    func decodeIfPresent(_: UInt16.Type, forKey key: Key) -> UInt16? {
         recordOptional(key: key, schema: .integer())
         return nil
     }
 
-    func decodeIfPresent(_: UInt32.Type, forKey key: Key) throws -> UInt32? {
+    func decodeIfPresent(_: UInt32.Type, forKey key: Key) -> UInt32? {
         recordOptional(key: key, schema: .integer())
         return nil
     }
 
-    func decodeIfPresent(_: UInt64.Type, forKey key: Key) throws -> UInt64? {
+    func decodeIfPresent(_: UInt64.Type, forKey key: Key) -> UInt64? {
         recordOptional(key: key, schema: .integer())
         return nil
     }
@@ -181,7 +181,7 @@ final class SchemaKeyedContainer<Key: CodingKey>: KeyedDecodingContainerProtocol
     func nestedContainer<NestedKey: CodingKey>(
         keyedBy _: NestedKey.Type,
         forKey key: Key
-    ) throws -> KeyedDecodingContainer<NestedKey> {
+    ) -> KeyedDecodingContainer<NestedKey> {
         let container = SchemaKeyedContainer<NestedKey>(
             decoder: decoder,
             codingPath: codingPath + [key]
@@ -189,15 +189,15 @@ final class SchemaKeyedContainer<Key: CodingKey>: KeyedDecodingContainerProtocol
         return KeyedDecodingContainer(container)
     }
 
-    func nestedUnkeyedContainer(forKey key: Key) throws -> any UnkeyedDecodingContainer {
+    func nestedUnkeyedContainer(forKey key: Key) -> any UnkeyedDecodingContainer {
         SchemaUnkeyedContainer(decoder: decoder, codingPath: codingPath + [key])
     }
 
-    func superDecoder() throws -> any Decoder {
+    func superDecoder() -> any Decoder {
         decoder
     }
 
-    func superDecoder(forKey _: Key) throws -> any Decoder {
+    func superDecoder(forKey _: Key) -> any Decoder {
         decoder
     }
 

@@ -65,6 +65,37 @@ public final class Agent<C: ToolContext>: Sendable {
         )
     }
 
+    public func stream(
+        userMessage: String,
+        history: [ChatMessage] = [],
+        context: C,
+        tokenBudget: Int? = nil,
+        requestContext: RequestContext? = nil
+    ) -> AsyncThrowingStream<StreamEvent, Error> {
+        stream(
+            userMessage: .user(userMessage),
+            history: history,
+            context: context,
+            tokenBudget: tokenBudget,
+            requestContext: requestContext
+        )
+    }
+
+    public func stream(
+        userMessage: ChatMessage,
+        history: [ChatMessage] = [],
+        context: C,
+        tokenBudget: Int? = nil,
+        requestContext: RequestContext? = nil
+    ) -> AsyncThrowingStream<StreamEvent, Error> {
+        stream(
+            userMessage: userMessage, history: history, context: context,
+            tokenBudget: tokenBudget, requestContext: requestContext, systemPromptOverride: nil
+        )
+    }
+}
+
+extension Agent {
     func run(
         userMessage: String,
         history: [ChatMessage] = [],
@@ -78,7 +109,7 @@ public final class Agent<C: ToolContext>: Sendable {
         )
     }
 
-    private func run(
+    func run(
         userMessage: ChatMessage,
         history: [ChatMessage],
         context: C,
@@ -144,35 +175,6 @@ public final class Agent<C: ToolContext>: Sendable {
         throw AgentError.maxIterationsReached(iterations: configuration.maxIterations)
     }
 
-    public func stream(
-        userMessage: String,
-        history: [ChatMessage] = [],
-        context: C,
-        tokenBudget: Int? = nil,
-        requestContext: RequestContext? = nil
-    ) -> AsyncThrowingStream<StreamEvent, Error> {
-        stream(
-            userMessage: .user(userMessage),
-            history: history,
-            context: context,
-            tokenBudget: tokenBudget,
-            requestContext: requestContext
-        )
-    }
-
-    public func stream(
-        userMessage: ChatMessage,
-        history: [ChatMessage] = [],
-        context: C,
-        tokenBudget: Int? = nil,
-        requestContext: RequestContext? = nil
-    ) -> AsyncThrowingStream<StreamEvent, Error> {
-        stream(
-            userMessage: userMessage, history: history, context: context,
-            tokenBudget: tokenBudget, requestContext: requestContext, systemPromptOverride: nil
-        )
-    }
-
     func stream(
         userMessage: String,
         history: [ChatMessage] = [],
@@ -186,7 +188,7 @@ public final class Agent<C: ToolContext>: Sendable {
         )
     }
 
-    private func stream(
+    func stream(
         userMessage: ChatMessage,
         history: [ChatMessage],
         context: C,
@@ -217,7 +219,7 @@ public final class Agent<C: ToolContext>: Sendable {
         }
     }
 
-    private func performStream(
+    func performStream(
         userMessage: ChatMessage,
         history: [ChatMessage],
         context: C,
@@ -300,7 +302,7 @@ public final class Agent<C: ToolContext>: Sendable {
         continuation.finish(throwing: AgentError.maxIterationsReached(iterations: configuration.maxIterations))
     }
 
-    private func buildInitialMessages(
+    func buildInitialMessages(
         userMessage: ChatMessage,
         history: [ChatMessage],
         systemPromptOverride: String? = nil
@@ -313,9 +315,7 @@ public final class Agent<C: ToolContext>: Sendable {
         messages.append(userMessage)
         return messages
     }
-}
 
-private extension Agent {
     func resolveTimeout(for call: ToolCall) -> Duration? {
         guard let tool = tools.first(where: { $0.name == call.name }) else {
             return configuration.toolTimeout
@@ -492,9 +492,4 @@ private extension Agent {
             history: history
         )
     }
-}
-
-private struct FinishArguments: Codable, Sendable {
-    let content: String
-    let reason: String?
 }

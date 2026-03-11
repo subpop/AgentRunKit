@@ -32,17 +32,17 @@ final class SchemaDecoderImpl: Decoder {
     var didAccessContainer = false
     var pendingNullable = false
 
-    func container<Key: CodingKey>(keyedBy _: Key.Type) throws -> KeyedDecodingContainer<Key> {
+    func container<Key: CodingKey>(keyedBy _: Key.Type) -> KeyedDecodingContainer<Key> {
         didAccessContainer = true
         return KeyedDecodingContainer(SchemaKeyedContainer<Key>(decoder: self, codingPath: codingPath))
     }
 
-    func unkeyedContainer() throws -> any UnkeyedDecodingContainer {
+    func unkeyedContainer() -> any UnkeyedDecodingContainer {
         didAccessContainer = true
         return SchemaUnkeyedContainer(decoder: self, codingPath: codingPath)
     }
 
-    func singleValueContainer() throws -> any SingleValueDecodingContainer {
+    func singleValueContainer() -> any SingleValueDecodingContainer {
         didAccessContainer = true
         return SchemaSingleValueContainer(decoder: self, codingPath: codingPath)
     }
