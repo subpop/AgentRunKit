@@ -426,6 +426,30 @@ struct StreamingChunkParsingTests {
         #expect(chunk.usage?.promptTokens == 100)
         #expect(chunk.usage?.completionTokens == 50)
     }
+
+    @Test
+    func streamingFinishedDeltaMapsUsageFromChunk() throws {
+        let json = """
+        {
+            "choices": [{
+                "delta": {},
+                "finish_reason": "stop"
+            }],
+            "usage": {
+                "prompt_tokens": 11,
+                "completion_tokens": 12,
+                "completion_tokens_details": {
+                    "reasoning_tokens": 5
+                }
+            }
+        }
+        """
+        let client = OpenAIClient(apiKey: "test", model: "test", baseURL: OpenAIClient.openRouterBaseURL)
+        let chunk = try client.parseStreamingChunk(Data(json.utf8))
+        let deltas = try client.extractDeltas(from: chunk)
+
+        #expect(deltas == [.finished(usage: TokenUsage(input: 11, output: 7, reasoning: 5))])
+    }
 }
 
 @Suite

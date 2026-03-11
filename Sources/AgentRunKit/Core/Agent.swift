@@ -109,7 +109,7 @@ extension Agent {
         )
     }
 
-    func run(
+    private func run(
         userMessage: ChatMessage,
         history: [ChatMessage],
         context: C,
@@ -187,7 +187,9 @@ extension Agent {
             tokenBudget: tokenBudget, requestContext: nil, systemPromptOverride: systemPromptOverride
         )
     }
+}
 
+private extension Agent {
     func stream(
         userMessage: ChatMessage,
         history: [ChatMessage],

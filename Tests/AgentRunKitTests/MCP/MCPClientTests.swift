@@ -406,6 +406,60 @@ struct MCPClientTests {
         #expect(hasInitNotification)
         await client.shutdown()
     }
+
+    @Test
+    func initializeRequestEmitsExpectedPayload() async throws {
+        let dataCollector = DataCollector()
+        let transport = DynamicMCPTransport { data in
+            await dataCollector.add(data)
+            guard let request = decodeRequest(data) else { return nil }
+            let idValue: Int = if case let .int(value) = request.id { value } else { 0 }
+            switch request.method {
+            case "initialize":
+                return MCPTestHelpers.encodeResponse(id: idValue, result: MCPTestHelpers.initializeResult())
+            case "tools/list":
+                return MCPTestHelpers.encodeResponse(id: idValue, result: MCPTestHelpers.emptyToolsListResult())
+            default:
+                return nil
+            }
+        }
+        let client = MCPClient(serverName: "test", transport: transport)
+        try await client.connectAndInitialize()
+
+        let initializeRequests = await dataCollector.items
+            .compactMap(decodeRequest)
+            .filter { $0.method == "initialize" }
+
+        #expect(initializeRequests.count == 1)
+        let request = try #require(initializeRequests.first)
+        #expect(request.id == .int(1))
+
+        guard case let .object(params) = request.params else {
+            Issue.record("Expected initialize params")
+            await client.shutdown()
+            return
+        }
+
+        #expect(params["protocolVersion"] == .string("2025-06-18"))
+        #expect(params["capabilities"] == .object([:]))
+
+        guard case let .object(clientInfo) = params["clientInfo"] else {
+            Issue.record("Expected clientInfo in initialize params")
+            await client.shutdown()
+            return
+        }
+
+        #expect(clientInfo["name"] == .string("AgentRunKit"))
+
+        guard case let .string(version) = clientInfo["version"] else {
+            Issue.record("Expected non-empty clientInfo.version in initialize params")
+            await client.shutdown()
+            return
+        }
+
+        #expect(!version.isEmpty)
+        await client.shutdown()
+    }
 }
 
 @Suite
