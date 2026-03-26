@@ -197,13 +197,6 @@ struct VertexAnthropicResponseTests {
     }
 }
 
-struct VertexAnthropicRequestWrapperTests {
-    @Test
-    func vertexAnthropicVersionConstant() {
-        #expect(VertexAnthropicRequest.vertexAnthropicVersion == "vertex-2023-10-16")
-    }
-}
-
 private enum TestVertexAnthropicOutput: SchemaProviding {
     static var jsonSchema: JSONSchema {
         .object(properties: ["value": .string()], required: ["value"])

@@ -1,7 +1,5 @@
 import Foundation
 
-// MARK: - ADC Credential File
-
 private struct ADCCredentials: Decodable {
     let type: String
     let clientId: String
@@ -16,8 +14,6 @@ private struct ADCCredentials: Decodable {
     }
 }
 
-// MARK: - Token Response
-
 private struct TokenResponse: Decodable {
     let accessToken: String
     let expiresIn: Int
@@ -30,17 +26,7 @@ private struct TokenResponse: Decodable {
     }
 }
 
-/// Manages Google OAuth2 tokens from Application Default Credentials (ADC).
-///
-/// Reads `~/.config/gcloud/application_default_credentials.json` (created by
-/// `gcloud auth application-default login`) and transparently refreshes access
-/// tokens as needed.
-///
-/// Thread-safe via `actor` isolation — only one refresh request can be in
-/// flight at a time.
 public actor GoogleAuthService {
-    // MARK: - Errors
-
     public enum GoogleAuthError: Error, LocalizedError, Sendable {
         case credentialsFileNotFound(path: String)
         case unsupportedCredentialType(String)
@@ -61,8 +47,6 @@ public actor GoogleAuthService {
         }
     }
 
-    // MARK: - State
-
     private let clientID: String
     private let clientSecret: String
     private let refreshToken: String
@@ -71,19 +55,14 @@ public actor GoogleAuthService {
     private var cachedAccessToken: String?
     private var tokenExpiry: Date?
 
-    /// Refresh the token when it has fewer than this many seconds remaining.
-    private let refreshMargin: TimeInterval = 300 // 5 minutes
+    private let refreshMargin: TimeInterval = 300
 
     private static let tokenEndpoint = URL(string: "https://oauth2.googleapis.com/token")!
 
-    // MARK: - Init
-
-    /// Creates an auth service by reading the ADC file at the default path.
     public init(session: URLSession = .shared) throws {
         try self.init(credentialsPath: Self.defaultCredentialsPath(), session: session)
     }
 
-    /// Creates an auth service by reading the ADC file at a custom path.
     public init(credentialsPath: String, session: URLSession = .shared) throws {
         guard FileManager.default.fileExists(atPath: credentialsPath) else {
             throw GoogleAuthError.credentialsFileNotFound(path: credentialsPath)
@@ -109,9 +88,6 @@ public actor GoogleAuthService {
         self.session = session
     }
 
-    // MARK: - Public API
-
-    /// Returns a valid access token, refreshing if necessary.
     public func accessToken() async throws -> String {
         if let token = cachedAccessToken,
            let expiry = tokenExpiry,
@@ -121,20 +97,19 @@ public actor GoogleAuthService {
         return try await refreshAccessToken()
     }
 
-    // MARK: - Private
-
     private func refreshAccessToken() async throws -> String {
+        var components = URLComponents()
+        components.queryItems = [
+            URLQueryItem(name: "client_id", value: clientID),
+            URLQueryItem(name: "client_secret", value: clientSecret),
+            URLQueryItem(name: "refresh_token", value: refreshToken),
+            URLQueryItem(name: "grant_type", value: "refresh_token"),
+        ]
+
         var request = URLRequest(url: Self.tokenEndpoint)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-
-        let body = [
-            "client_id=\(urlEncode(clientID))",
-            "client_secret=\(urlEncode(clientSecret))",
-            "refresh_token=\(urlEncode(refreshToken))",
-            "grant_type=refresh_token",
-        ].joined(separator: "&")
-        request.httpBody = Data(body.utf8)
+        request.httpBody = Data((components.percentEncodedQuery ?? "").utf8)
 
         let (data, response) = try await session.data(for: request)
 
@@ -152,17 +127,11 @@ public actor GoogleAuthService {
         return tokenResponse.accessToken
     }
 
-    private func urlEncode(_ string: String) -> String {
-        string.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? string
-    }
-
-    /// The default path to the ADC credentials file.
     public static func defaultCredentialsPath() -> String {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         return "\(home)/.config/gcloud/application_default_credentials.json"
     }
 
-    /// Whether an ADC credentials file exists at the default path.
     public static func credentialsAvailable() -> Bool {
         FileManager.default.fileExists(atPath: defaultCredentialsPath())
     }

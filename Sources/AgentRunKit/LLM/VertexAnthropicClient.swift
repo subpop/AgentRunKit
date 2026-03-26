@@ -1,30 +1,12 @@
 import Foundation
 
-/// An LLM client for Anthropic Claude models served via Vertex AI.
-///
-/// Uses OAuth2 Bearer token authentication (via ``GoogleAuthService`` or a custom
-/// token provider closure) instead of Anthropic API key authentication.
-///
-/// The wire format is the standard Anthropic Messages API with a
-/// `"anthropic_version": "vertex-2023-10-16"` field injected into the request body.
-/// Response parsing and SSE streaming are delegated to an internal ``AnthropicClient``.
-///
-/// ```swift
-/// let auth = try GoogleAuthService()
-/// let client = VertexAnthropicClient(
-///     projectID: "my-project",
-///     location: "us-east5",
-///     model: "claude-sonnet-4-6",
-///     authService: auth
-/// )
-/// ```
 public struct VertexAnthropicClient: LLMClient, Sendable {
+    public let modelIdentifier: String?
     public let contextWindowSize: Int?
 
     let anthropic: AnthropicClient
     private let projectID: String
     private let location: String
-    private let model: String
     private let tokenProvider: @Sendable () async throws -> String
     private let session: URLSession
     private let retryPolicy: RetryPolicy
@@ -44,7 +26,7 @@ public struct VertexAnthropicClient: LLMClient, Sendable {
     ) {
         self.projectID = projectID
         self.location = location
-        self.model = model
+        modelIdentifier = model
         self.tokenProvider = tokenProvider
         self.session = session
         self.retryPolicy = retryPolicy
@@ -62,7 +44,6 @@ public struct VertexAnthropicClient: LLMClient, Sendable {
         )
     }
 
-    /// Convenience initializer that uses a ``GoogleAuthService`` for authentication.
     public init(
         projectID: String,
         location: String,
@@ -90,8 +71,6 @@ public struct VertexAnthropicClient: LLMClient, Sendable {
             cachingEnabled: cachingEnabled
         )
     }
-
-    // MARK: - LLMClient
 
     public func generate(
         messages: [ChatMessage],
@@ -141,8 +120,6 @@ public struct VertexAnthropicClient: LLMClient, Sendable {
         }
     }
 
-    // MARK: - Streaming
-
     private func performStreamRequest(
         messages: [ChatMessage],
         tools: [ToolDefinition],
@@ -176,8 +153,6 @@ public struct VertexAnthropicClient: LLMClient, Sendable {
         continuation.finish()
     }
 
-    // MARK: - URL Construction
-
     func buildVertexURLRequest(
         _ request: VertexAnthropicRequest,
         stream: Bool,
@@ -185,8 +160,10 @@ public struct VertexAnthropicClient: LLMClient, Sendable {
     ) throws -> URLRequest {
         let action = stream ? "streamRawPredict" : "rawPredict"
         let basePath = "v1/projects/\(projectID)/locations/\(location)"
-            + "/publishers/anthropic/models/\(model):\(action)"
-        let baseURL = URL(string: "https://\(location)-aiplatform.googleapis.com")!
+            + "/publishers/anthropic/models/\(modelIdentifier ?? ""):\(action)"
+        guard let baseURL = URL(string: "https://\(location)-aiplatform.googleapis.com") else {
+            throw AgentError.llmError(.other("Invalid Vertex AI location: \(location)"))
+        }
         let url = baseURL.appendingPathComponent(basePath)
 
         let headers = ["Authorization": "Bearer \(token)"]
@@ -194,10 +171,6 @@ public struct VertexAnthropicClient: LLMClient, Sendable {
     }
 }
 
-// MARK: - Vertex Anthropic Request Wrapper
-
-/// Wraps an ``AnthropicRequest`` and injects `"anthropic_version": "vertex-2023-10-16"`
-/// into the encoded JSON body for Vertex AI compatibility.
 struct VertexAnthropicRequest: Encodable {
     static let vertexAnthropicVersion = "vertex-2023-10-16"
 

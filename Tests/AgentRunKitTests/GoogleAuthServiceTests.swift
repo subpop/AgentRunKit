@@ -97,7 +97,6 @@ struct GoogleAuthServiceTests {
         try Data(json.utf8).write(to: tempFile)
         defer { try? FileManager.default.removeItem(at: tempFile) }
 
-        // Should not throw
         _ = try GoogleAuthService(credentialsPath: tempFile.path)
     }
 

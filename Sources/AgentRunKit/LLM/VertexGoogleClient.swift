@@ -1,29 +1,12 @@
 import Foundation
 
-/// An LLM client for Google Gemini models served via Vertex AI.
-///
-/// Uses OAuth2 Bearer token authentication (via ``GoogleAuthService`` or a custom
-/// token provider closure) instead of API key authentication.
-///
-/// The wire format is identical to the Gemini API — this client delegates request
-/// building, response parsing, and SSE handling to an internal ``GeminiClient``.
-///
-/// ```swift
-/// let auth = try GoogleAuthService()
-/// let client = VertexGoogleClient(
-///     projectID: "my-project",
-///     location: "us-central1",
-///     model: "gemini-2.5-pro",
-///     authService: auth
-/// )
-/// ```
 public struct VertexGoogleClient: LLMClient, Sendable {
+    public let modelIdentifier: String?
     public let contextWindowSize: Int?
 
     let gemini: GeminiClient
     private let projectID: String
     private let location: String
-    private let model: String
     private let apiVersion: String
     private let tokenProvider: @Sendable () async throws -> String
     private let session: URLSession
@@ -43,7 +26,7 @@ public struct VertexGoogleClient: LLMClient, Sendable {
     ) {
         self.projectID = projectID
         self.location = location
-        self.model = model
+        modelIdentifier = model
         self.apiVersion = apiVersion
         self.tokenProvider = tokenProvider
         self.session = session
@@ -60,7 +43,6 @@ public struct VertexGoogleClient: LLMClient, Sendable {
         )
     }
 
-    /// Convenience initializer that uses a ``GoogleAuthService`` for authentication.
     public init(
         projectID: String,
         location: String,
@@ -86,8 +68,6 @@ public struct VertexGoogleClient: LLMClient, Sendable {
             reasoningConfig: reasoningConfig
         )
     }
-
-    // MARK: - LLMClient
 
     public func generate(
         messages: [ChatMessage],
@@ -133,8 +113,6 @@ public struct VertexGoogleClient: LLMClient, Sendable {
         }
     }
 
-    // MARK: - Streaming
-
     private func performStreamRequest(
         messages: [ChatMessage],
         tools: [ToolDefinition],
@@ -165,8 +143,6 @@ public struct VertexGoogleClient: LLMClient, Sendable {
         continuation.finish()
     }
 
-    // MARK: - URL Construction
-
     func buildVertexURLRequest(
         _ request: GeminiRequest,
         stream: Bool,
@@ -174,14 +150,21 @@ public struct VertexGoogleClient: LLMClient, Sendable {
     ) throws -> URLRequest {
         let action = stream ? "streamGenerateContent" : "generateContent"
         let basePath = "\(apiVersion)/projects/\(projectID)/locations/\(location)"
-            + "/publishers/google/models/\(model):\(action)"
-        let baseURL = URL(string: "https://\(location)-aiplatform.googleapis.com")!
+            + "/publishers/google/models/\(modelIdentifier ?? ""):\(action)"
+        guard let baseURL = URL(string: "https://\(location)-aiplatform.googleapis.com") else {
+            throw AgentError.llmError(.other("Invalid Vertex AI location: \(location)"))
+        }
         var url = baseURL.appendingPathComponent(basePath)
 
         if stream {
-            var components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+            guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+                throw AgentError.llmError(.other("Failed to parse URL components from: \(url)"))
+            }
             components.queryItems = [URLQueryItem(name: "alt", value: "sse")]
-            url = components.url!
+            guard let streamURL = components.url else {
+                throw AgentError.llmError(.other("Failed to construct URL with query items"))
+            }
+            url = streamURL
         }
 
         let headers = ["Authorization": "Bearer \(token)"]
