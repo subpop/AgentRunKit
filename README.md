@@ -54,6 +54,7 @@
 - [LLM Providers](#llm-providers)
   - [Anthropic Messages API](#anthropic-messages-api)
   - [Google Gemini](#google-gemini)
+  - [Vertex AI](#vertex-ai)
   - [OpenAI Responses API](#openai-responses-api)
   - [ChatGPT Subscription (OAuth)](#chatgpt-subscription-oauth)
   - [Proxy Mode](#proxy-mode)
@@ -1322,6 +1323,33 @@ let result = try await agent.run(userMessage: "Analyze this data", context: Empt
 
 Works with any Gemini model — 2.5 Flash, 2.5 Pro, 3 Flash, 3.1 Pro, 3.1 Flash-Lite, and the `customtools` variant. Thinking budget and effort levels map to Gemini's native `thinkingConfig`.
 
+### Vertex AI
+
+`VertexGoogleClient` and `VertexAnthropicClient` access Gemini and Claude models through Google Cloud's Vertex AI, using OAuth2 instead of API keys.
+
+```swift
+let auth = try GoogleAuthService()
+let client = VertexGoogleClient(
+    projectID: "my-project",
+    location: "us-central1",
+    model: "gemini-3.1-pro-preview",
+    authService: auth
+)
+```
+
+Also supports Anthropic models on Vertex:
+
+```swift
+let client = VertexAnthropicClient(
+    projectID: "my-project",
+    location: "us-east5",
+    model: "claude-sonnet-4-6",
+    authService: auth
+)
+```
+
+Both clients accept a custom `tokenProvider` closure for non-ADC auth flows.
+
 ### OpenAI Responses API
 
 `ResponsesAPIClient` speaks OpenAI's [Responses API](https://platform.openai.com/docs/api-reference/responses) — a newer endpoint with native support for reasoning models, server-side conversation state, and structured tool calling.
@@ -1492,6 +1520,8 @@ The client bridges `AnyTool` definitions to Apple's `Tool` protocol at runtime v
 | `LLMClient` | Protocol for LLM implementations |
 | `AnthropicClient` | Anthropic Messages API client (Claude Sonnet, Opus, Haiku) |
 | `GeminiClient` | Google Gemini API client (2.5 Flash/Pro, 3 Flash, 3.1 Pro/Flash-Lite) |
+| `VertexGoogleClient` | Vertex AI client for Google models (OAuth2 auth) |
+| `VertexAnthropicClient` | Vertex AI client for Anthropic models (OAuth2 auth) |
 | `OpenAIClient` | Chat Completions client (OpenAI, OpenRouter, Groq, etc.) |
 | `ResponsesAPIClient` | OpenAI Responses API client (GPT-5.4, GPT-5.3-Codex) |
 | `MLXClient` | On-device inference via MLX on Apple Silicon (Qwen 3.5, Liquid LFM2.5, etc.) |
