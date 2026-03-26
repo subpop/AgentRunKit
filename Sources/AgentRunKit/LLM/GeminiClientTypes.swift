@@ -121,13 +121,13 @@ struct GeminiGenerationConfig: Encodable {
     let maxOutputTokens: Int?
     let thinkingConfig: GeminiThinkingConfig?
     let responseMimeType: String?
-    let responseSchema: JSONSchema?
+    let responseSchema: GeminiSchema?
 
     init(
         maxOutputTokens: Int? = nil,
         thinkingConfig: GeminiThinkingConfig? = nil,
         responseMimeType: String? = nil,
-        responseSchema: JSONSchema? = nil
+        responseSchema: GeminiSchema? = nil
     ) {
         self.maxOutputTokens = maxOutputTokens
         self.thinkingConfig = thinkingConfig
@@ -342,7 +342,7 @@ struct GeminiSchema: Encodable {
                 try container.encode(required, forKey: .required)
             }
             try container.encodeIfPresent(description, forKey: .description)
-            // NOTE: intentionally omits `additionalProperties` — unsupported by Gemini API
+            // Intentionally omits additionalProperties — unsupported by Gemini API
 
         case .null:
             try container.encode("null", forKey: .type)

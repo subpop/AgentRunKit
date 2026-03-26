@@ -101,10 +101,10 @@ extension GeminiClient {
         )
 
         var responseMimeType: String?
-        var responseSchema: JSONSchema?
+        var responseSchema: GeminiSchema?
         if let responseFormat {
             responseMimeType = "application/json"
-            responseSchema = responseFormat.schema
+            responseSchema = GeminiSchema(responseFormat.schema)
         }
 
         let thinkingConfig = buildThinkingConfig()

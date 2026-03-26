@@ -868,8 +868,6 @@ private enum TestGeminiOutput: SchemaProviding {
 // MARK: - GeminiSchema Tests
 
 struct GeminiSchemaTests {
-    /// Recursively asserts that no dictionary in the tree contains the key
-    /// `additionalProperties`.
     private func assertNoAdditionalProperties(
         _ value: Any, path: String = "$"
     ) {
@@ -889,8 +887,6 @@ struct GeminiSchemaTests {
 
     @Test
     func stripsAdditionalPropertiesRecursively() throws {
-        // Exercises every nesting path: top-level object, nested object,
-        // array items, anyOf variants, and deeply nested combinations.
         let schema = GeminiSchema(
             .object(
                 properties: [
@@ -925,10 +921,8 @@ struct GeminiSchemaTests {
         let data = try JSONEncoder().encode(schema)
         let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
-        // No additionalProperties anywhere in the tree
         assertNoAdditionalProperties(json)
 
-        // Spot-check that schema fields are still preserved
         #expect(json["type"] as? String == "object")
         #expect(json["description"] as? String == "User record")
         #expect(json["required"] as? [String] == ["name"])
@@ -973,5 +967,20 @@ struct GeminiSchemaTests {
 
         assertNoAdditionalProperties(params)
         #expect(params["type"] as? String == "object")
+    }
+
+    @Test
+    func responseFormatSchemaOmitsAdditionalProperties() throws {
+        let client = GeminiClient(apiKey: "k", model: "m")
+        let format = ResponseFormat.jsonSchema(TestGeminiOutput.self)
+        let request = try client.buildRequest(
+            messages: [.user("Hi")], tools: [], responseFormat: format
+        )
+        let json = try encodeRequest(request)
+
+        let genConfig = try #require(json["generationConfig"] as? [String: Any])
+        let responseSchema = try #require(genConfig["responseSchema"] as? [String: Any])
+        assertNoAdditionalProperties(responseSchema)
+        #expect(responseSchema["type"] as? String == "object")
     }
 }
