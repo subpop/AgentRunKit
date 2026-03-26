@@ -91,7 +91,7 @@ struct GeminiTool: Encodable {
 struct GeminiFunctionDeclaration: Encodable {
     let name: String
     let description: String
-    let parametersJsonSchema: JSONSchema
+    let parametersJsonSchema: GeminiSchema
 
     enum CodingKeys: String, CodingKey {
         case name, description
@@ -101,7 +101,7 @@ struct GeminiFunctionDeclaration: Encodable {
     init(_ definition: ToolDefinition) {
         name = definition.name
         description = definition.description
-        parametersJsonSchema = definition.parametersSchema
+        parametersJsonSchema = GeminiSchema(definition.parametersSchema)
     }
 }
 
@@ -290,6 +290,65 @@ enum GeminiMessageMapper {
             throw AgentError.llmError(.decodingFailed(
                 description: "Failed to parse tool call arguments as JSON: \(arguments)"
             ))
+        }
+    }
+}
+
+struct GeminiSchema: Encodable {
+    let wrapped: JSONSchema
+
+    init(_ schema: JSONSchema) {
+        wrapped = schema
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case type, description, items, properties, required, anyOf
+        case `enum`
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+
+        switch wrapped {
+        case let .string(description, enumValues):
+            try container.encode("string", forKey: .type)
+            try container.encodeIfPresent(description, forKey: .description)
+            try container.encodeIfPresent(enumValues, forKey: .enum)
+
+        case let .integer(description):
+            try container.encode("integer", forKey: .type)
+            try container.encodeIfPresent(description, forKey: .description)
+
+        case let .number(description):
+            try container.encode("number", forKey: .type)
+            try container.encodeIfPresent(description, forKey: .description)
+
+        case let .boolean(description):
+            try container.encode("boolean", forKey: .type)
+            try container.encodeIfPresent(description, forKey: .description)
+
+        case let .array(items, description):
+            try container.encode("array", forKey: .type)
+            try container.encode(GeminiSchema(items), forKey: .items)
+            try container.encodeIfPresent(description, forKey: .description)
+
+        case let .object(properties, required, description):
+            try container.encode("object", forKey: .type)
+            try container.encode(
+                properties.mapValues { GeminiSchema($0) },
+                forKey: .properties
+            )
+            if !required.isEmpty {
+                try container.encode(required, forKey: .required)
+            }
+            try container.encodeIfPresent(description, forKey: .description)
+            // NOTE: intentionally omits `additionalProperties` — unsupported by Gemini API
+
+        case .null:
+            try container.encode("null", forKey: .type)
+
+        case let .anyOf(schemas):
+            try container.encode(schemas.map { GeminiSchema($0) }, forKey: .anyOf)
         }
     }
 }

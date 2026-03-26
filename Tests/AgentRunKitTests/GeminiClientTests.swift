@@ -864,3 +864,114 @@ private enum TestGeminiOutput: SchemaProviding {
         .object(properties: ["value": .string()], required: ["value"])
     }
 }
+
+// MARK: - GeminiSchema Tests
+
+struct GeminiSchemaTests {
+    /// Recursively asserts that no dictionary in the tree contains the key
+    /// `additionalProperties`.
+    private func assertNoAdditionalProperties(
+        _ value: Any, path: String = "$"
+    ) {
+        if let dict = value as? [String: Any] {
+            if dict["additionalProperties"] != nil {
+                Issue.record("Found additionalProperties at \(path)")
+            }
+            for (key, child) in dict {
+                assertNoAdditionalProperties(child, path: "\(path).\(key)")
+            }
+        } else if let array = value as? [Any] {
+            for (index, child) in array.enumerated() {
+                assertNoAdditionalProperties(child, path: "\(path)[\(index)]")
+            }
+        }
+    }
+
+    @Test
+    func stripsAdditionalPropertiesRecursively() throws {
+        // Exercises every nesting path: top-level object, nested object,
+        // array items, anyOf variants, and deeply nested combinations.
+        let schema = GeminiSchema(
+            .object(
+                properties: [
+                    "name": .string(description: "User name"),
+                    "age": .integer(description: "Age"),
+                    "score": .number(),
+                    "active": .boolean(),
+                    "role": .string(enumValues: ["admin", "user"]),
+                    "address": .object(
+                        properties: ["city": .string(), "zip": .string()],
+                        required: ["city"]
+                    ),
+                    "items": .array(items:
+                        .object(
+                            properties: [
+                                "meta": .object(
+                                    properties: ["key": .string()],
+                                    required: ["key"]
+                                )
+                            ],
+                            required: ["meta"]
+                        )),
+                    "optional_field": .anyOf([
+                        .object(properties: ["a": .string()], required: ["a"]),
+                        .null
+                    ])
+                ],
+                required: ["name"],
+                description: "User record"
+            )
+        )
+        let data = try JSONEncoder().encode(schema)
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        // No additionalProperties anywhere in the tree
+        assertNoAdditionalProperties(json)
+
+        // Spot-check that schema fields are still preserved
+        #expect(json["type"] as? String == "object")
+        #expect(json["description"] as? String == "User record")
+        #expect(json["required"] as? [String] == ["name"])
+
+        let props = json["properties"] as? [String: Any]
+        #expect((props?["name"] as? [String: Any])?["type"] as? String == "string")
+        #expect((props?["age"] as? [String: Any])?["type"] as? String == "integer")
+        #expect((props?["score"] as? [String: Any])?["type"] as? String == "number")
+        #expect((props?["active"] as? [String: Any])?["type"] as? String == "boolean")
+        #expect((props?["role"] as? [String: Any])?["enum"] as? [String] == ["admin", "user"])
+
+        let address = props?["address"] as? [String: Any]
+        #expect(address?["type"] as? String == "object")
+    }
+
+    @Test
+    func geminiRequestToolSchemaOmitsAdditionalProperties() throws {
+        let client = GeminiClient(apiKey: "test-key", model: "gemini-2.5-pro")
+        let tools = [
+            ToolDefinition(
+                name: "create_user",
+                description: "Create a user",
+                parametersSchema: .object(
+                    properties: [
+                        "name": .string(),
+                        "address": .object(
+                            properties: ["street": .string(), "city": .string()],
+                            required: ["street", "city"]
+                        ),
+                        "tags": .array(items: .string())
+                    ],
+                    required: ["name", "address"]
+                )
+            )
+        ]
+        let request = try client.buildRequest(messages: [.user("Hi")], tools: tools)
+        let json = try encodeRequest(request)
+
+        let jsonTools = json["tools"] as? [[String: Any]]
+        let decls = jsonTools?[0]["functionDeclarations"] as? [[String: Any]]
+        let params = try #require(decls?[0]["parameters"] as? [String: Any])
+
+        assertNoAdditionalProperties(params)
+        #expect(params["type"] as? String == "object")
+    }
+}
