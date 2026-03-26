@@ -1,9 +1,7 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
 
-@testable import AgentRunKit
-
-@Suite
 struct AnthropicResponseParsingTests {
     private func makeClient() -> AnthropicClient {
         AnthropicClient(apiKey: "test-key", model: "claude-sonnet-4-6")
@@ -232,7 +230,6 @@ struct AnthropicResponseParsingTests {
     }
 }
 
-@Suite
 struct AnthropicCacheUsageParsingTests {
     private func makeClient() -> AnthropicClient {
         AnthropicClient(apiKey: "test-key", model: "claude-sonnet-4-6")
@@ -296,7 +293,6 @@ struct AnthropicCacheUsageParsingTests {
     }
 }
 
-@Suite
 struct AnthropicMessageTranslationTests {
     @Test
     func toolResultsMergedIntoSingleUserMessage() throws {

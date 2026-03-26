@@ -1,9 +1,7 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
 
-@testable import AgentRunKit
-
-@Suite
 struct StreamingFinishDecodingTests {
     @Test
     func malformedFinishArgumentsThrowsInStreaming() async throws {
@@ -71,7 +69,6 @@ struct StreamingFinishDecodingTests {
     }
 }
 
-@Suite
 struct OptionalArrayElementSchemaTests {
     @Test
     func arrayOfOptionalStringsProducesCorrectSchema() throws {
@@ -198,7 +195,6 @@ struct OptionalArrayElementSchemaTests {
     }
 }
 
-@Suite
 struct InterleavedOutOfOrderDeltaTests {
     @Test
     func interleavedDeltasForMultipleToolCalls() async throws {
@@ -323,16 +319,18 @@ struct InterleavedOutOfOrderDeltaTests {
     }
 }
 
-private struct InterleavedEchoParams: Codable, SchemaProviding, Sendable {
+private struct InterleavedEchoParams: Codable, SchemaProviding {
     let message: String
-    static var jsonSchema: JSONSchema { .object(properties: ["message": .string()], required: ["message"]) }
+    static var jsonSchema: JSONSchema {
+        .object(properties: ["message": .string()], required: ["message"])
+    }
 }
 
-private struct InterleavedEchoOutput: Codable, Sendable {
+private struct InterleavedEchoOutput: Codable {
     let echoed: String
 }
 
-private struct InterleavedAddParams: Codable, SchemaProviding, Sendable {
+private struct InterleavedAddParams: Codable, SchemaProviding {
     let lhs: Int
     let rhs: Int
     static var jsonSchema: JSONSchema {
@@ -340,11 +338,10 @@ private struct InterleavedAddParams: Codable, SchemaProviding, Sendable {
     }
 }
 
-private struct InterleavedAddOutput: Codable, Sendable {
+private struct InterleavedAddOutput: Codable {
     let sum: Int
 }
 
-@Suite
 struct OrphanedStreamDeltaTests {
     @Test
     func orphanedDeltasWithoutStartThrowsError() async throws {
@@ -432,7 +429,6 @@ struct OrphanedStreamDeltaTests {
     }
 }
 
-@Suite
 struct SSEPayloadExtractionTests {
     @Test
     func extractsPayloadWithSpace() {

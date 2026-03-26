@@ -5,14 +5,16 @@
     import FoundationModels
 
     @available(macOS 26, iOS 26, *)
-    struct FMToolAdapter<C: ToolContext>: FoundationModels.Tool, Sendable {
+    struct FMToolAdapter<C: ToolContext>: FoundationModels.Tool {
         let name: String
         let description: String
         let generationSchema: GenerationSchema
 
         typealias Arguments = GeneratedContent
 
-        var parameters: GenerationSchema { generationSchema }
+        var parameters: GenerationSchema {
+            generationSchema
+        }
 
         private let wrappedTool: any AnyTool<C>
         private let context: C

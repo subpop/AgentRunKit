@@ -1,9 +1,7 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
 
-@testable import AgentRunKit
-
-@Suite
 struct MP3ConcatenatorTests {
     @Test
     func emptyArrayReturnsEmptyData() {

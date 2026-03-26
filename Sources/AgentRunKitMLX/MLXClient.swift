@@ -1,6 +1,5 @@
-import Foundation
-
 import AgentRunKit
+import Foundation
 import MLXLMCommon
 
 public struct MLXClient: LLMClient, Sendable {

@@ -1,7 +1,7 @@
 @testable import AgentRunKit
 import Testing
 
-@Suite struct ReasoningDetailAccumulatorTests {
+struct ReasoningDetailAccumulatorTests {
     @Test
     func emptyAccumulatorProducesEmptyArray() {
         let acc = ReasoningDetailAccumulator()

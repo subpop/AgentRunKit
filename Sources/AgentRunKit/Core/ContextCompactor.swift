@@ -1,6 +1,6 @@
 import Foundation
 
-struct ContextCompactor: Sendable {
+struct ContextCompactor {
     let client: any LLMClient
     let toolDefinitions: [ToolDefinition]
     let configuration: AgentConfiguration

@@ -1,7 +1,6 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
-
-@testable import AgentRunKit
 
 actor MockLLMClient: LLMClient {
     private let responses: [AssistantMessage]
@@ -33,7 +32,6 @@ actor MockLLMClient: LLMClient {
     }
 }
 
-@Suite
 struct MockLLMClientTests {
     @Test
     func returnsResponses() async throws {
@@ -71,7 +69,6 @@ struct MockLLMClientTests {
     }
 }
 
-@Suite
 struct ToolDefinitionTests {
     @Test
     func createsFromTool() throws {
@@ -92,7 +89,6 @@ struct ToolDefinitionTests {
     }
 }
 
-@Suite
 struct OpenAIClientRequestTests {
     @Test
     func requestEncodesCorrectly() throws {
@@ -261,7 +257,7 @@ struct OpenAIClientRequestTests {
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
         let data = try encoder.encode(request)
-        let jsonString = String(data: data, encoding: .utf8)!
+        let jsonString = try #require(String(data: data, encoding: .utf8))
 
         #expect(!jsonString.contains("\"content\":null"))
         #expect(jsonString.contains("\"content\":\"\""))
@@ -347,7 +343,6 @@ struct OpenAIClientRequestTests {
     }
 }
 
-@Suite
 struct TransportErrorTests {
     @Test
     func errorsAreEquatable() {
@@ -362,7 +357,6 @@ struct TransportErrorTests {
     }
 }
 
-@Suite
 struct OpenAIClientInitTests {
     @Test
     func defaultMaxTokensIs16k() {
@@ -377,7 +371,6 @@ struct OpenAIClientInitTests {
     }
 }
 
-@Suite
 struct OpenAIClientURLRequestTests {
     @Test
     func buildURLRequestSetsCorrectProperties() throws {
@@ -509,7 +502,6 @@ struct OpenAIClientURLRequestTests {
     }
 }
 
-@Suite
 struct ReasoningConfigTests {
     @Test
     func initialization() {
@@ -574,7 +566,6 @@ struct ReasoningConfigTests {
     }
 }
 
-@Suite
 struct ReasoningMultiTurnTests {
     @Test
     func assistantMessageWithReasoningEncodes() throws {
@@ -731,18 +722,17 @@ struct ReasoningMultiTurnTests {
     }
 }
 
-@Suite
 struct ProxyModeTests {
     @Test
-    func proxyFactoryCreatesClientWithoutApiKeyOrModel() {
-        let client = OpenAIClient.proxy(baseURL: URL(string: "http://localhost:8080")!)
+    func proxyFactoryCreatesClientWithoutApiKeyOrModel() throws {
+        let client = try OpenAIClient.proxy(baseURL: #require(URL(string: "http://localhost:8080")))
         #expect(client.modelIdentifier == nil)
         #expect(client.maxTokens == 16384)
     }
 
     @Test
     func proxyRequestOmitsAuthorizationHeader() throws {
-        let client = OpenAIClient.proxy(baseURL: URL(string: "http://localhost:8080")!)
+        let client = try OpenAIClient.proxy(baseURL: #require(URL(string: "http://localhost:8080")))
         let messages: [ChatMessage] = [.user("Hello")]
         let request = client.buildRequest(messages: messages, tools: [])
         let urlRequest = try client.buildURLRequest(request)
@@ -753,7 +743,7 @@ struct ProxyModeTests {
 
     @Test
     func proxyRequestOmitsModelFromBody() throws {
-        let client = OpenAIClient.proxy(baseURL: URL(string: "http://localhost:8080")!)
+        let client = try OpenAIClient.proxy(baseURL: #require(URL(string: "http://localhost:8080")))
         let messages: [ChatMessage] = [.user("Hello")]
         let request = client.buildRequest(messages: messages, tools: [])
 
@@ -767,8 +757,8 @@ struct ProxyModeTests {
 
     @Test
     func proxyWithAdditionalHeaders() throws {
-        let client = OpenAIClient.proxy(
-            baseURL: URL(string: "http://localhost:8080")!,
+        let client = try OpenAIClient.proxy(
+            baseURL: #require(URL(string: "http://localhost:8080")),
             additionalHeaders: { ["X-Custom-Header": "custom-value"] }
         )
         let messages: [ChatMessage] = [.user("Hello")]
@@ -781,7 +771,7 @@ struct ProxyModeTests {
 
     @Test
     func clientWithApiKeyIncludesAuthorizationHeader() throws {
-        let client = OpenAIClient(apiKey: "test-key", baseURL: URL(string: "http://localhost:8080")!)
+        let client = try OpenAIClient(apiKey: "test-key", baseURL: #require(URL(string: "http://localhost:8080")))
         let messages: [ChatMessage] = [.user("Hello")]
         let request = client.buildRequest(messages: messages, tools: [])
         let urlRequest = try client.buildURLRequest(request)
@@ -791,7 +781,7 @@ struct ProxyModeTests {
 
     @Test
     func transcribeThrowsWhenApiKeyNil() async throws {
-        let client = OpenAIClient.proxy(baseURL: URL(string: "http://localhost:8080")!)
+        let client = try OpenAIClient.proxy(baseURL: #require(URL(string: "http://localhost:8080")))
 
         await #expect(throws: AgentError.self) {
             _ = try await client.transcribe(audio: Data(), format: .wav, model: "whisper-1")
@@ -799,7 +789,7 @@ struct ProxyModeTests {
     }
 }
 
-struct ControlledByteStream: AsyncSequence, Sendable {
+struct ControlledByteStream: AsyncSequence {
     typealias Element = UInt8
     let stream: AsyncStream<UInt8>
 
@@ -810,10 +800,11 @@ struct ControlledByteStream: AsyncSequence, Sendable {
 
 private actor LineCounter {
     private(set) var count = 0
-    func increment() { count += 1 }
+    func increment() {
+        count += 1
+    }
 }
 
-@Suite
 struct StreamStallDetectionTests {
     private func sseChunk(_ json: String) -> [UInt8] {
         Array("data: \(json)\n\n".utf8)

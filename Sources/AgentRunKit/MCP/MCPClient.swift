@@ -6,17 +6,17 @@ private enum MCPConstants {
     static let clientVersion = "1.20.1"
 }
 
-private struct MCPInitializeResult: Decodable, Sendable {
+private struct MCPInitializeResult: Decodable {
     let protocolVersion: String
 }
 
-private struct MCPToolsListResult: Decodable, Sendable {
+private struct MCPToolsListResult: Decodable {
     let tools: [MCPToolInfo]
     let nextCursor: String?
 }
 
 public actor MCPClient {
-    enum State: Sendable {
+    enum State {
         case created
         case connecting
         case ready

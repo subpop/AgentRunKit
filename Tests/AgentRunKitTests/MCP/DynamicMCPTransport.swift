@@ -14,7 +14,9 @@ actor DynamicMCPTransport: MCPTransport {
         self.continuation = continuation
     }
 
-    func connect() async throws { connected = true }
+    func connect() async throws {
+        connected = true
+    }
 
     func disconnect() async {
         connected = false
@@ -28,7 +30,9 @@ actor DynamicMCPTransport: MCPTransport {
         }
     }
 
-    nonisolated func messages() -> AsyncThrowingStream<Data, Error> { stream }
+    nonisolated func messages() -> AsyncThrowingStream<Data, Error> {
+        stream
+    }
 
     func injectMessage(_ data: Data) {
         continuation.yield(data)

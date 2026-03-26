@@ -1,9 +1,8 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
 
-@testable import AgentRunKit
-
-struct TestParams: Codable, SchemaProviding, Sendable {
+struct TestParams: Codable, SchemaProviding {
     let value: Int
 
     static var jsonSchema: JSONSchema {
@@ -11,7 +10,7 @@ struct TestParams: Codable, SchemaProviding, Sendable {
     }
 }
 
-struct TestOutput: Codable, Sendable, Equatable {
+struct TestOutput: Codable, Equatable {
     let result: Int
 }
 
@@ -19,7 +18,6 @@ enum TestExecutorError: Error {
     case intentionalFailure
 }
 
-@Suite
 struct ToolTests {
     @Test
     func executeWithValidArguments() async throws {
@@ -180,7 +178,7 @@ struct ToolTests {
     }
 }
 
-struct UnencodableOutput: Codable, Sendable {
+struct UnencodableOutput: Codable {
     let value: Double
 
     func encode(to _: any Encoder) throws {
@@ -196,7 +194,7 @@ struct UnencodableOutput: Codable, Sendable {
     }
 }
 
-struct UnsupportedFieldParams: Codable, SchemaProviding, Sendable {
+struct UnsupportedFieldParams: Codable, SchemaProviding {
     init() {}
 
     init(from decoder: any Decoder) throws {
@@ -209,7 +207,6 @@ struct UnsupportedFieldParams: Codable, SchemaProviding, Sendable {
     }
 }
 
-@Suite
 struct ToolResultTests {
     @Test
     func successFactory() {

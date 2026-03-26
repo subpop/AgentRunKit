@@ -5,7 +5,7 @@
     import Foundation
     import Testing
 
-    @Suite struct FoundationModelsClientTests {
+    struct FoundationModelsClientTests {
         @Test func contextWindowSize() {
             guard #available(macOS 26, iOS 26, *) else { return }
             let client = FoundationModelsClient<EmptyContext>(context: EmptyContext())
@@ -89,7 +89,7 @@
         }
     }
 
-    private struct DummySchema: SchemaProviding, Codable, Sendable {
+    private struct DummySchema: SchemaProviding, Codable {
         static let jsonSchema = JSONSchema.object(properties: [:], required: [])
     }
 

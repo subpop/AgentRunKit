@@ -1,6 +1,6 @@
 import Foundation
 
-struct ResponsesRequest: Encodable, Sendable {
+struct ResponsesRequest: Encodable {
     let model: String?
     let instructions: String?
     let input: [ResponsesInputItem]
@@ -59,7 +59,7 @@ struct ResponsesRequest: Encodable, Sendable {
     }
 }
 
-enum ResponsesInputItem: Encodable, Sendable {
+enum ResponsesInputItem: Encodable {
     case userMessage(role: String, content: String)
     case assistantMessage(ResponsesAssistantItem)
     case functionCall(ResponsesFunctionCallItem)
@@ -89,7 +89,7 @@ enum ResponsesInputItem: Encodable, Sendable {
     }
 }
 
-struct ResponsesAssistantItem: Encodable, Sendable {
+struct ResponsesAssistantItem: Encodable {
     let type = "message"
     let role = "assistant"
     let content: [ResponsesOutputTextItem]
@@ -99,7 +99,7 @@ struct ResponsesAssistantItem: Encodable, Sendable {
     }
 }
 
-struct ResponsesOutputTextItem: Encodable, Sendable {
+struct ResponsesOutputTextItem: Encodable {
     let type = "output_text"
     let text: String
 
@@ -108,7 +108,7 @@ struct ResponsesOutputTextItem: Encodable, Sendable {
     }
 }
 
-struct ResponsesFunctionCallItem: Encodable, Sendable {
+struct ResponsesFunctionCallItem: Encodable {
     let type = "function_call"
     let callId: String
     let name: String
@@ -121,7 +121,7 @@ struct ResponsesFunctionCallItem: Encodable, Sendable {
     }
 }
 
-struct ResponsesFunctionCallOutputItem: Encodable, Sendable {
+struct ResponsesFunctionCallOutputItem: Encodable {
     let type = "function_call_output"
     let callId: String
     let output: String
@@ -133,7 +133,7 @@ struct ResponsesFunctionCallOutputItem: Encodable, Sendable {
     }
 }
 
-struct ResponsesToolDefinition: Encodable, Sendable {
+struct ResponsesToolDefinition: Encodable {
     let type = "function"
     let name: String
     let description: String
@@ -150,11 +150,11 @@ struct ResponsesToolDefinition: Encodable, Sendable {
     }
 }
 
-struct ResponsesTextConfig: Encodable, Sendable {
+struct ResponsesTextConfig: Encodable {
     let format: ResponsesFormatConfig
 }
 
-struct ResponsesFormatConfig: Encodable, Sendable {
+struct ResponsesFormatConfig: Encodable {
     let type = "json_schema"
     let name: String
     let strict = true
@@ -165,7 +165,7 @@ struct ResponsesFormatConfig: Encodable, Sendable {
     }
 }
 
-struct ResponsesReasoningConfig: Encodable, Sendable {
+struct ResponsesReasoningConfig: Encodable {
     let effort: String
     let summary: String?
 
@@ -179,7 +179,7 @@ struct ResponsesReasoningConfig: Encodable, Sendable {
     }
 }
 
-struct ResponsesAPIResponse: Decodable, Sendable {
+struct ResponsesAPIResponse: Decodable {
     let id: String
     let status: String?
     let output: [ResponsesOutputItem]
@@ -187,7 +187,7 @@ struct ResponsesAPIResponse: Decodable, Sendable {
     let error: ResponsesErrorDetail?
 }
 
-enum ResponsesOutputItem: Decodable, Sendable {
+enum ResponsesOutputItem: Decodable {
     case message(ResponsesMessageOutput)
     case functionCall(ResponsesFunctionCallOutput)
     case reasoning(JSONValue)
@@ -210,16 +210,16 @@ enum ResponsesOutputItem: Decodable, Sendable {
     }
 }
 
-struct ResponsesMessageOutput: Decodable, Sendable {
+struct ResponsesMessageOutput: Decodable {
     let content: [ResponsesOutputContent]
 }
 
-struct ResponsesOutputContent: Decodable, Sendable {
+struct ResponsesOutputContent: Decodable {
     let type: String
     let text: String?
 }
 
-struct ResponsesFunctionCallOutput: Decodable, Sendable {
+struct ResponsesFunctionCallOutput: Decodable {
     let callId: String
     let name: String
     let arguments: String
@@ -230,7 +230,7 @@ struct ResponsesFunctionCallOutput: Decodable, Sendable {
     }
 }
 
-struct ResponsesUsage: Decodable, Sendable {
+struct ResponsesUsage: Decodable {
     let inputTokens: Int
     let outputTokens: Int
     let outputTokensDetails: ResponsesOutputTokensDetails?
@@ -242,7 +242,7 @@ struct ResponsesUsage: Decodable, Sendable {
     }
 }
 
-struct ResponsesOutputTokensDetails: Decodable, Sendable {
+struct ResponsesOutputTokensDetails: Decodable {
     let reasoningTokens: Int?
 
     enum CodingKeys: String, CodingKey {
@@ -250,7 +250,7 @@ struct ResponsesOutputTokensDetails: Decodable, Sendable {
     }
 }
 
-struct ResponsesErrorDetail: Decodable, Sendable {
+struct ResponsesErrorDetail: Decodable {
     let message: String
     let code: String
 }

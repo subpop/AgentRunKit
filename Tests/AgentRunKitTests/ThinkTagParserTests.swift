@@ -1,9 +1,7 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
 
-@testable import AgentRunKit
-
-@Suite("ThinkTagParser - Batch")
 struct ThinkTagParserBatchTests {
     @Test
     func noThinkTags() {
@@ -83,7 +81,6 @@ struct ThinkTagParserBatchTests {
     }
 }
 
-@Suite("ThinkTagParser - Streaming")
 struct ThinkTagParserStreamingTests {
     private func feedChunks(_ chunks: [String]) -> (reasoning: String, content: String) {
         var parser = ThinkTagParser()
@@ -157,7 +154,6 @@ struct ThinkTagParserStreamingTests {
     }
 }
 
-@Suite("ThinkTagParser - Finalize")
 struct ThinkTagParserFinalizeTests {
     @Test
     func finalizeLookingForOpen() {
@@ -207,7 +203,6 @@ struct ThinkTagParserFinalizeTests {
     }
 }
 
-@Suite("ThinkTagParser - Overlap")
 struct ThinkTagParserOverlapTests {
     @Test
     func overlapPartialMatch() {
@@ -225,7 +220,6 @@ struct ThinkTagParserOverlapTests {
     }
 }
 
-@Suite("ThinkTagParser - Custom Delimiters")
 struct ThinkTagParserCustomDelimiterTests {
     @Test
     func customTags() {
@@ -263,7 +257,6 @@ struct ThinkTagParserCustomDelimiterTests {
     }
 }
 
-@Suite("ThinkTagParser - Property")
 struct ThinkTagParserPropertyTests {
     @Test
     func chunkBoundaryInvariant() {

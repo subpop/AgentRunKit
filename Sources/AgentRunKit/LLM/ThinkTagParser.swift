@@ -1,7 +1,7 @@
 import Foundation
 
 public struct ThinkTagParser: Sendable {
-    private enum State: Sendable {
+    private enum State {
         case lookingForOpen
         case eatingOpenWhitespace
         case thinking

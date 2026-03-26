@@ -1,7 +1,6 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
-
-@testable import AgentRunKit
 
 private func makeStandardTransport(
     tools: [MCPTestHelpers.MockTool] = []
@@ -31,7 +30,6 @@ private func makeStandardTransport(
     }
 }
 
-@Suite
 struct MCPSessionTests {
     @Test
     func singleServerLifecycle() async throws {
@@ -216,6 +214,11 @@ private actor FailingTransport: MCPTransport {
     }
 
     func disconnect() async {}
-    func send(_: Data) async throws { throw MCPError.transportClosed }
-    nonisolated func messages() -> AsyncThrowingStream<Data, Error> { stream }
+    func send(_: Data) async throws {
+        throw MCPError.transportClosed
+    }
+
+    nonisolated func messages() -> AsyncThrowingStream<Data, Error> {
+        stream
+    }
 }

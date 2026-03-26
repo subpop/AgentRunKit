@@ -1,7 +1,6 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
-
-@testable import AgentRunKit
 
 private let apiKey = ProcessInfo.processInfo.environment["OPENROUTER_API_KEY"] ?? ""
 private let hasAPIKey = !apiKey.isEmpty
@@ -160,7 +159,7 @@ struct AgentIntegrationTests {
     }
 }
 
-private struct AddParams: Codable, SchemaProviding, Sendable {
+private struct AddParams: Codable, SchemaProviding {
     let lhs: Int
     let rhs: Int
 
@@ -175,17 +174,17 @@ private struct AddParams: Codable, SchemaProviding, Sendable {
     }
 }
 
-private struct AddOutput: Codable, Sendable {
+private struct AddOutput: Codable {
     let sum: Int
 }
 
-private struct AutoSchemaParams: Codable, SchemaProviding, Sendable {
+private struct AutoSchemaParams: Codable, SchemaProviding {
     let text: String
     let count: Int
     let enabled: Bool
 }
 
-private struct EchoOutput: Codable, Sendable {
+private struct EchoOutput: Codable {
     let echoed: String
 }
 
@@ -228,7 +227,7 @@ struct AutoSchemaIntegrationTests {
     }
 
     @Test
-    func autoSchemaGeneratesCorrectJSON() throws {
+    func autoSchemaGeneratesCorrectJSON() {
         let schema = AutoSchemaParams.jsonSchema
         guard case let .object(properties, required, _) = schema else {
             Issue.record("Expected object schema")
@@ -241,11 +240,11 @@ struct AutoSchemaIntegrationTests {
     }
 }
 
-private struct SlowParams: Codable, SchemaProviding, Sendable {
+private struct SlowParams: Codable, SchemaProviding {
     let id: Int
 }
 
-private struct SlowOutput: Codable, Sendable {
+private struct SlowOutput: Codable {
     let id: Int
     let timestamp: Double
 }
@@ -311,7 +310,7 @@ struct ParallelExecutionIntegrationTests {
 
         if executionTimes.count >= 2 {
             let times = executionTimes.values.sorted()
-            let timeDiff = times.last! - times.first!
+            let timeDiff = try #require(times.last) - times.first!
             // If truly parallel, start times should be within 150ms of each other
             #expect(timeDiff < 0.15, "Tools should start within 150ms of each other if parallel")
         }

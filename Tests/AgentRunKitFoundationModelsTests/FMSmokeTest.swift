@@ -6,7 +6,7 @@
     import FoundationModels
     import Testing
 
-    private struct CalculatorParams: Codable, Sendable, SchemaProviding {
+    private struct CalculatorParams: Codable, SchemaProviding {
         let expression: String
     }
 

@@ -1,7 +1,6 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
-
-@testable import AgentRunKit
 
 private let apiKey = ProcessInfo.processInfo.environment["OPENROUTER_API_KEY"]
 

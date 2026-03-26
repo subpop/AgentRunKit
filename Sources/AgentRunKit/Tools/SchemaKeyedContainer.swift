@@ -13,9 +13,13 @@ final class SchemaKeyedContainer<Key: CodingKey>: KeyedDecodingContainerProtocol
         decoder.schema = .object(properties: [:], required: [])
     }
 
-    func contains(_: Key) -> Bool { true }
+    func contains(_: Key) -> Bool {
+        true
+    }
 
-    func decodeNil(forKey _: Key) -> Bool { false }
+    func decodeNil(forKey _: Key) -> Bool {
+        false
+    }
 
     func decode(_: Bool.Type, forKey key: Key) -> Bool {
         record(key: key, schema: .boolean())

@@ -1,7 +1,6 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
-
-@testable import AgentRunKit
 
 private actor MockTTSProvider: TTSProvider {
     let config: TTSProviderConfig
@@ -42,8 +41,13 @@ private actor MockTTSProvider: TTSProvider {
         return dataFactory(text)
     }
 
-    func getCallCount() -> Int { callCount }
-    func getReceivedVoices() -> [String] { receivedVoices }
+    func getCallCount() -> Int {
+        callCount
+    }
+
+    func getReceivedVoices() -> [String] {
+        receivedVoices
+    }
 }
 
 private actor ReverseDelayProvider: TTSProvider {
@@ -97,7 +101,9 @@ private actor ConcurrencyTracker: TTSProvider {
         return data
     }
 
-    func getPeakConcurrent() -> Int { peakConcurrent }
+    func getPeakConcurrent() -> Int {
+        peakConcurrent
+    }
 }
 
 private func wrapInMP3Metadata(_ text: String) -> Data {
@@ -108,7 +114,6 @@ private func wrapInMP3Metadata(_ text: String) -> Data {
     return data
 }
 
-@Suite
 struct TTSClientTests {
     @Test
     func generateDelegatesToProvider() async throws {
@@ -253,7 +258,9 @@ struct TTSClientTests {
     @Test
     func providerNonTransportErrorWrappedInChunkFailed() async {
         struct CustomError: Error, CustomStringConvertible {
-            var description: String { "custom failure" }
+            var description: String {
+                "custom failure"
+            }
         }
         let provider = MockTTSProvider(
             config: TTSProviderConfig(maxChunkCharacters: 1000, defaultVoice: "alloy", defaultFormat: .mp3),

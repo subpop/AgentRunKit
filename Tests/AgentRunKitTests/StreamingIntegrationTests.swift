@@ -1,7 +1,6 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
-
-@testable import AgentRunKit
 
 private let apiKey = ProcessInfo.processInfo.environment["OPENROUTER_API_KEY"] ?? ""
 private let hasAPIKey = !apiKey.isEmpty
@@ -187,7 +186,7 @@ struct StreamingIntegrationTests {
     }
 }
 
-private struct StreamingAddParams: Codable, SchemaProviding, Sendable {
+private struct StreamingAddParams: Codable, SchemaProviding {
     let lhs: Int
     let rhs: Int
 
@@ -202,18 +201,18 @@ private struct StreamingAddParams: Codable, SchemaProviding, Sendable {
     }
 }
 
-private struct StreamingAddOutput: Codable, Sendable {
+private struct StreamingAddOutput: Codable {
     let sum: Int
 }
 
-private struct StreamingEchoParams: Codable, SchemaProviding, Sendable {
+private struct StreamingEchoParams: Codable, SchemaProviding {
     let message: String
     static var jsonSchema: JSONSchema {
         .object(properties: ["message": .string(description: "Message to echo")], required: ["message"])
     }
 }
 
-private struct StreamingEchoOutput: Codable, Sendable {
+private struct StreamingEchoOutput: Codable {
     let echoed: String
 }
 

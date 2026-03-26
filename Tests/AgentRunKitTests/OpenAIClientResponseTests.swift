@@ -1,9 +1,7 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
 
-@testable import AgentRunKit
-
-@Suite
 struct OpenAIClientResponseTests {
     @Test
     func responseDecodesCorrectly() throws {
@@ -300,7 +298,6 @@ struct OpenAIClientResponseTests {
     }
 }
 
-@Suite
 struct StreamingChunkParsingTests {
     @Test
     func streamingChunkWithReasoningFieldParsesCorrectly() throws {
@@ -452,7 +449,6 @@ struct StreamingChunkParsingTests {
     }
 }
 
-@Suite
 struct ResponseValidationTests {
     @Test
     func emptyToolCallIdThrows() throws {
@@ -630,7 +626,6 @@ struct ResponseValidationTests {
     }
 }
 
-@Suite
 struct ReasoningDetailsResponseTests {
     @Test
     func responseWithReasoningDetailsDecodes() throws {
@@ -726,7 +721,6 @@ struct ReasoningDetailsResponseTests {
     }
 }
 
-@Suite
 struct StreamingAudioChunkTests {
     @Test
     func audioTranscriptChunkParsesCorrectly() throws {

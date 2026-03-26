@@ -1,9 +1,7 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
 
-@testable import AgentRunKit
-
-@Suite
 struct JSONSchemaTests {
     private func encodeToJSON(_ schema: JSONSchema) throws -> [String: Any] {
         let data = try JSONEncoder().encode(schema)
@@ -168,7 +166,6 @@ private enum SchemaTestError: Error {
     case invalidJSON
 }
 
-@Suite
 struct SchemaDecoderTests {
     @Test
     func basicTypes() throws {
@@ -288,7 +285,7 @@ struct SchemaDecoderTests {
     }
 
     @Test
-    func defaultSchemaProvidingImplementation() throws {
+    func defaultSchemaProvidingImplementation() {
         struct AutoParams: Codable, SchemaProviding, Sendable {
             let message: String
             let count: Int

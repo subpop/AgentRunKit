@@ -1,7 +1,7 @@
 import Foundation
 
-struct ReasoningDetailAccumulator: Sendable {
-    private struct TextBlock: Sendable {
+struct ReasoningDetailAccumulator {
+    private struct TextBlock {
         let template: [String: JSONValue]
         var text = ""
         var signature = ""
@@ -21,7 +21,9 @@ struct ReasoningDetailAccumulator: Sendable {
     private var textBlocks: [Int: TextBlock] = [:]
     private var otherBlocks: [JSONValue] = []
 
-    var isEmpty: Bool { textBlocks.isEmpty && otherBlocks.isEmpty }
+    var isEmpty: Bool {
+        textBlocks.isEmpty && otherBlocks.isEmpty
+    }
 
     mutating func append(_ details: [JSONValue]) {
         for detail in details {

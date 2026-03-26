@@ -1,7 +1,6 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
-
-@testable import AgentRunKit
 
 struct TestStructuredOutput: Codable, SchemaProviding, Equatable {
     let name: String
@@ -19,10 +18,11 @@ struct TestStructuredOutput: Codable, SchemaProviding, Equatable {
 }
 
 struct GenericWrapper<T>: SchemaProviding {
-    static var jsonSchema: JSONSchema { .string() }
+    static var jsonSchema: JSONSchema {
+        .string()
+    }
 }
 
-@Suite
 struct ResponseFormatTests {
     @Test
     func encodesCorrectly() throws {
@@ -61,7 +61,6 @@ struct ResponseFormatTests {
     }
 }
 
-@Suite
 struct ChatCompletionRequestResponseFormatTests {
     @Test
     func requestWithResponseFormatEncodesCorrectly() throws {
@@ -135,7 +134,6 @@ actor StructuredOutputMockLLMClient: LLMClient {
     }
 }
 
-@Suite
 struct ChatStructuredOutputTests {
     @Test
     func sendDecodesValidJSON() async throws {
@@ -182,7 +180,6 @@ struct ChatStructuredOutputTests {
     }
 }
 
-@Suite
 struct JSONSchemaAdditionalPropertiesTests {
     @Test
     func objectSchemaIncludesAdditionalPropertiesFalse() throws {

@@ -3,7 +3,7 @@ import Foundation
 
 // swiftlint:disable force_try
 enum MCPTestHelpers {
-    struct MockTool: Sendable {
+    struct MockTool {
         let name: String
         let description: String
         let schema: JSONValue

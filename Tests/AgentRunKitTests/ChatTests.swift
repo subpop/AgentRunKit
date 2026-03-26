@@ -1,9 +1,7 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
 
-@testable import AgentRunKit
-
-@Suite
 struct ChatTests {
     @Test
     func streamSimpleResponseWithoutTools() async throws {
@@ -350,7 +348,6 @@ private actor ChatCapturingMockLLMClient: LLMClient {
     }
 }
 
-@Suite
 struct ChatStreamingEdgeTests {
     @Test
     func outOfOrderDeltasBuffered() async throws {
@@ -455,16 +452,18 @@ struct ChatStreamingEdgeTests {
     }
 }
 
-private struct EchoParams: Codable, SchemaProviding, Sendable {
+private struct EchoParams: Codable, SchemaProviding {
     let message: String
-    static var jsonSchema: JSONSchema { .object(properties: ["message": .string()], required: ["message"]) }
+    static var jsonSchema: JSONSchema {
+        .object(properties: ["message": .string()], required: ["message"])
+    }
 }
 
-private struct EchoOutput: Codable, Sendable {
+private struct EchoOutput: Codable {
     let echoed: String
 }
 
-private struct AddParams: Codable, SchemaProviding, Sendable {
+private struct AddParams: Codable, SchemaProviding {
     let lhs: Int
     let rhs: Int
     static var jsonSchema: JSONSchema {
@@ -472,21 +471,22 @@ private struct AddParams: Codable, SchemaProviding, Sendable {
     }
 }
 
-private struct AddOutput: Codable, Sendable {
+private struct AddOutput: Codable {
     let sum: Int
 }
 
-private struct NoopParams: Codable, SchemaProviding, Sendable {
-    static var jsonSchema: JSONSchema { .object(properties: [:], required: []) }
+private struct NoopParams: Codable, SchemaProviding {
+    static var jsonSchema: JSONSchema {
+        .object(properties: [:], required: [])
+    }
 }
 
-private struct NoopOutput: Codable, Sendable {}
+private struct NoopOutput: Codable {}
 
-private enum TestToolError: Error, Sendable {
+private enum TestToolError: Error {
     case intentional
 }
 
-@Suite
 struct ChatAudioStreamingTests {
     @Test
     func audioDataAndTranscriptEventsEmitted() async throws {

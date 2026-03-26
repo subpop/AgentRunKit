@@ -1,9 +1,7 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
 
-@testable import AgentRunKit
-
-@Suite
 struct TokenUsageTests {
     @Test
     func total() {
@@ -42,7 +40,6 @@ struct TokenUsageTests {
     }
 }
 
-@Suite
 struct AssistantMessageTests {
     @Test
     func defaultValues() {
@@ -72,7 +69,6 @@ struct AssistantMessageTests {
     }
 }
 
-@Suite
 struct ReasoningContentTests {
     @Test
     func initWithContentOnly() {
@@ -106,7 +102,6 @@ struct ReasoningContentTests {
     }
 }
 
-@Suite
 struct CodableRoundTripTests {
     @Test
     func tokenUsageRoundTrip() throws {
@@ -178,7 +173,6 @@ struct CodableRoundTripTests {
     }
 }
 
-@Suite
 struct ChatMessageTests {
     @Test
     func systemMessageRoundTrip() throws {
@@ -238,7 +232,6 @@ struct ChatMessageTests {
     }
 }
 
-@Suite
 struct ContentPartTests {
     @Test
     func audioEncodesAsInputAudio() throws {
@@ -320,7 +313,6 @@ struct ContentPartTests {
     }
 }
 
-@Suite
 struct AudioFormatTests {
     @Test
     func audioInputFormatMappings() {
@@ -337,7 +329,6 @@ struct AudioFormatTests {
     }
 }
 
-@Suite
 struct ChatMessageTruncationTests {
     @Test
     func truncationPreservesRecentMessages() {

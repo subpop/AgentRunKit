@@ -1,12 +1,9 @@
-import Foundation
-
 import AgentRunKit
+@testable import AgentRunKitMLX
+import Foundation
 import MLXLMCommon
 import Testing
 
-@testable import AgentRunKitMLX
-
-@Suite("MLX Message Mapper")
 struct MLXMessageMapperTests {
     @Test func systemMessage() {
         let dicts = MLXMessageMapper.mapMessages([.system("You are helpful.")])
@@ -138,7 +135,6 @@ struct MLXMessageMapperTests {
     }
 }
 
-@Suite("MLX ToolSpec Conversion")
 struct MLXToolSpecTests {
     @Test func stringSchema() throws {
         let dict = try testSchemaDict(.string(description: "A city name"))
@@ -240,7 +236,6 @@ struct MLXToolSpecTests {
     }
 }
 
-@Suite("MLX ToolCall Mapping")
 struct MLXToolCallMappingTests {
     @Test func basicToolCallMapping() throws {
         let mlxCall = MLXLMCommon.ToolCall(
@@ -276,7 +271,6 @@ struct MLXToolCallMappingTests {
     }
 }
 
-@Suite("MLX Parameter Merging")
 struct MLXParameterMergingTests {
     @Test func noExtraFieldsReturnsBase() {
         let base = GenerateParameters(maxTokens: 512, temperature: 0.7)

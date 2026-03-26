@@ -4,7 +4,7 @@
     @testable import AgentRunKitFoundationModels
     import Testing
 
-    @Suite struct FMMessageMapperTests {
+    struct FMMessageMapperTests {
         @Test func singleUserMessage() {
             guard #available(macOS 26, iOS 26, *) else { return }
             let mapped = FMMessageMapper.map([.user("Hello")])

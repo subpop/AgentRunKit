@@ -1,6 +1,6 @@
 import Foundation
 
-struct AnthropicRequest: Encodable, Sendable {
+struct AnthropicRequest: Encodable {
     let model: String?
     let messages: [AnthropicMessage]
     let system: [AnthropicSystemBlock]?
@@ -49,16 +49,16 @@ struct AnthropicRequest: Encodable, Sendable {
     }
 }
 
-enum AnthropicRole: String, Encodable, Sendable {
+enum AnthropicRole: String, Encodable {
     case user, assistant
 }
 
-struct AnthropicMessage: Encodable, Sendable {
+struct AnthropicMessage: Encodable {
     let role: AnthropicRole
     var content: AnthropicMessageContent
 }
 
-enum AnthropicMessageContent: Encodable, Sendable {
+enum AnthropicMessageContent: Encodable {
     case text(String)
     case blocks([AnthropicContentBlock])
     case textWithCacheControl(String)
@@ -76,7 +76,7 @@ enum AnthropicMessageContent: Encodable, Sendable {
     }
 }
 
-enum AnthropicContentBlock: Encodable, Sendable {
+enum AnthropicContentBlock: Encodable {
     case text(String)
     case thinking(thinking: String, signature: String)
     case toolUse(id: String, name: String, input: JSONValue)
@@ -119,11 +119,11 @@ enum AnthropicContentBlock: Encodable, Sendable {
     }
 }
 
-struct CacheControl: Encodable, Sendable {
+struct CacheControl: Encodable {
     let type = "ephemeral"
 }
 
-struct AnthropicSystemBlock: Encodable, Sendable {
+struct AnthropicSystemBlock: Encodable {
     let type = "text"
     let text: String
     var cacheControl: CacheControl?
@@ -134,7 +134,7 @@ struct AnthropicSystemBlock: Encodable, Sendable {
     }
 }
 
-struct AnthropicToolDefinition: Encodable, Sendable {
+struct AnthropicToolDefinition: Encodable {
     let name: String
     let description: String
     let inputSchema: JSONSchema
@@ -153,7 +153,7 @@ struct AnthropicToolDefinition: Encodable, Sendable {
     }
 }
 
-enum AnthropicThinkingConfig: Encodable, Sendable {
+enum AnthropicThinkingConfig: Encodable {
     case enabled(budgetTokens: Int)
     case disabled
 
@@ -181,12 +181,12 @@ enum AnthropicThinkingConfig: Encodable, Sendable {
     }
 }
 
-struct AnthropicResponse: Decodable, Sendable {
+struct AnthropicResponse: Decodable {
     let content: [AnthropicResponseBlock]
     let usage: AnthropicUsage
 }
 
-enum AnthropicResponseBlock: Decodable, Sendable {
+enum AnthropicResponseBlock: Decodable {
     case text(String)
     case thinking(thinking: String, signature: String)
     case toolUse(id: String, name: String, input: JSONValue)
@@ -230,7 +230,7 @@ enum AnthropicResponseBlock: Decodable, Sendable {
     }
 }
 
-struct AnthropicUsage: Decodable, Sendable {
+struct AnthropicUsage: Decodable {
     let inputTokens: Int
     let outputTokens: Int
     let cacheCreationInputTokens: Int?
@@ -244,12 +244,12 @@ struct AnthropicUsage: Decodable, Sendable {
     }
 }
 
-struct AnthropicErrorResponse: Decodable, Sendable {
+struct AnthropicErrorResponse: Decodable {
     let type: String
     let error: AnthropicErrorDetail
 }
 
-struct AnthropicErrorDetail: Decodable, Sendable {
+struct AnthropicErrorDetail: Decodable {
     let type: String
     let message: String
 }

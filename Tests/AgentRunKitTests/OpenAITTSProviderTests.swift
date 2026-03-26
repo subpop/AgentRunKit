@@ -1,9 +1,7 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
 
-@testable import AgentRunKit
-
-@Suite
 struct OpenAITTSProviderTests {
     private let provider = OpenAITTSProvider(
         apiKey: "test-key",
@@ -121,9 +119,9 @@ struct OpenAITTSProviderTests {
 
     @Test
     func networkErrorUnwrappedFromAgentError() async throws {
-        let unreachableProvider = OpenAITTSProvider(
+        let unreachableProvider = try OpenAITTSProvider(
             apiKey: "key",
-            baseURL: URL(string: "http://localhost:1")!,
+            baseURL: #require(URL(string: "http://localhost:1")),
             session: .shared,
             retryPolicy: RetryPolicy(maxAttempts: 1)
         )
@@ -140,10 +138,10 @@ struct OpenAITTSProviderTests {
     }
 
     @Test
-    func cancellationPropagatesThroughGenerate() async {
-        let slowProvider = OpenAITTSProvider(
+    func cancellationPropagatesThroughGenerate() async throws {
+        let slowProvider = try OpenAITTSProvider(
             apiKey: "key",
-            baseURL: URL(string: "http://10.255.255.1")!,
+            baseURL: #require(URL(string: "http://10.255.255.1")),
             session: .shared,
             retryPolicy: RetryPolicy(maxAttempts: 1)
         )

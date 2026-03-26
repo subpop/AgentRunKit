@@ -1,11 +1,11 @@
 import Foundation
 
 #if os(macOS)
-    // @unchecked Sendable justification: Process and Pipe are not Sendable.
-    // Mutable state (process, stdinPipe) follows strict lifecycle: written once
-    // in connect(), read in send()/disconnect(), cleared in disconnect().
-    // stream and continuation are immutable let properties constructed in init.
-    // The owning MCPClient actor serializes all access through the MCPTransport protocol.
+    /// @unchecked Sendable justification: Process and Pipe are not Sendable.
+    /// Mutable state (process, stdinPipe) follows strict lifecycle: written once
+    /// in connect(), read in send()/disconnect(), cleared in disconnect().
+    /// stream and continuation are immutable let properties constructed in init.
+    /// The owning MCPClient actor serializes all access through the MCPTransport protocol.
     public final class StdioMCPTransport: MCPTransport, @unchecked Sendable {
         private let command: String
         private let arguments: [String]
@@ -89,7 +89,7 @@ import Foundation
             continuation.finish()
 
             guard let process, process.isRunning else {
-                self.process = nil
+                process = nil
                 stdinPipe = nil
                 return
             }
@@ -121,6 +121,8 @@ import Foundation
             }
         }
 
-        public nonisolated func messages() -> AsyncThrowingStream<Data, Error> { stream }
+        public nonisolated func messages() -> AsyncThrowingStream<Data, Error> {
+            stream
+        }
     }
 #endif

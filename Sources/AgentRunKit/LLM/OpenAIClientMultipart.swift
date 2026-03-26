@@ -1,12 +1,12 @@
 import Foundation
 
-struct MultipartFormData: Sendable {
-    enum Body: Sendable {
+struct MultipartFormData {
+    enum Body {
         case data(Data)
         case file(URL)
     }
 
-    struct Part: Sendable {
+    struct Part {
         let headers: [(String, String)]
         let body: Body
     }

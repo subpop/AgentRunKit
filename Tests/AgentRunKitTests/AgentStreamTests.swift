@@ -1,9 +1,7 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
 
-@testable import AgentRunKit
-
-@Suite
 struct AgentStreamTests {
     @MainActor
     private func makeStream(
@@ -32,7 +30,7 @@ struct AgentStreamTests {
     }
 
     @MainActor @Test
-    func contentAccumulatesFromDeltas() async throws {
+    func contentAccumulatesFromDeltas() async {
         let deltas: [StreamDelta] = [
             .content("Hello"),
             .content(" world"),
@@ -49,7 +47,7 @@ struct AgentStreamTests {
     }
 
     @MainActor @Test
-    func reasoningDeltaAccumulates() async throws {
+    func reasoningDeltaAccumulates() async {
         let deltas: [StreamDelta] = [
             .reasoning("Let me "),
             .reasoning("think"),
@@ -140,7 +138,7 @@ struct AgentStreamTests {
     }
 
     @MainActor @Test
-    func finishedSetsTokenUsageAndHistory() async throws {
+    func finishedSetsTokenUsageAndHistory() async {
         let deltas: [StreamDelta] = [
             .content("Result"),
             .toolCallStart(index: 0, id: "call_1", name: "finish"),
@@ -159,7 +157,7 @@ struct AgentStreamTests {
     }
 
     @MainActor @Test
-    func sendResetsState() async throws {
+    func sendResetsState() async {
         let deltas1: [StreamDelta] = [
             .content("First"),
             .toolCallStart(index: 0, id: "call_1", name: "finish"),
@@ -188,7 +186,7 @@ struct AgentStreamTests {
     }
 
     @MainActor @Test
-    func cancelStopsStreaming() async throws {
+    func cancelStopsStreaming() async {
         let deltas: [StreamDelta] = [
             .content("Hello"),
             .toolCallStart(index: 0, id: "call_1", name: "finish"),
@@ -206,7 +204,7 @@ struct AgentStreamTests {
     }
 
     @MainActor @Test
-    func errorSurfacedOnStreamFailure() async throws {
+    func errorSurfacedOnStreamFailure() async {
         let client = FailingStreamMockLLMClient()
         let agent = Agent<EmptyContext>(client: client, tools: [])
         let stream = AgentStream(agent: agent)
@@ -219,7 +217,7 @@ struct AgentStreamTests {
     }
 
     @MainActor @Test
-    func isStreamingLifecycle() async throws {
+    func isStreamingLifecycle() async {
         let deltas: [StreamDelta] = [
             .content("Hello"),
             .toolCallStart(index: 0, id: "call_1", name: "finish"),
@@ -237,7 +235,7 @@ struct AgentStreamTests {
     }
 
     @MainActor @Test
-    func finishContentUsedWhenNoDeltaContent() async throws {
+    func finishContentUsedWhenNoDeltaContent() async {
         let deltas: [StreamDelta] = [
             .toolCallStart(index: 0, id: "call_1", name: "finish"),
             .toolCallDelta(index: 0, arguments: #"{"content": "fallback result"}"#),
@@ -252,7 +250,7 @@ struct AgentStreamTests {
     }
 
     @MainActor @Test
-    func finishContentIgnoredWhenDeltaContentExists() async throws {
+    func finishContentIgnoredWhenDeltaContentExists() async {
         let deltas: [StreamDelta] = [
             .content("From deltas"),
             .toolCallStart(index: 0, id: "call_1", name: "finish"),
@@ -300,7 +298,7 @@ struct AgentStreamTests {
     }
 
     @MainActor @Test
-    func iterationUsagesResetOnNewSend() async throws {
+    func iterationUsagesResetOnNewSend() async {
         let deltas1: [StreamDelta] = [
             .toolCallStart(index: 0, id: "call_1", name: "finish"),
             .toolCallDelta(index: 0, arguments: #"{"content": "done1"}"#),
@@ -327,12 +325,14 @@ struct AgentStreamTests {
     }
 }
 
-private struct EchoParams: Codable, SchemaProviding, Sendable {
+private struct EchoParams: Codable, SchemaProviding {
     let message: String
-    static var jsonSchema: JSONSchema { .object(properties: ["message": .string()], required: ["message"]) }
+    static var jsonSchema: JSONSchema {
+        .object(properties: ["message": .string()], required: ["message"])
+    }
 }
 
-private struct EchoOutput: Codable, Sendable {
+private struct EchoOutput: Codable {
     let echoed: String
 }
 

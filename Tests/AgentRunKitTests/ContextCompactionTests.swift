@@ -1,7 +1,6 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
-
-@testable import AgentRunKit
 
 // MARK: - Mock
 
@@ -104,24 +103,25 @@ private func extractToolContent(_ messages: [ChatMessage]) -> String? {
     return nil
 }
 
-private struct NoopParams: Codable, SchemaProviding, Sendable {
-    static var jsonSchema: JSONSchema { .object(properties: [:], required: []) }
+private struct NoopParams: Codable, SchemaProviding {
+    static var jsonSchema: JSONSchema {
+        .object(properties: [:], required: [])
+    }
 }
 
-private struct NoopOutput: Codable, Sendable {}
+private struct NoopOutput: Codable {}
 
-private struct EchoParams: Codable, SchemaProviding, Sendable {
+private struct EchoParams: Codable, SchemaProviding {
     let message: String
     static var jsonSchema: JSONSchema {
         .object(properties: ["message": .string()], required: ["message"])
     }
 }
 
-private struct EchoOutput: Codable, Sendable { let echoed: String }
+private struct EchoOutput: Codable { let echoed: String }
 
 // MARK: - Compaction Trigger Tests
 
-@Suite
 struct CompactionTriggerTests {
     @Test
     func compactionTriggersAtThreshold() async throws {
@@ -268,7 +268,6 @@ struct CompactionTriggerTests {
 
 // MARK: - Compaction Fallback Tests
 
-@Suite
 struct CompactionFallbackTests {
     @Test
     func compactionFallsBackToTruncationOnError() async throws {
@@ -300,7 +299,6 @@ struct CompactionFallbackTests {
 
 // MARK: - Compaction Token Usage Tests
 
-@Suite
 struct CompactionTokenUsageTests {
     @Test
     func compactionTokenUsageAddedToTotal() async throws {
@@ -329,7 +327,6 @@ struct CompactionTokenUsageTests {
 
 // MARK: - Compaction Context Preservation Tests
 
-@Suite
 struct CompactionContextPreservationTests {
     private func compactionClient() -> CompactionMockLLMClient {
         CompactionMockLLMClient(
@@ -438,7 +435,6 @@ struct CompactionContextPreservationTests {
 
 // MARK: - Observation Pruning Tests
 
-@Suite
 struct ObservationPruningTests {
     private var compactor: ContextCompactor {
         ContextCompactor(
@@ -510,7 +506,6 @@ struct ObservationPruningTests {
 
 // MARK: - Tool Result Truncation Tests
 
-@Suite
 struct ToolResultTruncationTests {
     @Test
     func toolResultMiddleOutTruncation() async throws {
@@ -591,7 +586,6 @@ struct ToolResultTruncationTests {
 
 // MARK: - Stream Compaction Tests
 
-@Suite
 struct StreamCompactionTests {
     @Test
     func streamEmitsCompactedEvent() async throws {

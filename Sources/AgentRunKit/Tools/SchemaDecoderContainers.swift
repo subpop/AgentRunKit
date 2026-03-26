@@ -4,7 +4,10 @@ struct SchemaUnkeyedContainer: UnkeyedDecodingContainer {
     let decoder: SchemaDecoderImpl
     var codingPath: [any CodingKey]
     var count: Int? = 1
-    var isAtEnd: Bool { currentIndex >= 1 }
+    var isAtEnd: Bool {
+        currentIndex >= 1
+    }
+
     var currentIndex: Int = 0
 
     mutating func decodeNil() -> Bool {

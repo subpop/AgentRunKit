@@ -1,6 +1,5 @@
-import Foundation
-
 @testable import AgentRunKit
+import Foundation
 
 actor StreamingMockLLMClient: LLMClient {
     private let generateResponses: [AssistantMessage]
@@ -199,7 +198,7 @@ actor ControllableStreamingMockLLMClient: LLMClient {
     }
 }
 
-struct MultipartTestPart: Sendable {
+struct MultipartTestPart {
     let headers: [String: String]
     let body: String
 

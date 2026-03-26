@@ -1,7 +1,6 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
-
-@testable import AgentRunKit
 
 private func decodeRequest(_ data: Data) -> JSONRPCRequest? {
     try? JSONDecoder().decode(JSONRPCRequest.self, from: data)
@@ -26,7 +25,6 @@ private func standardHandler(
     }
 }
 
-@Suite
 struct MCPClientTests {
     private func makeInitAndToolsResponses(
         tools: [MCPTestHelpers.MockTool] = []
@@ -462,7 +460,6 @@ struct MCPClientTests {
     }
 }
 
-@Suite
 struct MCPClientEdgeCaseTests {
     @Test
     func shutdownIdempotent() async throws {
@@ -540,10 +537,14 @@ struct MCPClientEdgeCaseTests {
 
 private actor IDCollector {
     var ids: [JSONRPCID] = []
-    func add(_ id: JSONRPCID) { ids.append(id) }
+    func add(_ id: JSONRPCID) {
+        ids.append(id)
+    }
 }
 
 private actor DataCollector {
     var items: [Data] = []
-    func add(_ data: Data) { items.append(data) }
+    func add(_ data: Data) {
+        items.append(data)
+    }
 }

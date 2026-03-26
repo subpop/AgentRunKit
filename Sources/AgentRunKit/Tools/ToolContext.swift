@@ -3,7 +3,9 @@ public protocol ToolContext: Sendable {
 }
 
 public extension ToolContext {
-    func withParentHistory(_: [ChatMessage]) -> Self { self }
+    func withParentHistory(_: [ChatMessage]) -> Self {
+        self
+    }
 }
 
 public struct EmptyContext: ToolContext {

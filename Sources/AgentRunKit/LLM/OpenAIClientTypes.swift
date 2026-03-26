@@ -94,13 +94,24 @@ public struct RequestContext: Sendable {
 
 struct DynamicCodingKey: CodingKey {
     var stringValue: String
-    var intValue: Int? { nil }
-    init(_ key: String) { stringValue = key }
-    init?(stringValue: String) { self.stringValue = stringValue }
-    init?(intValue _: Int) { nil }
+    var intValue: Int? {
+        nil
+    }
+
+    init(_ key: String) {
+        stringValue = key
+    }
+
+    init?(stringValue: String) {
+        self.stringValue = stringValue
+    }
+
+    init?(intValue _: Int) {
+        nil
+    }
 }
 
-struct StreamOptions: Encodable, Sendable {
+struct StreamOptions: Encodable {
     let includeUsage: Bool
 
     enum CodingKeys: String, CodingKey {
@@ -108,7 +119,7 @@ struct StreamOptions: Encodable, Sendable {
     }
 }
 
-struct RequestReasoning: Encodable, Sendable {
+struct RequestReasoning: Encodable {
     let effort: String
     let maxTokens: Int?
     let exclude: Bool?
@@ -133,7 +144,7 @@ struct RequestReasoning: Encodable, Sendable {
     }
 }
 
-struct ChatCompletionRequest: Encodable, Sendable {
+struct ChatCompletionRequest: Encodable {
     let model: String?
     let messages: [RequestMessage]
     let tools: [RequestTool]?
@@ -175,7 +186,7 @@ struct ChatCompletionRequest: Encodable, Sendable {
     }
 }
 
-struct RequestMessage: Encodable, Sendable {
+struct RequestMessage: Encodable {
     let role: String
     let content: MessageContent?
     let toolCalls: [RequestToolCall]?
@@ -192,7 +203,7 @@ struct RequestMessage: Encodable, Sendable {
         case reasoningDetails = "reasoning_details"
     }
 
-    enum MessageContent: Encodable, Sendable {
+    enum MessageContent: Encodable {
         case text(String)
         case multimodal([ContentPart])
 
@@ -253,7 +264,7 @@ struct RequestMessage: Encodable, Sendable {
     }
 }
 
-struct RequestToolCall: Encodable, Sendable {
+struct RequestToolCall: Encodable {
     let id: String
     let type: String
     let function: RequestFunction
@@ -265,12 +276,12 @@ struct RequestToolCall: Encodable, Sendable {
     }
 }
 
-struct RequestFunction: Encodable, Sendable {
+struct RequestFunction: Encodable {
     let name: String
     let arguments: String
 }
 
-struct RequestTool: Encodable, Sendable {
+struct RequestTool: Encodable {
     let type: String
     let function: RequestToolFunction
 
@@ -280,7 +291,7 @@ struct RequestTool: Encodable, Sendable {
     }
 }
 
-struct RequestToolFunction: Encodable, Sendable {
+struct RequestToolFunction: Encodable {
     let name: String
     let description: String
     let parameters: JSONSchema
@@ -292,17 +303,17 @@ struct RequestToolFunction: Encodable, Sendable {
     }
 }
 
-struct ChatCompletionResponse: Decodable, Sendable {
+struct ChatCompletionResponse: Decodable {
     let choices: [ResponseChoice]
     let usage: ResponseUsage?
 }
 
-struct ResponseChoice: Decodable, Sendable {
+struct ResponseChoice: Decodable {
     let message: ResponseMessage
     let finishReason: String?
 }
 
-struct ResponseMessage: Decodable, Sendable {
+struct ResponseMessage: Decodable {
     let role: String
     let content: String?
     let toolCalls: [ResponseToolCall]?
@@ -310,7 +321,7 @@ struct ResponseMessage: Decodable, Sendable {
     let reasoningContent: String?
 }
 
-struct ResponseToolCall: Decodable, Sendable {
+struct ResponseToolCall: Decodable {
     let id: String
     let type: String
     let function: ResponseFunction
@@ -332,7 +343,7 @@ struct ResponseToolCall: Decodable, Sendable {
     }
 }
 
-struct ResponseFunction: Decodable, Sendable {
+struct ResponseFunction: Decodable {
     let name: String
     let arguments: String
 
@@ -352,7 +363,7 @@ struct ResponseFunction: Decodable, Sendable {
     }
 }
 
-struct ResponseUsage: Decodable, Sendable {
+struct ResponseUsage: Decodable {
     let promptTokens: Int
     let completionTokens: Int
     let completionTokensDetails: CompletionTokensDetails?
@@ -364,28 +375,28 @@ struct ResponseUsage: Decodable, Sendable {
     }
 }
 
-struct CompletionTokensDetails: Decodable, Sendable {
+struct CompletionTokensDetails: Decodable {
     let reasoningTokens: Int?
 }
 
-struct StreamingChunk: Decodable, Sendable {
+struct StreamingChunk: Decodable {
     let choices: [StreamingChoice]?
     let usage: ResponseUsage?
 }
 
-struct StreamingChoice: Decodable, Sendable {
+struct StreamingChoice: Decodable {
     let delta: StreamingDelta
     let finishReason: String?
 }
 
-struct StreamingAudioDelta: Decodable, Sendable {
+struct StreamingAudioDelta: Decodable {
     let id: String?
     let data: String?
     let transcript: String?
     let expiresAt: Int?
 }
 
-struct StreamingDelta: Decodable, Sendable {
+struct StreamingDelta: Decodable {
     let content: String?
     let toolCalls: [StreamingToolCall]?
     let reasoning: String?
@@ -393,13 +404,13 @@ struct StreamingDelta: Decodable, Sendable {
     let audio: StreamingAudioDelta?
 }
 
-struct StreamingToolCall: Decodable, Sendable {
+struct StreamingToolCall: Decodable {
     let index: Int
     let id: String?
     let function: StreamingFunction?
 }
 
-struct StreamingFunction: Decodable, Sendable {
+struct StreamingFunction: Decodable {
     let name: String?
     let arguments: String?
 }
@@ -443,6 +454,6 @@ public struct TranscriptionOptions: Sendable, Equatable {
     }
 }
 
-struct TranscriptionResponse: Decodable, Sendable {
+struct TranscriptionResponse: Decodable {
     let text: String
 }

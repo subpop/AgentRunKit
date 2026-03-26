@@ -1,14 +1,12 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
-
-@testable import AgentRunKit
 
 private func encodeRequest(_ request: ResponsesRequest) throws -> [String: Any] {
     let data = try JSONEncoder().encode(request)
     return try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
 }
 
-@Suite
 struct ResponsesRequestSerializationTests {
     private func makeClient(store: Bool = false) -> ResponsesAPIClient {
         ResponsesAPIClient(
@@ -173,7 +171,6 @@ struct ResponsesRequestSerializationTests {
     }
 }
 
-@Suite
 struct ResponsesServerSideStateTests {
     @Test
     func firstRequestSendsFullInputNoPreviousId() async throws {
@@ -273,7 +270,6 @@ extension ResponsesAPIClient {
     }
 }
 
-@Suite
 struct ResponsesResponseParsingTests {
     private func makeClient() -> ResponsesAPIClient {
         ResponsesAPIClient(
@@ -443,7 +439,6 @@ struct ResponsesResponseParsingTests {
     }
 }
 
-@Suite
 struct ResponsesStreamingTests {
     private func makeClient() -> ResponsesAPIClient {
         ResponsesAPIClient(
@@ -617,7 +612,6 @@ struct ResponsesStreamingTests {
     }
 }
 
-@Suite
 struct ResponsesURLRequestTests {
     @Test
     func buildURLRequestSetsCorrectProperties() async throws {
@@ -653,10 +647,10 @@ struct ResponsesURLRequestTests {
 
     @Test
     func customResponsesPath() async throws {
-        let client = ResponsesAPIClient(
+        let client = try ResponsesAPIClient(
             apiKey: "test-key",
             model: "gpt-4.1",
-            baseURL: URL(string: "https://custom.api.com/v2")!,
+            baseURL: #require(URL(string: "https://custom.api.com/v2")),
             responsesPath: "custom/responses"
         )
         let request = try await client.buildRequest(
@@ -669,7 +663,6 @@ struct ResponsesURLRequestTests {
     }
 }
 
-@Suite
 struct ResponsesStoreFieldTests {
     @Test
     func storeTrueIncludedInRequestBody() async throws {
@@ -696,7 +689,6 @@ struct ResponsesStoreFieldTests {
     }
 }
 
-@Suite
 struct ResponsesFormatMappingTests {
     @Test
     func responseFormatMapsToTextFormat() async throws {
@@ -727,7 +719,6 @@ private struct TestResponsesOutput: SchemaProviding {
     }
 }
 
-@Suite
 struct ResponsesExtraFieldsTests {
     private func makeClient() -> ResponsesAPIClient {
         ResponsesAPIClient(
@@ -790,13 +781,12 @@ struct ResponsesExtraFieldsTests {
         )
         let json = try encodeRequest(request)
 
-        let expectedKeys: Set<String> = ["model", "input", "store", "include"]
+        let expectedKeys: Set = ["model", "input", "store", "include"]
         let actualKeys = Set(json.keys)
         #expect(actualKeys == expectedKeys)
     }
 }
 
-@Suite
 struct ResponsesEdgeCaseTests {
     @Test
     func emptyToolsArrayOmitsToolsField() async throws {
@@ -885,7 +875,6 @@ struct ResponsesEdgeCaseTests {
     }
 }
 
-@Suite
 struct ResponsesMultiTurnRoundTripTests {
     @Test
     func fullMultiTurnConversationWithToolRoundTrip() async throws {

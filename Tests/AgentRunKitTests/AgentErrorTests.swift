@@ -1,9 +1,7 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
 
-@testable import AgentRunKit
-
-@Suite
 struct AgentErrorTests {
     @Test
     func toolNotFoundFeedsErrorToLLM() async throws {
@@ -161,22 +159,26 @@ struct AgentErrorTests {
     }
 }
 
-private struct EchoParams: Codable, SchemaProviding, Sendable {
+private struct EchoParams: Codable, SchemaProviding {
     let message: String
-    static var jsonSchema: JSONSchema { .object(properties: ["message": .string()], required: ["message"]) }
+    static var jsonSchema: JSONSchema {
+        .object(properties: ["message": .string()], required: ["message"])
+    }
 }
 
-private struct EchoOutput: Codable, Sendable {
+private struct EchoOutput: Codable {
     let echoed: String
 }
 
-private struct NoopParams: Codable, SchemaProviding, Sendable {
-    static var jsonSchema: JSONSchema { .object(properties: [:], required: []) }
+private struct NoopParams: Codable, SchemaProviding {
+    static var jsonSchema: JSONSchema {
+        .object(properties: [:], required: [])
+    }
 }
 
-private struct NoopOutput: Codable, Sendable {}
+private struct NoopOutput: Codable {}
 
-private enum AgentErrorTestError: Error, Sendable {
+private enum AgentErrorTestError: Error {
     case intentional
 }
 

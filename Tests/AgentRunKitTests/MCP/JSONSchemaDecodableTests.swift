@@ -1,9 +1,7 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
 
-@testable import AgentRunKit
-
-@Suite
 struct JSONSchemaDecodableTests {
     private func roundTrip(_ schema: JSONSchema) throws -> JSONSchema {
         let data = try JSONEncoder().encode(schema)

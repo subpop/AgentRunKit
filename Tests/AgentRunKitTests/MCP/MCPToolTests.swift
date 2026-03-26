@@ -1,9 +1,7 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
 
-@testable import AgentRunKit
-
-@Suite
 struct MCPToolTests {
     private func makeReadyClient(
         toolCallHandler: (@Sendable (String, Data) async throws -> MCPCallResult)? = nil

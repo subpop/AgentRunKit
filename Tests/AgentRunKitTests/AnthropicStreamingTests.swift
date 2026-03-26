@@ -1,9 +1,7 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
 
-@testable import AgentRunKit
-
-@Suite
 struct AnthropicStreamingTests {
     private func makeClient() -> AnthropicClient {
         AnthropicClient(apiKey: "test-key", model: "claude-sonnet-4-6")
@@ -251,7 +249,7 @@ struct AnthropicStreamingTests {
     }
 
     @Test
-    func emptyInputToolCallAccumulatesToValidJSON() async throws {
+    func emptyInputToolCallAccumulatesToValidJSON() {
         var accumulator = ToolCallAccumulator(id: "toolu_01", name: "list_items")
         let toolCall = accumulator.toToolCall()
         #expect(toolCall.arguments == "{}")
@@ -290,7 +288,6 @@ struct AnthropicStreamingTests {
     }
 }
 
-@Suite
 struct AnthropicStreamingInputUsageTests {
     private func makeClient() -> AnthropicClient {
         AnthropicClient(apiKey: "test-key", model: "claude-sonnet-4-6")

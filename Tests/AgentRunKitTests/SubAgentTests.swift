@@ -1,26 +1,26 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
 
-@testable import AgentRunKit
-
-private struct QueryParams: Codable, SchemaProviding, Sendable {
+private struct QueryParams: Codable, SchemaProviding {
     let query: String
     static var jsonSchema: JSONSchema {
         .object(properties: ["query": .string()], required: ["query"])
     }
 }
 
-private struct NoopParams: Codable, SchemaProviding, Sendable {
-    static var jsonSchema: JSONSchema { .object(properties: [:], required: []) }
+private struct NoopParams: Codable, SchemaProviding {
+    static var jsonSchema: JSONSchema {
+        .object(properties: [:], required: [])
+    }
 }
 
-private struct NoopOutput: Codable, Sendable {}
+private struct NoopOutput: Codable {}
 
-private struct TaggedContext: ToolContext, Sendable {
+private struct TaggedContext: ToolContext {
     let tag: String
 }
 
-@Suite
 struct SubAgentContextTests {
     @Test
     func descendingIncrementsDepth() {
@@ -49,7 +49,6 @@ struct SubAgentContextTests {
     }
 }
 
-@Suite
 struct SubAgentToolTests {
     @Test
     func happyPath() async throws {
@@ -400,7 +399,6 @@ struct SubAgentToolTests {
     }
 }
 
-@Suite
 struct SubAgentInheritParentMessagesTests {
     @Test
     func childSeesParentHistory() async throws {

@@ -18,7 +18,9 @@ public protocol LLMClient: Sendable {
 }
 
 public extension LLMClient {
-    var contextWindowSize: Int? { nil }
+    var contextWindowSize: Int? {
+        nil
+    }
 
     func generate(
         messages: [ChatMessage],

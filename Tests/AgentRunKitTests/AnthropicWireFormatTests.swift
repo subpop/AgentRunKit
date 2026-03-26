@@ -1,9 +1,7 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
 
-@testable import AgentRunKit
-
-@Suite
 struct AnthropicContentBlockEncodingTests {
     private func encodeBlock(_ block: AnthropicContentBlock) throws -> [String: Any] {
         let data = try JSONEncoder().encode(block)
@@ -92,7 +90,6 @@ struct AnthropicContentBlockEncodingTests {
     }
 }
 
-@Suite
 struct AnthropicCacheControlWireFormatTests {
     private func encodeToDict(_ value: some Encodable) throws -> [String: Any] {
         let data = try JSONEncoder().encode(value)
@@ -158,7 +155,6 @@ struct AnthropicCacheControlWireFormatTests {
     }
 }
 
-@Suite
 struct AnthropicMessageContentEncodingTests {
     @Test
     func textWithCacheControlEncodesAsBlockArray() throws {
@@ -176,7 +172,6 @@ struct AnthropicMessageContentEncodingTests {
     }
 }
 
-@Suite
 struct AnthropicErrorHandlingTests {
     @Test
     func malformedResponseThrowsDecodingError() {

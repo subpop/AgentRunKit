@@ -1,7 +1,6 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
-
-@testable import AgentRunKit
 
 private func makeStandardTransport(
     tools: [MCPTestHelpers.MockTool] = [],
@@ -39,7 +38,6 @@ private func makeStandardTransport(
     }
 }
 
-@Suite
 struct MCPIntegrationTests {
     @Test
     func fullLifecycle() async throws {
@@ -364,7 +362,7 @@ private actor IntegrationCapturingMockLLMClient: LLMClient {
     }
 }
 
-private struct MixedParams: Codable, SchemaProviding, Sendable {
+private struct MixedParams: Codable, SchemaProviding {
     let lhs: Int
     let rhs: Int
 
@@ -376,6 +374,6 @@ private struct MixedParams: Codable, SchemaProviding, Sendable {
     }
 }
 
-private struct MixedOutput: Codable, Sendable {
+private struct MixedOutput: Codable {
     let result: String
 }

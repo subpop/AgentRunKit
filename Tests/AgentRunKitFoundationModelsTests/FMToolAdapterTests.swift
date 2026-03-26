@@ -32,7 +32,7 @@
         }
     }
 
-    @Suite struct FMToolAdapterTests {
+    struct FMToolAdapterTests {
         @Test func adapterNameMatchesWrappedTool() throws {
             guard #available(macOS 26, iOS 26, *) else { return }
             let adapter = try FMToolAdapter(wrapping: EchoTool(), context: EmptyContext())

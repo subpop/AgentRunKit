@@ -5,7 +5,7 @@
 
     @available(macOS 26, iOS 26, *)
     enum FMMessageMapper {
-        struct MappedInput: Sendable {
+        struct MappedInput {
             let instructions: String?
             let prompt: String
         }

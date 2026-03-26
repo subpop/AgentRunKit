@@ -1,9 +1,7 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
 
-@testable import AgentRunKit
-
-@Suite
 struct AgentStreamingTests {
     @Test
     func streamToCompletionWithFinishTool() async throws {
@@ -405,7 +403,6 @@ struct AgentStreamingTests {
     }
 }
 
-@Suite
 struct StreamingReasoningTests {
     @Test
     func reasoningDeltasEmittedAsReasoningDeltaEvents() async throws {
@@ -632,26 +629,29 @@ struct StreamingReasoningTests {
     }
 }
 
-private struct EchoParams: Codable, SchemaProviding, Sendable {
+private struct EchoParams: Codable, SchemaProviding {
     let message: String
-    static var jsonSchema: JSONSchema { .object(properties: ["message": .string()], required: ["message"]) }
+    static var jsonSchema: JSONSchema {
+        .object(properties: ["message": .string()], required: ["message"])
+    }
 }
 
-private struct EchoOutput: Codable, Sendable {
+private struct EchoOutput: Codable {
     let echoed: String
 }
 
-private struct NoopParams: Codable, SchemaProviding, Sendable {
-    static var jsonSchema: JSONSchema { .object(properties: [:], required: []) }
+private struct NoopParams: Codable, SchemaProviding {
+    static var jsonSchema: JSONSchema {
+        .object(properties: [:], required: [])
+    }
 }
 
-private struct NoopOutput: Codable, Sendable {}
+private struct NoopOutput: Codable {}
 
-private enum TestToolError: Error, Sendable {
+private enum TestToolError: Error {
     case intentional
 }
 
-@Suite
 struct AgentIterationCompletedTests {
     @Test
     func iterationCompletedEmittedAfterEachLLMCall() async throws {
@@ -763,7 +763,6 @@ struct AgentIterationCompletedTests {
     }
 }
 
-@Suite
 struct AgentStreamingTokenBudgetTests {
     @Test
     func budgetExceededDuringStreaming() async throws {
@@ -850,7 +849,6 @@ struct AgentStreamingTokenBudgetTests {
     }
 }
 
-@Suite
 struct AgentAudioStreamingTests {
     @Test
     func audioEventsPassThroughAgent() async throws {

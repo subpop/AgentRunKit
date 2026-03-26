@@ -1,6 +1,6 @@
 import Foundation
 
-struct ToolCallAccumulator: Sendable {
+struct ToolCallAccumulator {
     let id: String
     let name: String
     var arguments: String = ""

@@ -1,9 +1,7 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
 
-@testable import AgentRunKit
-
-@Suite
 struct JSONValueEncodingTests {
     @Test
     func encodesString() throws {
@@ -77,7 +75,6 @@ struct JSONValueEncodingTests {
     }
 }
 
-@Suite
 struct JSONValueEquatableTests {
     @Test
     func stringEquality() {
@@ -127,7 +124,6 @@ struct JSONValueEquatableTests {
     }
 }
 
-@Suite
 struct RequestContextTests {
     @Test
     func initializesWithDefaults() {
@@ -149,7 +145,6 @@ struct RequestContextTests {
     }
 }
 
-@Suite
 struct ChatCompletionRequestExtraFieldsTests {
     @Test
     func requestWithExtraFieldsIncludesThem() throws {
@@ -248,7 +243,6 @@ struct ChatCompletionRequestExtraFieldsTests {
     }
 }
 
-@Suite
 struct ReasoningConfigEncodingTests {
     @Test
     func reasoningEffortEncodesAsNestedObject() throws {
@@ -424,7 +418,6 @@ private struct ForwardingTestOutput: Codable, SchemaProviding {
     }
 }
 
-@Suite
 struct RequestContextForwardingTests {
     private static let finishResponse = AssistantMessage(
         content: "",

@@ -1,7 +1,6 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
-
-@testable import AgentRunKit
 
 private func encodeRequest(_ request: AnthropicRequest) throws -> [String: Any] {
     let object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(request))
@@ -11,7 +10,6 @@ private func encodeRequest(_ request: AnthropicRequest) throws -> [String: Any] 
     return dict
 }
 
-@Suite
 struct AnthropicRequestSerializationTests {
     private func makeClient(
         reasoningConfig: ReasoningConfig? = nil, interleavedThinking: Bool = false, maxTokens: Int = 8192
@@ -204,7 +202,6 @@ struct AnthropicRequestSerializationTests {
     }
 }
 
-@Suite
 struct AnthropicURLRequestTests {
     @Test
     func setsCorrectHeaders() throws {
@@ -281,10 +278,10 @@ struct AnthropicURLRequestTests {
 
     @Test
     func customBaseURL() throws {
-        let client = AnthropicClient(
+        let client = try AnthropicClient(
             apiKey: "test-key",
             model: "claude-sonnet-4-6",
-            baseURL: URL(string: "https://custom.api.example.com/v2")!
+            baseURL: #require(URL(string: "https://custom.api.example.com/v2"))
         )
         let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
         let urlRequest = try client.buildURLRequest(request)
@@ -307,7 +304,6 @@ struct AnthropicURLRequestTests {
     }
 }
 
-@Suite
 struct AnthropicBudgetMappingTests {
     @Test
     func effortMappingValues() throws {
@@ -393,7 +389,6 @@ struct AnthropicBudgetMappingTests {
     }
 }
 
-@Suite
 struct AnthropicCachingRequestTests {
     private let testTools = [
         ToolDefinition(
@@ -467,7 +462,6 @@ struct AnthropicCachingRequestTests {
     }
 }
 
-@Suite
 struct AnthropicConversationCachingTests {
     @Test
     func conversationCachingMarksSecondToLastUserMessage() throws {
@@ -581,5 +575,7 @@ struct AnthropicConversationCachingTests {
 }
 
 private enum TestAnthropicOutput: SchemaProviding {
-    static var jsonSchema: JSONSchema { .object(properties: ["value": .string()], required: ["value"]) }
+    static var jsonSchema: JSONSchema {
+        .object(properties: ["value": .string()], required: ["value"])
+    }
 }

@@ -1,6 +1,6 @@
 import Foundation
 
-struct StreamPolicy: Sendable {
+struct StreamPolicy {
     let terminalToolName: String?
     let terminateWhenNoToolCalls: Bool
     let emitToolStartForTerminalTool: Bool
@@ -45,7 +45,7 @@ struct StreamPolicy: Sendable {
     }
 }
 
-struct StreamIteration: Sendable {
+struct StreamIteration {
     let content: String
     let toolCalls: [ToolCall]
     let reasoning: String
@@ -58,7 +58,7 @@ struct StreamIteration: Sendable {
     }
 }
 
-private struct AudioAccumulator: Sendable {
+private struct AudioAccumulator {
     var id: String?
     var expiresAt = 0
     var data = Data()
@@ -162,7 +162,7 @@ private struct StreamAccumulation {
     }
 }
 
-struct StreamProcessor: Sendable {
+struct StreamProcessor {
     let client: any LLMClient
     let toolDefinitions: [ToolDefinition]
     let policy: StreamPolicy

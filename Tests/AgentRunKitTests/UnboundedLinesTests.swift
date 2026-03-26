@@ -1,7 +1,6 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
-
-@testable import AgentRunKit
 
 struct MockByteSequence: AsyncSequence {
     typealias Element = UInt8
@@ -23,7 +22,6 @@ struct MockByteSequence: AsyncSequence {
     }
 }
 
-@Suite
 struct UnboundedLinesTests {
     @Test
     func lfLineEndings() async throws {

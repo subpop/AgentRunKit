@@ -1,9 +1,7 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
 
-@testable import AgentRunKit
-
-@Suite
 struct ParseRetryAfterTests {
     private func makeResponse(headers: [String: String] = [:]) throws -> HTTPURLResponse {
         let url = try #require(URL(string: "https://example.com"))
@@ -70,7 +68,6 @@ struct ParseRetryAfterTests {
     }
 }
 
-@Suite
 struct ParseHTTPDateTests {
     @Test
     func rfc1123Format() {
@@ -103,7 +100,6 @@ struct ParseHTTPDateTests {
     }
 }
 
-@Suite
 struct HandleErrorStatusTests {
     @Test
     func nonRateLimitReturnsStop() async throws {

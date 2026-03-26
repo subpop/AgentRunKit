@@ -1,9 +1,7 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
 
-@testable import AgentRunKit
-
-@Suite
 struct AgentHistoryTests {
     @Test
     func historyIncludedInMessages() async throws {
@@ -189,7 +187,6 @@ struct AgentHistoryTests {
     }
 }
 
-@Suite
 struct AgentTruncationTests {
     @Test
     func truncationPreservesSystemPrompt() async throws {
@@ -338,12 +335,14 @@ struct AgentTruncationTests {
     }
 }
 
-private struct EchoParams: Codable, SchemaProviding, Sendable {
+private struct EchoParams: Codable, SchemaProviding {
     let message: String
-    static var jsonSchema: JSONSchema { .object(properties: ["message": .string()], required: ["message"]) }
+    static var jsonSchema: JSONSchema {
+        .object(properties: ["message": .string()], required: ["message"])
+    }
 }
 
-private struct EchoOutput: Codable, Sendable {
+private struct EchoOutput: Codable {
     let echoed: String
 }
 
