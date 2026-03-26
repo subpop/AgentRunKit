@@ -80,13 +80,9 @@ public struct GeminiClient: LLMClient, Sendable {
     }
 }
 
-// MARK: - Constants
-
 public extension GeminiClient {
     static let geminiBaseURL = URL(string: "https://generativelanguage.googleapis.com")!
 }
-
-// MARK: - Request Building
 
 extension GeminiClient {
     func buildRequest(
@@ -105,10 +101,10 @@ extension GeminiClient {
         )
 
         var responseMimeType: String?
-        var responseJsonSchema: JSONSchema?
+        var responseSchema: JSONSchema?
         if let responseFormat {
             responseMimeType = "application/json"
-            responseJsonSchema = responseFormat.schema
+            responseSchema = responseFormat.schema
         }
 
         let thinkingConfig = buildThinkingConfig()
@@ -117,7 +113,7 @@ extension GeminiClient {
             maxOutputTokens: maxOutputTokens,
             thinkingConfig: thinkingConfig,
             responseMimeType: responseMimeType,
-            responseJsonSchema: responseJsonSchema
+            responseSchema: responseSchema
         )
 
         return GeminiRequest(
@@ -159,24 +155,40 @@ extension GeminiClient {
         let action = stream ? "streamGenerateContent" : "generateContent"
         let modelPath = modelIdentifier.map { "models/\($0)" } ?? "models/gemini-2.5-flash"
         let path = "\(apiVersion)/\(modelPath):\(action)"
-        var url = baseURL.appendingPathComponent(path)
+        let url = baseURL.appendingPathComponent(path)
 
         var queryItems = [URLQueryItem(name: "key", value: apiKey)]
         if stream {
             queryItems.append(URLQueryItem(name: "alt", value: "sse"))
         }
-        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            throw AgentError.llmError(.other("Failed to parse URL components from: \(url)"))
+        }
         components.queryItems = queryItems
-        url = components.url!
+        guard let finalURL = components.url else {
+            throw AgentError.llmError(.other("Failed to construct URL with query items"))
+        }
 
         let headers = additionalHeaders()
-        return try buildJSONPostRequest(url: url, body: request, headers: headers)
+        return try buildJSONPostRequest(url: finalURL, body: request, headers: headers)
     }
 }
 
-// MARK: - Response Parsing
-
 extension GeminiClient {
+    func encodeFunctionCallArgs(_ args: JSONValue?) throws -> String {
+        guard let args else { return "{}" }
+        let encoded: Data
+        do {
+            encoded = try JSONEncoder().encode(args)
+        } catch {
+            throw AgentError.llmError(.encodingFailed(error))
+        }
+        guard let str = String(data: encoded, encoding: .utf8) else {
+            preconditionFailure("JSONEncoder produced invalid UTF-8")
+        }
+        return str
+    }
+
     func parseResponse(_ data: Data) throws -> AssistantMessage {
         if let err = try? JSONDecoder().decode(GeminiErrorResponse.self, from: data) {
             throw AgentError.llmError(.other("\(err.error.status): \(err.error.message)"))
@@ -205,21 +217,7 @@ extension GeminiClient {
                     defer { syntheticIdCounter += 1 }
                     return "gemini_call_\(syntheticIdCounter)"
                 }()
-                let arguments: String
-                if let args = functionCall.args {
-                    let encoded: Data
-                    do {
-                        encoded = try JSONEncoder().encode(args)
-                    } catch {
-                        throw AgentError.llmError(.encodingFailed(error))
-                    }
-                    guard let str = String(data: encoded, encoding: .utf8) else {
-                        preconditionFailure("JSONEncoder produced invalid UTF-8")
-                    }
-                    arguments = str
-                } else {
-                    arguments = "{}"
-                }
+                let arguments = try encodeFunctionCallArgs(functionCall.args)
                 toolCalls.append(ToolCall(id: callId, name: functionCall.name, arguments: arguments))
             } else if let text = part.text {
                 if part.thought == true {
@@ -238,22 +236,10 @@ extension GeminiClient {
             }
         }
 
-        let usage = response.usageMetadata
-        let thoughtsTokenCount = usage?.thoughtsTokenCount ?? 0
-        let candidatesTokenCount = usage?.candidatesTokenCount ?? 0
-        let outputTokens = max(0, candidatesTokenCount - thoughtsTokenCount)
-
-        let tokenUsage = TokenUsage(
-            input: usage?.promptTokenCount ?? 0,
-            output: outputTokens,
-            reasoning: thoughtsTokenCount,
-            cacheRead: usage?.cachedContentTokenCount
-        )
-
         return AssistantMessage(
             content: content,
             toolCalls: toolCalls,
-            tokenUsage: tokenUsage,
+            tokenUsage: response.usageMetadata?.tokenUsage,
             reasoning: reasoningText.map { ReasoningContent(content: $0) },
             reasoningDetails: reasoningDetails.isEmpty ? nil : reasoningDetails
         )

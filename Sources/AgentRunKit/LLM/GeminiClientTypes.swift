@@ -1,6 +1,6 @@
 import Foundation
 
-struct GeminiRequest: Encodable, Sendable {
+struct GeminiRequest: Encodable {
     let contents: [GeminiContent]
     let systemInstruction: GeminiContent?
     let tools: [GeminiTool]?
@@ -9,15 +9,12 @@ struct GeminiRequest: Encodable, Sendable {
     let extraFields: [String: JSONValue]
 
     private static let validExtraFields: Set<String> = [
-        "temperature", "top_p", "top_k", "stop_sequences",
-        "safety_settings", "cached_content"
+        "temperature", "topP", "topK", "stopSequences",
+        "safetySettings", "cachedContent"
     ]
 
     enum CodingKeys: String, CodingKey {
-        case contents, tools
-        case systemInstruction = "system_instruction"
-        case toolConfig = "tool_config"
-        case generationConfig = "generation_config"
+        case contents, systemInstruction, tools, toolConfig, generationConfig
     }
 
     func encode(to encoder: any Encoder) throws {
@@ -48,27 +45,17 @@ struct GeminiRequest: Encodable, Sendable {
     }
 }
 
-// MARK: - Content & Parts
-
-struct GeminiContent: Codable, Sendable {
+struct GeminiContent: Codable {
     let role: String?
     let parts: [GeminiPart]
 }
 
-struct GeminiPart: Codable, Sendable {
+struct GeminiPart: Codable {
     let text: String?
     let functionCall: GeminiFunctionCall?
     let functionResponse: GeminiFunctionResponse?
     let thought: Bool?
     let thoughtSignature: String?
-
-    enum CodingKeys: String, CodingKey {
-        case text
-        case functionCall = "functionCall"
-        case functionResponse = "functionResponse"
-        case thought
-        case thoughtSignature
-    }
 
     init(
         text: String? = nil,
@@ -85,33 +72,23 @@ struct GeminiPart: Codable, Sendable {
     }
 }
 
-struct GeminiFunctionCall: Codable, Sendable {
+struct GeminiFunctionCall: Codable {
     let id: String?
     let name: String
     let args: JSONValue?
 }
 
-struct GeminiFunctionResponse: Codable, Sendable {
+struct GeminiFunctionResponse: Codable {
     let id: String?
     let name: String
     let response: JSONValue
-
-    enum CodingKeys: String, CodingKey {
-        case id, name, response
-    }
 }
 
-// MARK: - Tool Definitions
-
-struct GeminiTool: Encodable, Sendable {
+struct GeminiTool: Encodable {
     let functionDeclarations: [GeminiFunctionDeclaration]?
-
-    enum CodingKeys: String, CodingKey {
-        case functionDeclarations = "function_declarations"
-    }
 }
 
-struct GeminiFunctionDeclaration: Encodable, Sendable {
+struct GeminiFunctionDeclaration: Encodable {
     let name: String
     let description: String
     let parametersJsonSchema: JSONSchema
@@ -128,15 +105,11 @@ struct GeminiFunctionDeclaration: Encodable, Sendable {
     }
 }
 
-struct GeminiToolConfig: Encodable, Sendable {
+struct GeminiToolConfig: Encodable {
     let functionCallingConfig: GeminiFunctionCallingConfig?
-
-    enum CodingKeys: String, CodingKey {
-        case functionCallingConfig = "function_calling_config"
-    }
 }
 
-struct GeminiFunctionCallingConfig: Encodable, Sendable {
+struct GeminiFunctionCallingConfig: Encodable {
     let mode: String
 
     init(mode: String = "AUTO") {
@@ -144,76 +117,68 @@ struct GeminiFunctionCallingConfig: Encodable, Sendable {
     }
 }
 
-// MARK: - Generation Config
-
-struct GeminiGenerationConfig: Encodable, Sendable {
+struct GeminiGenerationConfig: Encodable {
     let maxOutputTokens: Int?
     let thinkingConfig: GeminiThinkingConfig?
     let responseMimeType: String?
-    let responseJsonSchema: JSONSchema?
-
-    enum CodingKeys: String, CodingKey {
-        case maxOutputTokens = "maxOutputTokens"
-        case thinkingConfig = "thinkingConfig"
-        case responseMimeType = "responseMimeType"
-        case responseJsonSchema = "responseJsonSchema"
-    }
+    let responseSchema: JSONSchema?
 
     init(
         maxOutputTokens: Int? = nil,
         thinkingConfig: GeminiThinkingConfig? = nil,
         responseMimeType: String? = nil,
-        responseJsonSchema: JSONSchema? = nil
+        responseSchema: JSONSchema? = nil
     ) {
         self.maxOutputTokens = maxOutputTokens
         self.thinkingConfig = thinkingConfig
         self.responseMimeType = responseMimeType
-        self.responseJsonSchema = responseJsonSchema
+        self.responseSchema = responseSchema
     }
 }
 
-struct GeminiThinkingConfig: Encodable, Sendable {
+struct GeminiThinkingConfig: Encodable {
     let includeThoughts: Bool
     let thinkingBudget: Int?
     let thinkingLevel: String?
-
-    enum CodingKeys: String, CodingKey {
-        case includeThoughts = "includeThoughts"
-        case thinkingBudget = "thinkingBudget"
-        case thinkingLevel = "thinkingLevel"
-    }
 }
 
-// MARK: - Response Types
-
-struct GeminiResponse: Decodable, Sendable {
+struct GeminiResponse: Decodable {
     let candidates: [GeminiCandidate]?
     let usageMetadata: GeminiUsageMetadata?
 }
 
-struct GeminiCandidate: Decodable, Sendable {
+struct GeminiCandidate: Decodable {
     let content: GeminiContent?
     let finishReason: String?
 }
 
-struct GeminiUsageMetadata: Decodable, Sendable {
+struct GeminiUsageMetadata: Decodable {
     let promptTokenCount: Int?
     let candidatesTokenCount: Int?
     let thoughtsTokenCount: Int?
     let cachedContentTokenCount: Int?
+
+    var tokenUsage: TokenUsage {
+        let thoughts = thoughtsTokenCount ?? 0
+        let candidates = candidatesTokenCount ?? 0
+        return TokenUsage(
+            input: promptTokenCount ?? 0,
+            output: max(0, candidates - thoughts),
+            reasoning: thoughts,
+            cacheRead: cachedContentTokenCount
+        )
+    }
 }
 
-struct GeminiErrorResponse: Decodable, Sendable {
+struct GeminiErrorResponse: Decodable {
     let error: GeminiErrorDetail
 }
 
-struct GeminiErrorDetail: Decodable, Sendable {
+struct GeminiErrorDetail: Decodable {
     let code: Int
     let message: String
     let status: String
 }
-
-// MARK: - Message Mapper
 
 enum GeminiMessageMapper {
     static func mapMessages(
@@ -242,12 +207,11 @@ enum GeminiMessageMapper {
                 try contents.append(mapAssistantMessage(msg))
 
             case let .tool(id, name, content):
-                let responseValue: JSONValue
-                if let data = content.data(using: .utf8),
-                   let parsed = try? JSONDecoder().decode(JSONValue.self, from: data) {
-                    responseValue = parsed
+                let responseValue: JSONValue = if let data = content.data(using: .utf8),
+                                                  let parsed = try? JSONDecoder().decode(JSONValue.self, from: data) {
+                    parsed
                 } else {
-                    responseValue = .object(["result": .string(content)])
+                    .object(["result": .string(content)])
                 }
                 pendingFunctionResponses.append(GeminiPart(
                     functionResponse: GeminiFunctionResponse(

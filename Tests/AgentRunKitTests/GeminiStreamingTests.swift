@@ -1,9 +1,9 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
 
-@testable import AgentRunKit
+// swiftlint:disable line_length
 
-@Suite
 struct GeminiStreamingTests {
     private func makeClient() -> GeminiClient {
         GeminiClient(apiKey: "test-key", model: "gemini-2.5-pro")
@@ -36,9 +36,7 @@ struct GeminiStreamingTests {
         let lines = [
             "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hello\"}]}}]}",
             "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" world\"}]}}]}",
-            """
-            data: {"candidates":[{"content":{"role":"model","parts":[{"text":"!"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":5}}
-            """
+            "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"!\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":10,\"candidatesTokenCount\":5}}",
         ]
         let deltas = try await collectDeltas(from: lines)
 
@@ -63,9 +61,7 @@ struct GeminiStreamingTests {
     @Test
     func functionCallStreaming() async throws {
         let lines = [
-            """
-            data: {"candidates":[{"content":{"role":"model","parts":[{"functionCall":{"id":"call_01","name":"get_weather","args":{"city":"NYC"}}}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":20,"candidatesTokenCount":15}}
-            """
+            "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"id\":\"call_01\",\"name\":\"get_weather\",\"args\":{\"city\":\"NYC\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":20,\"candidatesTokenCount\":15}}",
         ]
         let deltas = try await collectDeltas(from: lines)
 
@@ -92,15 +88,9 @@ struct GeminiStreamingTests {
     @Test
     func thinkingStreaming() async throws {
         let lines = [
-            """
-            data: {"candidates":[{"content":{"role":"model","parts":[{"text":"Let me think...","thought":true}]}}]}
-            """,
-            """
-            data: {"candidates":[{"content":{"role":"model","parts":[{"text":"more thinking","thought":true,"thoughtSignature":"sig123"}]}}]}
-            """,
-            """
-            data: {"candidates":[{"content":{"role":"model","parts":[{"text":"The answer."}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":20,"thoughtsTokenCount":8}}
-            """
+            "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Let me think...\",\"thought\":true}]}}]}",
+            "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"more thinking\",\"thought\":true,\"thoughtSignature\":\"sig123\"}]}}]}",
+            "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"The answer.\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":10,\"candidatesTokenCount\":20,\"thoughtsTokenCount\":8}}",
         ]
         let deltas = try await collectDeltas(from: lines)
 
@@ -126,12 +116,8 @@ struct GeminiStreamingTests {
     @Test
     func thinkingDetailsEmittedOnFinish() async throws {
         let lines = [
-            """
-            data: {"candidates":[{"content":{"role":"model","parts":[{"text":"thought1","thought":true,"thoughtSignature":"sig1"}]}}]}
-            """,
-            """
-            data: {"candidates":[{"content":{"role":"model","parts":[{"text":"result"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":20,"thoughtsTokenCount":5}}
-            """
+            "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"thought1\",\"thought\":true,\"thoughtSignature\":\"sig1\"}]}}]}",
+            "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"result\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":10,\"candidatesTokenCount\":20,\"thoughtsTokenCount\":5}}",
         ]
         let deltas = try await collectDeltas(from: lines)
 
@@ -152,9 +138,7 @@ struct GeminiStreamingTests {
     @Test
     func tokenUsageInFinishedDelta() async throws {
         let lines = [
-            """
-            data: {"candidates":[{"content":{"role":"model","parts":[{"text":"Hi"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":100,"candidatesTokenCount":50,"thoughtsTokenCount":10,"cachedContentTokenCount":20}}
-            """
+            "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hi\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":100,\"candidatesTokenCount\":50,\"thoughtsTokenCount\":10,\"cachedContentTokenCount\":20}}",
         ]
         let deltas = try await collectDeltas(from: lines)
 
@@ -175,7 +159,7 @@ struct GeminiStreamingTests {
         let lines = [
             "",
             "event: message",
-            "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hi\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":2}}"
+            "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hi\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":2}}",
         ]
         let deltas = try await collectDeltas(from: lines)
 
@@ -188,9 +172,7 @@ struct GeminiStreamingTests {
     @Test
     func multipleFunctionCallsInStream() async throws {
         let lines = [
-            """
-            data: {"candidates":[{"content":{"role":"model","parts":[{"functionCall":{"id":"call_a","name":"search","args":{"q":"first"}}},{"functionCall":{"id":"call_b","name":"lookup","args":{"id":42}}}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":30,"candidatesTokenCount":20}}
-            """
+            "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"id\":\"call_a\",\"name\":\"search\",\"args\":{\"q\":\"first\"}}},{\"functionCall\":{\"id\":\"call_b\",\"name\":\"lookup\",\"args\":{\"id\":42}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":30,\"candidatesTokenCount\":20}}",
         ]
         let deltas = try await collectDeltas(from: lines)
 
@@ -213,9 +195,7 @@ struct GeminiStreamingTests {
     @Test
     func functionCallWithoutIdGetsSyntheticId() async throws {
         let lines = [
-            """
-            data: {"candidates":[{"content":{"role":"model","parts":[{"functionCall":{"name":"search","args":{"q":"test"}}}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":5}}
-            """
+            "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"search\",\"args\":{\"q\":\"test\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":10,\"candidatesTokenCount\":5}}",
         ]
         let deltas = try await collectDeltas(from: lines)
 
@@ -231,9 +211,7 @@ struct GeminiStreamingTests {
     @Test
     func maxTokensFinishReasonYieldsFinished() async throws {
         let lines = [
-            """
-            data: {"candidates":[{"content":{"role":"model","parts":[{"text":"truncated"}]},"finishReason":"MAX_TOKENS"}],"usageMetadata":{"promptTokenCount":100,"candidatesTokenCount":50}}
-            """
+            "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"truncated\"}]},\"finishReason\":\"MAX_TOKENS\"}],\"usageMetadata\":{\"promptTokenCount\":100,\"candidatesTokenCount\":50}}",
         ]
         let deltas = try await collectDeltas(from: lines)
 
@@ -247,9 +225,7 @@ struct GeminiStreamingTests {
     func noCandidatesChunkSkipped() async throws {
         let lines = [
             "data: {\"usageMetadata\":{\"promptTokenCount\":10}}",
-            """
-            data: {"candidates":[{"content":{"role":"model","parts":[{"text":"Hi"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":5}}
-            """
+            "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hi\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":10,\"candidatesTokenCount\":5}}",
         ]
         let deltas = try await collectDeltas(from: lines)
 
@@ -258,4 +234,75 @@ struct GeminiStreamingTests {
         }
         #expect(contentDeltas.count == 1)
     }
+
+    @Test
+    func safetyFinishReasonYieldsFinished() async throws {
+        let lines = [
+            "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[]},\"finishReason\":\"SAFETY\"}],\"usageMetadata\":{\"promptTokenCount\":50,\"candidatesTokenCount\":0}}",
+        ]
+        let deltas = try await collectDeltas(from: lines)
+
+        let finishedDeltas = deltas.filter {
+            if case .finished = $0 { return true }; return false
+        }
+        #expect(finishedDeltas.count == 1)
+        if case let .finished(usage) = finishedDeltas[0] {
+            #expect(usage?.input == 50)
+        }
+    }
+
+    @Test
+    func interleavedThinkingProducesSeparateBlocks() async throws {
+        let lines = [
+            "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"thought1\",\"thought\":true,\"thoughtSignature\":\"sig1\"}]}}]}",
+            "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"content1\"}]}}]}",
+            "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"thought2\",\"thought\":true,\"thoughtSignature\":\"sig2\"}]}}]}",
+            "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"content2\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":10,\"candidatesTokenCount\":20,\"thoughtsTokenCount\":5}}",
+        ]
+        let deltas = try await collectDeltas(from: lines)
+
+        let detailDeltas = deltas.filter {
+            if case .reasoningDetails = $0 { return true }; return false
+        }
+        #expect(detailDeltas.count == 1)
+        if case let .reasoningDetails(details) = detailDeltas[0] {
+            #expect(details.count == 2)
+            if case let .object(first) = details[0] {
+                #expect(first["thinking"] == .string("thought1"))
+                #expect(first["signature"] == .string("sig1"))
+            }
+            if case let .object(second) = details[1] {
+                #expect(second["thinking"] == .string("thought2"))
+                #expect(second["signature"] == .string("sig2"))
+            }
+        }
+    }
+
+    @Test
+    func errorResponseInStreamThrows() async throws {
+        let lines = [
+            "data: {\"error\":{\"code\":429,\"message\":\"Rate limit exceeded\",\"status\":\"RESOURCE_EXHAUSTED\"}}",
+        ]
+        let client = makeClient()
+        let state = GeminiStreamState()
+        let continuation = AsyncThrowingStream<StreamDelta, Error>.makeStream()
+
+        do {
+            _ = try await client.handleSSELine(
+                lines[0], state: state, continuation: continuation.continuation
+            )
+            Issue.record("Expected error")
+        } catch let error as AgentError {
+            guard case let .llmError(transport) = error,
+                  case let .other(msg) = transport
+            else {
+                Issue.record("Expected .other, got \(error)")
+                return
+            }
+            #expect(msg.contains("RESOURCE_EXHAUSTED"))
+            #expect(msg.contains("Rate limit exceeded"))
+        }
+    }
 }
+
+// swiftlint:enable line_length

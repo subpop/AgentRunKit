@@ -57,20 +57,13 @@ extension GeminiClient {
 
         for part in candidate.content?.parts ?? [] {
             if let functionCall = part.functionCall {
+                await state.flushThinkingBlock()
                 let toolIndex = await state.incrementToolCallCount()
                 let callId = functionCall.id ?? "gemini_call_\(toolIndex)"
                 continuation.yield(.toolCallStart(
                     index: toolIndex, id: callId, name: functionCall.name
                 ))
-
-                let arguments: String
-                if let args = functionCall.args,
-                   let encoded = try? JSONEncoder().encode(args),
-                   let str = String(data: encoded, encoding: .utf8) {
-                    arguments = str
-                } else {
-                    arguments = "{}"
-                }
+                let arguments = try encodeFunctionCallArgs(functionCall.args)
                 continuation.yield(.toolCallDelta(
                     index: toolIndex, arguments: arguments
                 ))
@@ -83,39 +76,28 @@ extension GeminiClient {
                     if let signature = part.thoughtSignature {
                         await state.appendSignature(signature)
                     }
-                } else if !text.isEmpty {
-                    continuation.yield(.content(text))
+                } else {
+                    await state.flushThinkingBlock()
+                    if !text.isEmpty {
+                        continuation.yield(.content(text))
+                    }
                 }
             }
         }
 
-        if let finishReason = candidate.finishReason,
-           finishReason == "STOP" || finishReason == "MAX_TOKENS" {
+        if candidate.finishReason != nil {
             let thinkingBlocks = await state.buildReasoningDetails()
             if !thinkingBlocks.isEmpty {
                 continuation.yield(.reasoningDetails(thinkingBlocks))
             }
 
-            let usage = response.usageMetadata
-            let thoughtsTokenCount = usage?.thoughtsTokenCount ?? 0
-            let candidatesTokenCount = usage?.candidatesTokenCount ?? 0
-            let outputTokens = max(0, candidatesTokenCount - thoughtsTokenCount)
-
-            let tokenUsage = TokenUsage(
-                input: usage?.promptTokenCount ?? 0,
-                output: outputTokens,
-                reasoning: thoughtsTokenCount,
-                cacheRead: usage?.cachedContentTokenCount
-            )
-            continuation.yield(.finished(usage: tokenUsage))
+            continuation.yield(.finished(usage: response.usageMetadata?.tokenUsage))
             return true
         }
 
         return false
     }
 }
-
-// MARK: - Stream State
 
 actor GeminiStreamState {
     private(set) var toolCallCount: Int = 0

@@ -1,16 +1,14 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
 
-@testable import AgentRunKit
-
-private struct QueryParams: Codable, SchemaProviding, Sendable {
+private struct QueryParams: Codable, SchemaProviding {
     let query: String
     static var jsonSchema: JSONSchema {
         .object(properties: ["query": .string()], required: ["query"])
     }
 }
 
-@Suite
 struct SubAgentStreamingLifecycleTests {
     @Test
     func emitsLifecycleEvents() async throws {
@@ -199,7 +197,6 @@ struct SubAgentStreamingLifecycleTests {
     }
 }
 
-@Suite
 struct SubAgentSystemPromptTests {
     @Test
     func overrideUsedInStreaming() async throws {
@@ -289,7 +286,6 @@ struct SubAgentSystemPromptTests {
     }
 }
 
-@Suite
 struct SubAgentTimeoutTests {
     @Test
     func errorYieldsCompletedWithErrorResult() async throws {
@@ -440,7 +436,6 @@ struct SubAgentTimeoutTests {
     }
 }
 
-@Suite
 struct SubAgentNestingTests {
     @Test
     func nestedSubAgentsStreamRecursively() async throws {
@@ -546,7 +541,6 @@ private struct BlockingStreamableTool: AnyTool, StreamableSubAgentTool {
     }
 }
 
-@Suite
 struct SubAgentCancellationTests {
     @Test
     func cancellationDuringSubAgentTerminatesStream() async throws {
@@ -570,7 +564,15 @@ struct SubAgentCancellationTests {
             }
         }
 
-        try await Task.sleep(for: .milliseconds(100))
+        for _ in 0 ..< 50 {
+            let started = await collector.events.contains { event in
+                if case .subAgentStarted = event { return true }
+                return false
+            }
+            if started { break }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+
         task.cancel()
         try? await task.value
 
@@ -591,7 +593,6 @@ struct SubAgentCancellationTests {
     }
 }
 
-@Suite
 struct SubAgentDepthLimitStreamingTests {
     @Test
     func executeStreamingThrowsAtMaxDepth() async throws {
@@ -624,7 +625,6 @@ struct SubAgentDepthLimitStreamingTests {
     }
 }
 
-@Suite
 struct SubAgentInheritHistoryStreamingTests {
     @Test
     func childSeesParentHistoryInStreaming() async throws {

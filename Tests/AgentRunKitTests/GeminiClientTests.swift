@@ -1,7 +1,6 @@
+@testable import AgentRunKit
 import Foundation
 import Testing
-
-@testable import AgentRunKit
 
 private func encodeRequest(_ request: GeminiRequest) throws -> [String: Any] {
     let object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(request))
@@ -13,7 +12,6 @@ private func encodeRequest(_ request: GeminiRequest) throws -> [String: Any] {
 
 // MARK: - Request Serialization Tests
 
-@Suite
 struct GeminiRequestSerializationTests {
     private func makeClient(
         reasoningConfig: ReasoningConfig? = nil,
@@ -47,7 +45,7 @@ struct GeminiRequestSerializationTests {
         let request = try client.buildRequest(messages: messages, tools: [])
         let json = try encodeRequest(request)
 
-        let system = json["system_instruction"] as? [String: Any]
+        let system = json["systemInstruction"] as? [String: Any]
         let sysParts = system?["parts"] as? [[String: Any]]
         #expect(sysParts?.count == 1)
         #expect(sysParts?[0]["text"] as? String == "Be helpful")
@@ -64,7 +62,7 @@ struct GeminiRequestSerializationTests {
         let request = try client.buildRequest(messages: messages, tools: [])
         let json = try encodeRequest(request)
 
-        let system = json["system_instruction"] as? [String: Any]
+        let system = json["systemInstruction"] as? [String: Any]
         let sysParts = system?["parts"] as? [[String: Any]]
         #expect(sysParts?.count == 2)
         #expect(sysParts?[0]["text"] as? String == "First")
@@ -77,7 +75,7 @@ struct GeminiRequestSerializationTests {
         let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
         let json = try encodeRequest(request)
 
-        #expect(json["system_instruction"] == nil)
+        #expect(json["systemInstruction"] == nil)
     }
 
     @Test
@@ -95,7 +93,7 @@ struct GeminiRequestSerializationTests {
 
         let jsonTools = json["tools"] as? [[String: Any]]
         #expect(jsonTools?.count == 1)
-        let decls = jsonTools?[0]["function_declarations"] as? [[String: Any]]
+        let decls = jsonTools?[0]["functionDeclarations"] as? [[String: Any]]
         #expect(decls?.count == 1)
         #expect(decls?[0]["name"] as? String == "get_weather")
         #expect(decls?[0]["description"] as? String == "Get weather")
@@ -114,7 +112,7 @@ struct GeminiRequestSerializationTests {
         let json = try encodeRequest(request)
 
         #expect(json["tools"] == nil)
-        #expect(json["tool_config"] == nil)
+        #expect(json["toolConfig"] == nil)
     }
 
     @Test
@@ -123,7 +121,7 @@ struct GeminiRequestSerializationTests {
         let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
         let json = try encodeRequest(request)
 
-        let genConfig = json["generation_config"] as? [String: Any]
+        let genConfig = json["generationConfig"] as? [String: Any]
         #expect(genConfig?["maxOutputTokens"] as? Int == 4096)
     }
 
@@ -133,7 +131,7 @@ struct GeminiRequestSerializationTests {
         let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
         let json = try encodeRequest(request)
 
-        let genConfig = json["generation_config"] as? [String: Any]
+        let genConfig = json["generationConfig"] as? [String: Any]
         let thinking = genConfig?["thinkingConfig"] as? [String: Any]
         #expect(thinking?["includeThoughts"] as? Bool == true)
         #expect(thinking?["thinkingLevel"] as? String == "HIGH")
@@ -145,7 +143,7 @@ struct GeminiRequestSerializationTests {
         let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
         let json = try encodeRequest(request)
 
-        let genConfig = json["generation_config"] as? [String: Any]
+        let genConfig = json["generationConfig"] as? [String: Any]
         #expect(genConfig?["thinkingConfig"] == nil)
     }
 
@@ -155,7 +153,7 @@ struct GeminiRequestSerializationTests {
         let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
         let json = try encodeRequest(request)
 
-        let genConfig = json["generation_config"] as? [String: Any]
+        let genConfig = json["generationConfig"] as? [String: Any]
         #expect(genConfig?["thinkingConfig"] == nil)
     }
 
@@ -165,7 +163,7 @@ struct GeminiRequestSerializationTests {
         let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
         let json = try encodeRequest(request)
 
-        let genConfig = json["generation_config"] as? [String: Any]
+        let genConfig = json["generationConfig"] as? [String: Any]
         let thinking = genConfig?["thinkingConfig"] as? [String: Any]
         #expect(thinking?["includeThoughts"] as? Bool == true)
         #expect(thinking?["thinkingBudget"] as? Int == 10000)
@@ -193,12 +191,12 @@ struct GeminiRequestSerializationTests {
         let client = makeClient()
         let request = try client.buildRequest(
             messages: [.user("Hi")], tools: [],
-            extraFields: ["temperature": .double(0.7), "top_p": .double(0.9)]
+            extraFields: ["temperature": .double(0.7), "topP": .double(0.9)]
         )
         let json = try encodeRequest(request)
 
         #expect(json["temperature"] as? Double == 0.7)
-        #expect(json["top_p"] as? Double == 0.9)
+        #expect(json["topP"] as? Double == 0.9)
     }
 
     @Test
@@ -230,15 +228,14 @@ struct GeminiRequestSerializationTests {
         let request = try client.buildRequest(messages: [.user("Hi")], tools: tools)
         let json = try encodeRequest(request)
 
-        let toolConfig = json["tool_config"] as? [String: Any]
-        let funcConfig = toolConfig?["function_calling_config"] as? [String: Any]
+        let toolConfig = json["toolConfig"] as? [String: Any]
+        let funcConfig = toolConfig?["functionCallingConfig"] as? [String: Any]
         #expect(funcConfig?["mode"] as? String == "AUTO")
     }
 }
 
 // MARK: - URL Request Tests
 
-@Suite
 struct GeminiURLRequestTests {
     @Test
     func setsCorrectURL() throws {
@@ -249,7 +246,7 @@ struct GeminiURLRequestTests {
         let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
         let urlRequest = try client.buildURLRequest(request, stream: false)
 
-        let url = urlRequest.url!
+        let url = try #require(urlRequest.url)
         #expect(url.path.contains("models/gemini-2.5-pro:generateContent"))
         #expect(url.query?.contains("key=test-api-key-123") == true)
         #expect(url.query?.contains("alt=sse") != true)
@@ -266,7 +263,7 @@ struct GeminiURLRequestTests {
         let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
         let urlRequest = try client.buildURLRequest(request, stream: true)
 
-        let url = urlRequest.url!
+        let url = try #require(urlRequest.url)
         #expect(url.path.contains("models/gemini-2.5-pro:streamGenerateContent"))
         #expect(url.query?.contains("alt=sse") == true)
         #expect(url.query?.contains("key=test-key") == true)
@@ -274,10 +271,10 @@ struct GeminiURLRequestTests {
 
     @Test
     func customBaseURL() throws {
-        let client = GeminiClient(
+        let client = try GeminiClient(
             apiKey: "test-key",
             model: "gemini-2.5-flash",
-            baseURL: URL(string: "https://custom.api.example.com")!
+            baseURL: #require(URL(string: "https://custom.api.example.com"))
         )
         let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
         let urlRequest = try client.buildURLRequest(request, stream: false)
@@ -323,7 +320,6 @@ struct GeminiURLRequestTests {
 
 // MARK: - Response Parsing Tests
 
-@Suite
 struct GeminiResponseParsingTests {
     private func makeClient() -> GeminiClient {
         GeminiClient(apiKey: "test-key", model: "gemini-2.5-pro")
@@ -640,8 +636,18 @@ struct GeminiResponseParsingTests {
         let client = makeClient()
         let garbage = Data("not json at all".utf8)
 
-        #expect(throws: AgentError.self) {
+        do {
             _ = try client.parseResponse(garbage)
+            Issue.record("Expected error")
+        } catch let error as AgentError {
+            guard case let .llmError(transport) = error,
+                  case .decodingFailed = transport
+            else {
+                Issue.record("Expected .decodingFailed, got \(error)")
+                return
+            }
+        } catch {
+            Issue.record("Expected AgentError, got \(error)")
         }
     }
 
@@ -692,7 +698,6 @@ struct GeminiResponseParsingTests {
 
 // MARK: - Message Mapper Tests
 
-@Suite
 struct GeminiMessageMapperTests {
     @Test
     func toolResultsMergedIntoSingleContent() throws {
@@ -827,7 +832,6 @@ struct GeminiMessageMapperTests {
 
 // MARK: - Response Format Tests
 
-@Suite
 struct GeminiResponseFormatTests {
     @Test
     func responseFormatEncodesInGenerationConfig() throws {
@@ -838,9 +842,9 @@ struct GeminiResponseFormatTests {
         )
         let json = try encodeRequest(request)
 
-        let genConfig = json["generation_config"] as? [String: Any]
+        let genConfig = json["generationConfig"] as? [String: Any]
         #expect(genConfig?["responseMimeType"] as? String == "application/json")
-        #expect(genConfig?["responseJsonSchema"] != nil)
+        #expect(genConfig?["responseSchema"] != nil)
     }
 
     @Test
@@ -849,12 +853,14 @@ struct GeminiResponseFormatTests {
         let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
         let json = try encodeRequest(request)
 
-        let genConfig = json["generation_config"] as? [String: Any]
+        let genConfig = json["generationConfig"] as? [String: Any]
         #expect(genConfig?["responseMimeType"] == nil)
-        #expect(genConfig?["responseJsonSchema"] == nil)
+        #expect(genConfig?["responseSchema"] == nil)
     }
 }
 
 private enum TestGeminiOutput: SchemaProviding {
-    static var jsonSchema: JSONSchema { .object(properties: ["value": .string()], required: ["value"]) }
+    static var jsonSchema: JSONSchema {
+        .object(properties: ["value": .string()], required: ["value"])
+    }
 }
