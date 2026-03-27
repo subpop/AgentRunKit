@@ -35,7 +35,9 @@ extension ResponseFormat {
     var schemaName: String {
         jsonSchema.name
     }
+}
 
+package extension ResponseFormat {
     var schema: JSONSchema {
         jsonSchema.schema
     }

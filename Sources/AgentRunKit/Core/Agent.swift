@@ -17,26 +17,8 @@ public final class Agent<C: ToolContext>: Sendable {
 
         self.client = client
         self.tools = tools
-        toolDefinitions = tools.map { ToolDefinition($0) } + [Self.finishToolDefinition]
+        toolDefinitions = tools.map { ToolDefinition($0) } + [reservedFinishToolDefinition]
         self.configuration = configuration
-    }
-
-    private static var finishToolDefinition: ToolDefinition {
-        ToolDefinition(
-            name: "finish",
-            description: """
-            Call this tool when you have completed the task. Pass the final result as content. \
-            IMPORTANT: If called alongside other tools, those tools will NOT be executed.
-            """,
-            parametersSchema: .object(
-                properties: [
-                    "content": .string(description: "The final result or response to return to the user"),
-                    "reason": .string(description: "Optional reason for finishing (e.g., 'completed', 'error')")
-                        .optional()
-                ],
-                required: ["content"]
-            )
-        )
     }
 
     public func run(

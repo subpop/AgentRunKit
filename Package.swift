@@ -10,6 +10,7 @@ let package = Package(
     ],
     products: [
         .library(name: "AgentRunKit", targets: ["AgentRunKit"]),
+        .library(name: "AgentRunKitTesting", targets: ["AgentRunKitTesting"]),
         .library(name: "AgentRunKitMLX", targets: ["AgentRunKitMLX"]),
         .library(name: "AgentRunKitFoundationModels", targets: ["AgentRunKitFoundationModels"])
     ],
@@ -18,7 +19,8 @@ let package = Package(
     ],
     targets: [
         .target(name: "AgentRunKit"),
-        .testTarget(name: "AgentRunKitTests", dependencies: ["AgentRunKit"]),
+        .target(name: "AgentRunKitTesting", dependencies: ["AgentRunKit"]),
+        .testTarget(name: "AgentRunKitTests", dependencies: ["AgentRunKit", "AgentRunKitTesting"]),
         .target(
             name: "AgentRunKitMLX",
             dependencies: [

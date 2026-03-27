@@ -9,3 +9,19 @@ public struct FinishArguments: Codable, Sendable {
         self.reason = reason
     }
 }
+
+package let reservedFinishToolDefinition = ToolDefinition(
+    name: "finish",
+    description: """
+    Call this tool when you have completed the task. Pass the final result as content. \
+    IMPORTANT: If called alongside other tools, those tools will NOT be executed.
+    """,
+    parametersSchema: .object(
+        properties: [
+            "content": .string(description: "The final result or response to return to the user"),
+            "reason": .string(description: "Optional reason for finishing (e.g., 'completed', 'error')")
+                .optional()
+        ],
+        required: ["content"]
+    )
+)
