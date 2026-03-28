@@ -159,6 +159,20 @@ struct GeminiRequestSerializationTests {
     }
 
     @Test
+    func noneEffortWithExplicitBudgetSendsBudget() throws {
+        let config = ReasoningConfig(effort: .none, budgetTokens: 4096)
+        let client = makeClient(reasoningConfig: config)
+        let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
+        let json = try encodeRequest(request)
+
+        let genConfig = json["generationConfig"] as? [String: Any]
+        let thinking = genConfig?["thinkingConfig"] as? [String: Any]
+        #expect(thinking?["includeThoughts"] as? Bool == true)
+        #expect(thinking?["thinkingBudget"] as? Int == 4096)
+        #expect(thinking?["thinkingLevel"] == nil)
+    }
+
+    @Test
     func explicitBudgetTokensEncodes() throws {
         let client = makeClient(reasoningConfig: .budget(10000))
         let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
@@ -173,7 +187,6 @@ struct GeminiRequestSerializationTests {
 
     @Test
     func effortWithBudgetSendsOnlyBudget() throws {
-        // Simulates what ProviderService produces: effort + budgetTokens.
         let config = ReasoningConfig(effort: .medium, budgetTokens: 32000)
         let client = makeClient(reasoningConfig: config)
         let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
