@@ -1,4 +1,4 @@
-.PHONY: build test lint format check clean bootstrap docs docs-preview
+.PHONY: build test lint format check clean bootstrap docs docs-preview smoke
 
 bootstrap:
 	brew install mint
@@ -23,6 +23,9 @@ docs:
 
 docs-preview:
 	swift package --disable-sandbox preview-documentation --target AgentRunKit
+
+smoke:
+	@if [ -f .env ]; then set -a && . ./.env && set +a; fi && swift test --filter Smoke
 
 clean:
 	swift package clean
