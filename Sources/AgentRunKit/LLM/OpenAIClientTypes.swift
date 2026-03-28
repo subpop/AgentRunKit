@@ -152,6 +152,7 @@ struct ChatCompletionRequest: Encodable {
     let tools: [RequestTool]?
     let toolChoice: String?
     let maxTokens: Int
+    let tokenFieldName: String
     let stream: Bool?
     let streamOptions: StreamOptions?
     let responseFormat: ResponseFormat?
@@ -161,7 +162,6 @@ struct ChatCompletionRequest: Encodable {
     enum CodingKeys: String, CodingKey {
         case model, messages, tools, reasoning
         case toolChoice = "tool_choice"
-        case maxTokens = "max_tokens"
         case stream
         case streamOptions = "stream_options"
         case responseFormat = "response_format"
@@ -173,17 +173,15 @@ struct ChatCompletionRequest: Encodable {
         try container.encode(messages, forKey: .messages)
         try container.encodeIfPresent(tools, forKey: .tools)
         try container.encodeIfPresent(toolChoice, forKey: .toolChoice)
-        try container.encode(maxTokens, forKey: .maxTokens)
         try container.encodeIfPresent(stream, forKey: .stream)
         try container.encodeIfPresent(streamOptions, forKey: .streamOptions)
         try container.encodeIfPresent(responseFormat, forKey: .responseFormat)
         try container.encodeIfPresent(reasoning, forKey: .reasoning)
 
-        if !extraFields.isEmpty {
-            var dynamicContainer = encoder.container(keyedBy: DynamicCodingKey.self)
-            for (key, value) in extraFields {
-                try dynamicContainer.encode(value, forKey: DynamicCodingKey(key))
-            }
+        var dynamicContainer = encoder.container(keyedBy: DynamicCodingKey.self)
+        try dynamicContainer.encode(maxTokens, forKey: DynamicCodingKey(tokenFieldName))
+        for (key, value) in extraFields {
+            try dynamicContainer.encode(value, forKey: DynamicCodingKey(key))
         }
     }
 }

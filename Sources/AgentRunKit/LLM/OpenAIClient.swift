@@ -136,12 +136,14 @@ extension OpenAIClient {
         responseFormat: ResponseFormat? = nil,
         extraFields: [String: JSONValue] = [:]
     ) -> ChatCompletionRequest {
-        ChatCompletionRequest(
+        let tokenField = baseURL == OpenAIClient.openAIBaseURL ? "max_completion_tokens" : "max_tokens"
+        return ChatCompletionRequest(
             model: modelIdentifier,
             messages: messages.map(RequestMessage.init),
             tools: tools.isEmpty ? nil : tools.map(RequestTool.init),
             toolChoice: tools.isEmpty ? nil : "auto",
             maxTokens: maxTokens,
+            tokenFieldName: tokenField,
             stream: stream ? true : nil,
             streamOptions: stream ? StreamOptions(includeUsage: true) : nil,
             responseFormat: responseFormat,

@@ -136,6 +136,42 @@ struct OpenAIClientRequestTests {
     }
 
     @Test
+    func firstPartyOpenAIEncodesMaxCompletionTokens() throws {
+        let client = OpenAIClient(
+            apiKey: "test-key",
+            model: "gpt-5.4-mini",
+            maxTokens: 2048,
+            baseURL: OpenAIClient.openAIBaseURL
+        )
+        let messages: [ChatMessage] = [.user("Hello")]
+        let request = client.buildRequest(messages: messages, tools: [])
+
+        let data = try JSONEncoder().encode(request)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+
+        #expect(json?["max_completion_tokens"] as? Int == 2048)
+        #expect(json?["max_tokens"] == nil)
+    }
+
+    @Test
+    func thirdPartyEncodesMaxTokens() throws {
+        let client = OpenAIClient(
+            apiKey: "test-key",
+            model: "test/model",
+            maxTokens: 1024,
+            baseURL: OpenAIClient.openRouterBaseURL
+        )
+        let messages: [ChatMessage] = [.user("Hello")]
+        let request = client.buildRequest(messages: messages, tools: [])
+
+        let data = try JSONEncoder().encode(request)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+
+        #expect(json?["max_tokens"] as? Int == 1024)
+        #expect(json?["max_completion_tokens"] == nil)
+    }
+
+    @Test
     func requestWithoutToolsOmitsToolFields() throws {
         let client = OpenAIClient(apiKey: "test-key", model: "test/model", baseURL: OpenAIClient.openRouterBaseURL)
         let messages: [ChatMessage] = [.user("Hello")]
