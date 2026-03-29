@@ -50,6 +50,14 @@ struct GeminiSmokeTests {
         try await assertSmokeStreamingTokenUsage(client: client)
     }
 
+    @Test func chatStreamWithTools() async throws {
+        try await assertSmokeChatStreamWithTools(client: client)
+    }
+
+    @Test func nestedStructuredOutput() async throws {
+        try await assertSmokeNestedStructuredOutput(client: client)
+    }
+
     @Test func reasoningStream() async throws {
         let thinkingClient = GeminiClient(
             apiKey: apiKey,

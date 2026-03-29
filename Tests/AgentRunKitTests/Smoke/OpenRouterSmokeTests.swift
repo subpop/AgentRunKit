@@ -54,4 +54,12 @@ struct OpenRouterSmokeTests {
     @Test func streamingTokenUsage() async throws {
         try await assertSmokeStreamingTokenUsage(client: client)
     }
+
+    @Test func chatStreamWithTools() async throws {
+        try await assertSmokeChatStreamWithTools(client: client)
+    }
+
+    @Test func nestedStructuredOutput() async throws {
+        try await assertSmokeNestedStructuredOutput(client: client)
+    }
 }

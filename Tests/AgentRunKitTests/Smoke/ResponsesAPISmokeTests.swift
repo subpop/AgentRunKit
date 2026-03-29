@@ -58,6 +58,14 @@ struct ResponsesAPISmokeTests {
         try await assertSmokeStreamingTokenUsage(client: makeClient())
     }
 
+    @Test func chatStreamWithTools() async throws {
+        try await assertSmokeChatStreamWithTools(client: makeClient())
+    }
+
+    @Test func nestedStructuredOutput() async throws {
+        try await assertSmokeNestedStructuredOutput(client: makeClient())
+    }
+
     @Test func conversationPersistence() async throws {
         let persistentClient = ResponsesAPIClient(
             apiKey: apiKey,

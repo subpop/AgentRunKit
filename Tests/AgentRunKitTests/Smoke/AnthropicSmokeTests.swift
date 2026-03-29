@@ -6,6 +6,11 @@ private let apiKey = ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"] ??
 private let hasAPIKey = !apiKey.isEmpty
 private let model = ProcessInfo.processInfo.environment["SMOKE_ANTHROPIC_MODEL"] ?? "claude-sonnet-4-6"
 
+private let cachingSystemPrompt = String(
+    repeating: "You are a helpful Swift programming assistant. Follow best practices. ",
+    count: 150
+)
+
 @Suite(.enabled(if: hasAPIKey, "Requires ANTHROPIC_API_KEY environment variable"))
 struct AnthropicSmokeTests {
     let client = AnthropicClient(apiKey: apiKey, model: model, maxTokens: 1024)
@@ -44,6 +49,45 @@ struct AnthropicSmokeTests {
 
     @Test func streamingTokenUsage() async throws {
         try await assertSmokeStreamingTokenUsage(client: client)
+    }
+
+    @Test func chatStreamWithTools() async throws {
+        try await assertSmokeChatStreamWithTools(client: client)
+    }
+
+    @Test func cachingEnabled() async throws {
+        let cachingClient = AnthropicClient(
+            apiKey: apiKey,
+            model: model,
+            maxTokens: 1024,
+            cachingEnabled: true
+        )
+
+        let messages: [ChatMessage] = [
+            .system(cachingSystemPrompt),
+            .user("What is Swift?"),
+        ]
+
+        let response1 = try await cachingClient.generate(messages: messages, tools: [smokeWeatherTool])
+        let usage1 = response1.tokenUsage
+        #expect(usage1 != nil)
+        #expect((usage1?.cacheWrite ?? 0) > 0)
+
+        let response2 = try await cachingClient.generate(messages: messages, tools: [smokeWeatherTool])
+        let usage2 = response2.tokenUsage
+        #expect(usage2 != nil)
+        #expect((usage2?.cacheRead ?? 0) > 0)
+    }
+
+    @Test func nonInterleavedReasoning() async throws {
+        let nonInterleavedClient = AnthropicClient(
+            apiKey: apiKey,
+            model: model,
+            maxTokens: 16384,
+            reasoningConfig: .budget(4096),
+            interleavedThinking: false
+        )
+        try await assertSmokeReasoningGenerate(client: nonInterleavedClient)
     }
 
     @Test func reasoningStream() async throws {

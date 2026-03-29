@@ -21,6 +21,21 @@ struct SmokeAddOutput: Codable {
     let sum: Int
 }
 
+struct SmokeLookupParams: Codable, SchemaProviding {
+    let key: String
+
+    static var jsonSchema: JSONSchema {
+        .object(
+            properties: ["key": .string(description: "Lookup key")],
+            required: ["key"]
+        )
+    }
+}
+
+struct SmokeLookupOutput: Codable {
+    let value: String
+}
+
 struct SmokeWorkout: Codable, SchemaProviding {
     let exercises: [SmokeExercise]
 
@@ -49,22 +64,31 @@ struct SmokeExercise: Codable, SchemaProviding {
     }
 }
 
-var smokeWeatherTool: ToolDefinition {
-    ToolDefinition(
-        name: "get_weather",
-        description: "Get the current weather for a city",
-        parametersSchema: .object(
-            properties: ["city": .string(description: "The city name")],
-            required: ["city"]
-        )
+let smokeWeatherTool = ToolDefinition(
+    name: "get_weather",
+    description: "Get the current weather for a city",
+    parametersSchema: .object(
+        properties: ["city": .string(description: "The city name")],
+        required: ["city"]
     )
-}
+)
 
 func makeSmokeAddTool() throws -> Tool<SmokeAddParams, SmokeAddOutput, EmptyContext> {
     try Tool(
         name: "add",
         description: "Add two numbers together. Always use this tool for addition.",
         executor: { params, _ in SmokeAddOutput(sum: params.lhs + params.rhs) }
+    )
+}
+
+func makeSmokeVerboseLookupTool() throws -> Tool<SmokeLookupParams, SmokeLookupOutput, EmptyContext> {
+    try Tool(
+        name: "lookup",
+        description: "Look up an entry by key. Always use this tool when asked to look something up.",
+        executor: { params, _ in
+            let padding = String(repeating: "x", count: 600)
+            return SmokeLookupOutput(value: "Result for \(params.key): data_\(params.key)_\(padding)")
+        }
     )
 }
 
@@ -266,6 +290,259 @@ func assertSmokeMultiTurn(client: any LLMClient) async throws {
     #expect(response2.content.contains("42"))
 }
 
+func assertSmokeChatStreamWithTools(client: any LLMClient) async throws {
+    let addTool = try makeSmokeAddTool()
+    let chat = Chat<EmptyContext>(
+        client: client,
+        tools: [addTool],
+        systemPrompt: "You are a calculator. Use the add tool for addition."
+    )
+
+    var deltas: [String] = []
+    var toolStartedNames: [String] = []
+    var toolCompletedResults: [(name: String, result: ToolResult)] = []
+    var finishedEvent: StreamEvent?
+
+    for try await event in chat.stream("What is 13 + 29?", context: EmptyContext()) {
+        switch event {
+        case let .delta(text):
+            deltas.append(text)
+        case let .toolCallStarted(name, _):
+            toolStartedNames.append(name)
+        case let .toolCallCompleted(_, name, result):
+            toolCompletedResults.append((name, result))
+        case .finished:
+            finishedEvent = event
+        default:
+            break
+        }
+    }
+
+    #expect(toolStartedNames.contains("add"))
+
+    let addResult = toolCompletedResults.first { $0.name == "add" }
+    #expect(addResult != nil)
+    #expect(addResult?.result.content.contains("42") == true)
+
+    #expect(!deltas.joined().isEmpty)
+
+    guard case let .finished(_, content, reason, history) = finishedEvent else {
+        Issue.record("Expected .finished event")
+        return
+    }
+    #expect(content == nil)
+    #expect(reason == nil)
+    #expect(history.count >= 4)
+}
+
+struct SmokeSubAgentParams: Codable, SchemaProviding {
+    let task: String
+
+    static var jsonSchema: JSONSchema {
+        .object(
+            properties: ["task": .string(description: "The task to delegate")],
+            required: ["task"]
+        )
+    }
+}
+
+func makeSmokeSubAgentAddTool() throws -> Tool<SmokeAddParams, SmokeAddOutput, SubAgentContext<EmptyContext>> {
+    try Tool(
+        name: "add",
+        description: "Add two numbers together. Always use this tool for addition.",
+        executor: { params, _ in SmokeAddOutput(sum: params.lhs + params.rhs) }
+    )
+}
+
+func assertSmokeSubAgentRoundTrip(client: any LLMClient) async throws {
+    let addTool = try makeSmokeSubAgentAddTool()
+    let childConfig = AgentConfiguration(
+        maxIterations: 5,
+        systemPrompt: """
+        You are a calculator. When asked to add numbers, use the add tool.
+        After getting the result, use the finish tool with the answer.
+        """
+    )
+    let childAgent = Agent<SubAgentContext<EmptyContext>>(
+        client: client, tools: [addTool], configuration: childConfig
+    )
+
+    let delegateTool: SubAgentTool<SmokeSubAgentParams, EmptyContext> = try SubAgentTool(
+        name: "delegate_calculator",
+        description: "Delegate a math question to the calculator sub-agent.",
+        agent: childAgent,
+        messageBuilder: { $0.task }
+    )
+
+    let parentConfig = AgentConfiguration(
+        maxIterations: 5,
+        systemPrompt: """
+        You are a coordinator. You CANNOT do math yourself. \
+        You MUST delegate ALL math questions to the delegate_calculator tool. \
+        After receiving the result, use the finish tool.
+        """
+    )
+    let parentAgent = Agent<SubAgentContext<EmptyContext>>(
+        client: client, tools: [delegateTool], configuration: parentConfig
+    )
+
+    let result = try await parentAgent.run(
+        userMessage: "What is 17 + 25?",
+        context: SubAgentContext(inner: EmptyContext(), maxDepth: 3)
+    )
+
+    #expect(result.content.contains("42"))
+    #expect(result.iterations >= 2)
+}
+
+func assertSmokeSubAgentStreamingEvents(client: any LLMClient) async throws {
+    let addTool = try makeSmokeSubAgentAddTool()
+    let childConfig = AgentConfiguration(
+        maxIterations: 5,
+        systemPrompt: """
+        You are a calculator. When asked to add numbers, use the add tool.
+        After getting the result, use the finish tool with the answer.
+        """
+    )
+    let childAgent = Agent<SubAgentContext<EmptyContext>>(
+        client: client, tools: [addTool], configuration: childConfig
+    )
+
+    let delegateTool: SubAgentTool<SmokeSubAgentParams, EmptyContext> = try SubAgentTool(
+        name: "delegate_calculator",
+        description: "Delegate a math question to the calculator sub-agent.",
+        agent: childAgent,
+        messageBuilder: { $0.task }
+    )
+
+    let parentConfig = AgentConfiguration(
+        maxIterations: 5,
+        systemPrompt: """
+        You are a coordinator. You CANNOT do math yourself. \
+        You MUST delegate ALL math questions to the delegate_calculator tool. \
+        After receiving the result, use the finish tool.
+        """
+    )
+    let parentAgent = Agent<SubAgentContext<EmptyContext>>(
+        client: client, tools: [delegateTool], configuration: parentConfig
+    )
+
+    var events: [StreamEvent] = []
+    for try await event in parentAgent.stream(
+        userMessage: "What is 7 + 8?",
+        context: SubAgentContext(inner: EmptyContext(), maxDepth: 3)
+    ) {
+        events.append(event)
+    }
+
+    let startedIndex = events.firstIndex {
+        if case let .subAgentStarted(_, toolName) = $0 { toolName == "delegate_calculator" } else { false }
+    }
+    let completedIndex = events.firstIndex {
+        if case let .subAgentCompleted(_, toolName, result) = $0 {
+            toolName == "delegate_calculator" && result.content.contains("15")
+        } else {
+            false
+        }
+    }
+    let hasFinished = events.contains {
+        if case .finished = $0 { true } else { false }
+    }
+
+    guard let start = startedIndex, let completed = completedIndex else {
+        Issue.record("Expected both subAgentStarted and subAgentCompleted events")
+        return
+    }
+    #expect(start < completed)
+    #expect(hasFinished)
+}
+
+func assertSmokeSubAgentHistoryInheritance(client: any LLMClient) async throws {
+    let childConfig = AgentConfiguration(
+        maxIterations: 3,
+        systemPrompt: "Answer questions using the conversation history. Be concise."
+    )
+    let childAgent = Agent<SubAgentContext<EmptyContext>>(
+        client: client, tools: [], configuration: childConfig
+    )
+
+    let delegateTool: SubAgentTool<SmokeSubAgentParams, EmptyContext> = try SubAgentTool(
+        name: "delegate_recall",
+        description: "Delegate a question to the sub-agent that can see conversation history.",
+        agent: childAgent,
+        inheritParentMessages: true,
+        messageBuilder: { $0.task }
+    )
+
+    let parentConfig = AgentConfiguration(
+        maxIterations: 5,
+        systemPrompt: "You are a coordinator. Use the delegate_recall tool to ask the sub-agent questions."
+    )
+    let parentAgent = Agent<SubAgentContext<EmptyContext>>(
+        client: client, tools: [delegateTool], configuration: parentConfig
+    )
+
+    let result = try await parentAgent.run(
+        userMessage: """
+        The secret codeword is xylophone7. \
+        Ask the sub-agent what the secret codeword is.
+        """,
+        context: SubAgentContext(inner: EmptyContext(), maxDepth: 3)
+    )
+
+    #expect(result.content.lowercased().contains("xylophone7"))
+}
+
+struct SmokeAuthor: Codable, SchemaProviding {
+    let name: String
+    let birthYear: Int?
+
+    static var jsonSchema: JSONSchema {
+        .object(
+            properties: [
+                "name": .string(description: "Author name"),
+                "birthYear": .integer(description: "Birth year").optional(),
+            ],
+            required: ["name", "birthYear"]
+        )
+    }
+}
+
+struct SmokeBookReview: Codable, SchemaProviding {
+    let title: String
+    let author: SmokeAuthor
+    let rating: Int
+    let tags: [String]
+    let sequel: String?
+
+    static var jsonSchema: JSONSchema {
+        .object(
+            properties: [
+                "title": .string(description: "Book title"),
+                "author": SmokeAuthor.jsonSchema,
+                "rating": .integer(description: "Rating 1-5"),
+                "tags": .array(items: .string()),
+                "sequel": .string(description: "Sequel title if any").optional(),
+            ],
+            required: ["title", "author", "rating", "tags", "sequel"]
+        )
+    }
+}
+
+func assertSmokeNestedStructuredOutput(client: any LLMClient) async throws {
+    let chat = Chat<EmptyContext>(client: client)
+    let (review, history) = try await chat.send(
+        "Write a short review of '1984' by George Orwell. Rate it 1-5. Include at least 2 tags.",
+        returning: SmokeBookReview.self
+    )
+
+    #expect(!review.title.isEmpty)
+    #expect(!review.author.name.isEmpty)
+    #expect(review.rating >= 1 && review.rating <= 5)
+    #expect(review.tags.count >= 2)
+    #expect(history.count >= 2)
+}
+
 func assertSmokeReasoningGenerate(client: any LLMClient) async throws {
     let messages: [ChatMessage] = [
         .system("You are a helpful assistant."),
@@ -305,4 +582,173 @@ func assertSmokeReasoningStream(client: any LLMClient) async throws {
     #expect(hasFinished)
     #expect(fullContent.contains("391"))
     #expect(!reasoningChunks.isEmpty)
+}
+
+// MARK: - Context Management Assertions
+
+func assertSmokeObservationPruning(client: any LLMClient) async throws {
+    let lookupTool = try makeSmokeVerboseLookupTool()
+    let config = AgentConfiguration(
+        maxIterations: 10,
+        systemPrompt: """
+        You are a lookup assistant. When asked to look up multiple items, \
+        look them up one at a time in sequence using the lookup tool. \
+        After all lookups are done, summarize the results using the finish tool.
+        """,
+        compactionThreshold: 0.5
+    )
+
+    let agent = Agent<EmptyContext>(client: client, tools: [lookupTool], configuration: config)
+    let result = try await agent.run(
+        userMessage: "Look up alpha, then look up beta, then look up gamma. Summarize all results.",
+        context: EmptyContext()
+    )
+
+    #expect(!result.content.isEmpty)
+    #expect(result.iterations >= 3)
+
+    let hasPruned = result.history.contains { message in
+        if case let .tool(_, _, content) = message {
+            return content.contains("(pruned)")
+        }
+        return false
+    }
+    #expect(hasPruned)
+}
+
+func assertSmokeLLMSummarization(client: any LLMClient) async throws {
+    let addTool = try makeSmokeAddTool()
+    let config = AgentConfiguration(
+        maxIterations: 15,
+        systemPrompt: """
+        You are a calculator assistant. When asked to add numbers, use the add tool. \
+        Perform each addition one at a time in sequence. Never batch multiple additions. \
+        After all additions, report every result using the finish tool.
+        """,
+        compactionThreshold: 0.3
+    )
+
+    let agent = Agent<EmptyContext>(client: client, tools: [addTool], configuration: config)
+    let result = try await agent.run(
+        userMessage: """
+        Add 1+2, then add 3+4, then add 5+6, then add 7+8, then add 9+10. \
+        Report all five results.
+        """,
+        context: EmptyContext()
+    )
+
+    #expect(!result.content.isEmpty)
+    let hasContinuation = result.history.contains { message in
+        if case let .user(content) = message {
+            return content.contains("[Context Continuation]")
+        }
+        return false
+    }
+    #expect(hasContinuation)
+}
+
+func assertSmokeToolResultTruncation(client: any LLMClient) async throws {
+    let lookupTool = try makeSmokeVerboseLookupTool()
+    let config = AgentConfiguration(
+        maxIterations: 5,
+        systemPrompt: """
+        You are a lookup assistant. Use the lookup tool when asked to look something up. \
+        After getting the result, report it using the finish tool.
+        """,
+        maxToolResultCharacters: 100
+    )
+
+    let agent = Agent<EmptyContext>(client: client, tools: [lookupTool], configuration: config)
+    let result = try await agent.run(
+        userMessage: "Look up the entry for alpha.",
+        context: EmptyContext()
+    )
+
+    let hasTruncated = result.history.contains { message in
+        if case let .tool(_, _, content) = message {
+            return content.contains("...[truncated]...")
+        }
+        return false
+    }
+    #expect(hasTruncated)
+}
+
+func assertSmokeMaxMessages(client: any LLMClient) async throws {
+    let addTool = try makeSmokeAddTool()
+    let config = AgentConfiguration(
+        maxIterations: 10,
+        systemPrompt: """
+        You are a calculator assistant. When asked to add numbers, use the add tool. \
+        Perform each addition one at a time in sequence. \
+        After all additions, report the last result using the finish tool.
+        """,
+        maxMessages: 6
+    )
+
+    let agent = Agent<EmptyContext>(client: client, tools: [addTool], configuration: config)
+    let result = try await agent.run(
+        userMessage: "Add 1+1, then add 2+2, then add 3+3. Report the last result.",
+        context: EmptyContext()
+    )
+
+    let hasSystem = result.history.contains { $0.isSystem }
+    #expect(hasSystem)
+    #expect(result.history.count <= 8)
+}
+
+func assertSmokeBudgetEvents(client: any LLMClient) async throws {
+    let addTool = try makeSmokeAddTool()
+    let config = AgentConfiguration(
+        maxIterations: 5,
+        systemPrompt: """
+        You are a calculator assistant. When asked to add numbers, use the add tool. \
+        After getting the result, report it using the finish tool.
+        """,
+        contextBudget: ContextBudgetConfig(softThreshold: 0.3)
+    )
+
+    let agent = Agent<EmptyContext>(client: client, tools: [addTool], configuration: config)
+
+    var budgetUpdatedCount = 0
+    var budgetAdvisoryCount = 0
+
+    for try await event in agent.stream(userMessage: "What is 10 + 20?", context: EmptyContext()) {
+        switch event {
+        case .budgetUpdated:
+            budgetUpdatedCount += 1
+        case .budgetAdvisory:
+            budgetAdvisoryCount += 1
+        default:
+            break
+        }
+    }
+
+    #expect(budgetUpdatedCount >= 1)
+    #expect(budgetAdvisoryCount >= 1)
+}
+
+func assertSmokeIterationCompleted(client: any LLMClient) async throws {
+    let addTool = try makeSmokeAddTool()
+    let config = AgentConfiguration(
+        maxIterations: 5,
+        systemPrompt: """
+        You are a calculator assistant. When asked to add numbers, use the add tool. \
+        After getting the result, report it using the finish tool.
+        """
+    )
+
+    let agent = Agent<EmptyContext>(client: client, tools: [addTool], configuration: config)
+
+    var iterationEvents: [(usage: TokenUsage, iteration: Int)] = []
+
+    for try await event in agent.stream(userMessage: "What is 10 + 20?", context: EmptyContext()) {
+        if case let .iterationCompleted(usage, iteration) = event {
+            iterationEvents.append((usage, iteration))
+        }
+    }
+
+    #expect(iterationEvents.count >= 2)
+    for event in iterationEvents {
+        #expect(event.usage.input > 0)
+    }
 }
