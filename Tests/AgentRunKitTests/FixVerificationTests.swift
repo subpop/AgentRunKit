@@ -225,7 +225,7 @@ struct InterleavedOutOfOrderDeltaTests {
 
         var toolResults: [String: String] = [:]
         for try await event in agent.stream(userMessage: "Hi", context: EmptyContext()) {
-            if case let .toolCallCompleted(id, _, result) = event {
+            if case let .toolCallCompleted(id, _, result) = event.kind {
                 toolResults[id] = result.content
             }
         }
@@ -264,7 +264,7 @@ struct InterleavedOutOfOrderDeltaTests {
 
         var toolResult: String?
         for try await event in agent.stream(userMessage: "Hi", context: EmptyContext()) {
-            if case let .toolCallCompleted(_, name, result) = event, name == "echo" {
+            if case let .toolCallCompleted(_, name, result) = event.kind, name == "echo" {
                 toolResult = result.content
             }
         }
@@ -304,7 +304,7 @@ struct InterleavedOutOfOrderDeltaTests {
 
         var sums: [Int] = []
         for try await event in agent.stream(userMessage: "Add", context: EmptyContext()) {
-            if case let .toolCallCompleted(_, name, result) = event, name == "add" {
+            if case let .toolCallCompleted(_, name, result) = event.kind, name == "add" {
                 let digitsOnly = result.content.components(separatedBy: CharacterSet.decimalDigits.inverted).joined()
                 if let sum = Int(digitsOnly) {
                     sums.append(sum)

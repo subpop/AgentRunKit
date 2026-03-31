@@ -88,9 +88,9 @@ Budget features that track usage require the client to report both `contextWindo
 
 Three ``StreamEvent`` cases surface budget state during streaming:
 
-- `.compacted(totalTokens:windowSize:)`: Fired after a successful compaction pass.
-- `.budgetUpdated(budget:)`: Emitted after each provider response when a ``ContextBudget`` snapshot is available.
-- `.budgetAdvisory(budget:)`: Emitted once when utilization first crosses the configured soft threshold.
+- ``StreamEvent/Kind/compacted(totalTokens:windowSize:)``: Fired after a successful compaction pass.
+- ``StreamEvent/Kind/budgetUpdated(budget:)``: Emitted after each provider response when a ``ContextBudget`` snapshot is available.
+- ``StreamEvent/Kind/budgetAdvisory(budget:)``: Emitted once when utilization first crosses the configured soft threshold.
 
 These events propagate through sub-agent chains. See <doc:SubAgents> for details on recursive event propagation.
 

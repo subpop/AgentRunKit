@@ -64,15 +64,15 @@ extension Agent {
         continuation: AsyncThrowingStream<StreamEvent, Error>.Continuation,
         approvalHandler: ToolApprovalHandler? = nil
     ) async throws -> ToolResult {
-        continuation.yield(.subAgentStarted(toolCallId: call.id, toolName: call.name))
+        continuation.yield(.make(.subAgentStarted(toolCallId: call.id, toolName: call.name)))
 
         var result = ToolResult.error("Sub-agent did not complete")
         defer {
-            continuation.yield(.subAgentCompleted(toolCallId: call.id, toolName: call.name, result: result))
+            continuation.yield(.make(.subAgentCompleted(toolCallId: call.id, toolName: call.name, result: result)))
         }
 
         let eventHandler: @Sendable (StreamEvent) -> Void = { event in
-            continuation.yield(.subAgentEvent(toolCallId: call.id, toolName: call.name, event: event))
+            continuation.yield(.make(.subAgentEvent(toolCallId: call.id, toolName: call.name, event: event)))
         }
 
         do {
@@ -118,7 +118,7 @@ extension Agent {
 
             var results = [(Int, ToolCall, ToolResult)]()
             for try await (index, call, result) in group {
-                continuation.yield(.toolCallCompleted(id: call.id, name: call.name, result: result))
+                continuation.yield(.make(.toolCallCompleted(id: call.id, name: call.name, result: result)))
                 results.append((index, call, result))
             }
             return results.sorted { $0.0 < $1.0 }.map { ($0.1, $0.2) }

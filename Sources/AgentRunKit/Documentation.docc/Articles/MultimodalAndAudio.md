@@ -68,7 +68,7 @@ let requestContext = RequestContext(extraFields: [
 ])
 
 for try await event in agent.stream(userMessage: "Tell me a story.", context: ctx, requestContext: requestContext) {
-    switch event {
+    switch event.kind {
     case .audioData(let chunk):
         audioPlayer.enqueue(chunk)
     case .audioTranscript(let text):

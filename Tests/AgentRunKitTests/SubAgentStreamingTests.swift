@@ -56,7 +56,7 @@ struct SubAgentStreamingLifecycleTests {
         }
 
         let started = events.contains { event in
-            if case let .subAgentStarted(id, name) = event {
+            if case let .subAgentStarted(id, name) = event.kind {
                 return id == "call_sub" && name == "research"
             }
             return false
@@ -64,8 +64,8 @@ struct SubAgentStreamingLifecycleTests {
         #expect(started)
 
         let hasChildDelta = events.contains { event in
-            if case let .subAgentEvent(id, name, inner) = event {
-                if case .delta("child thinking...") = inner {
+            if case let .subAgentEvent(id, name, inner) = event.kind {
+                if case .delta("child thinking...") = inner.kind {
                     return id == "call_sub" && name == "research"
                 }
             }
@@ -74,7 +74,7 @@ struct SubAgentStreamingLifecycleTests {
         #expect(hasChildDelta)
 
         let completed = events.contains { event in
-            if case let .subAgentCompleted(id, name, result) = event {
+            if case let .subAgentCompleted(id, name, result) = event.kind {
                 return id == "call_sub" && name == "research"
                     && result.content == "child result" && !result.isError
             }
@@ -83,7 +83,7 @@ struct SubAgentStreamingLifecycleTests {
         #expect(completed)
 
         let toolCompleted = events.contains { event in
-            if case let .toolCallCompleted(id, name, result) = event {
+            if case let .toolCallCompleted(id, name, result) = event.kind {
                 return id == "call_sub" && name == "research"
                     && result.content == "child result" && !result.isError
             }
@@ -91,11 +91,61 @@ struct SubAgentStreamingLifecycleTests {
         }
         #expect(toolCompleted)
 
-        let startedIdx = events.firstIndex { if case .subAgentStarted = $0 { return true }; return false }
-        let completedIdx = events.firstIndex { if case .subAgentCompleted = $0 { return true }; return false }
-        let toolCompletedIdx = events.firstIndex { if case .toolCallCompleted = $0 { return true }; return false }
+        let startedIdx = events.firstIndex { if case .subAgentStarted = $0.kind { return true }; return false }
+        let completedIdx = events.firstIndex { if case .subAgentCompleted = $0.kind { return true }; return false }
+        let toolCompletedIdx = events.firstIndex { if case .toolCallCompleted = $0.kind { return true }; return false }
         #expect(try #require(startedIdx) < #require(completedIdx))
         #expect(try #require(completedIdx) < #require(toolCompletedIdx))
+    }
+
+    @Test
+    func emittedEventsCarryStage1EnvelopeMetadata() async throws {
+        let childDeltas: [StreamDelta] = [
+            .content("child thinking..."),
+            .toolCallStart(index: 0, id: "child_finish", name: "finish"),
+            .toolCallDelta(index: 0, arguments: #"{"content": "child result"}"#),
+            .finished(usage: nil),
+        ]
+        let childClient = StreamingMockLLMClient(streamSequences: [childDeltas])
+        let childAgent = Agent<SubAgentContext<EmptyContext>>(client: childClient, tools: [])
+
+        let tool = try SubAgentTool<QueryParams, EmptyContext>(
+            name: "research",
+            description: "Research tool",
+            agent: childAgent,
+            messageBuilder: { $0.query }
+        )
+
+        let parentDeltas1: [StreamDelta] = [
+            .toolCallStart(index: 0, id: "call_sub", name: "research"),
+            .toolCallDelta(index: 0, arguments: #"{"query": "test"}"#),
+            .finished(usage: nil),
+        ]
+        let parentDeltas2: [StreamDelta] = [
+            .toolCallStart(index: 0, id: "call_finish", name: "finish"),
+            .toolCallDelta(index: 0, arguments: #"{"content": "parent done"}"#),
+            .finished(usage: nil),
+        ]
+        let parentClient = StreamingMockLLMClient(streamSequences: [parentDeltas1, parentDeltas2])
+        let parentAgent = Agent<SubAgentContext<EmptyContext>>(client: parentClient, tools: [tool])
+
+        let startedAt = Date()
+        var events: [StreamEvent] = []
+        let ctx = SubAgentContext(inner: EmptyContext(), maxDepth: 3)
+        for try await event in parentAgent.stream(userMessage: "Go", context: ctx) {
+            events.append(event)
+        }
+        let endedAt = Date()
+
+        #expect(events.contains {
+            if case .subAgentEvent = $0.kind { return true }
+            return false
+        })
+        StreamEventInvariantAssertions.assertStage1RuntimeInvariants(
+            events,
+            startedAt: startedAt,
+            endedAt: endedAt
+        )
     }
 
     @Test
@@ -132,7 +182,7 @@ struct SubAgentStreamingLifecycleTests {
         var subAgentEvents: [StreamEvent] = []
         let ctx = SubAgentContext(inner: EmptyContext(), maxDepth: 3)
         for try await event in parentAgent.stream(userMessage: "Go", context: ctx) {
-            switch event {
+            switch event.kind {
             case .subAgentStarted, .subAgentEvent, .subAgentCompleted:
                 subAgentEvents.append(event)
             default:
@@ -142,7 +192,7 @@ struct SubAgentStreamingLifecycleTests {
 
         #expect(subAgentEvents.count >= 3)
         for event in subAgentEvents {
-            switch event {
+            switch event.kind {
             case let .subAgentStarted(id, name):
                 #expect(id == "call_xyz")
                 #expect(name == "analyzer")
@@ -190,13 +240,13 @@ struct SubAgentStreamingLifecycleTests {
         }
 
         let completedCount = events.count(where: { event in
-            if case let .subAgentCompleted(_, _, result) = event { return result.isError }
+            if case let .subAgentCompleted(_, _, result) = event.kind { return result.isError }
             return false
         })
         #expect(completedCount == 1)
 
         let toolCompletedCount = events.count(where: { event in
-            if case let .toolCallCompleted(_, name, _) = event {
+            if case let .toolCallCompleted(_, name, _) = event.kind {
                 return name == "failing"
             }
             return false
@@ -327,14 +377,14 @@ struct SubAgentTimeoutTests {
         }
 
         let completedEvents = events.filter { event in
-            if case let .subAgentCompleted(_, _, result) = event {
+            if case let .subAgentCompleted(_, _, result) = event.kind {
                 return result.isError
             }
             return false
         }
         #expect(completedEvents.count == 1)
 
-        guard case let .finished(_, content, _, _) = events.last else {
+        guard case let .finished(_, content, _, _) = events.last?.kind else {
             Issue.record("Expected finished event")
             return
         }
@@ -391,7 +441,7 @@ struct SubAgentTimeoutTests {
         }
 
         let completed = events.contains { event in
-            if case let .subAgentCompleted(_, _, result) = event {
+            if case let .subAgentCompleted(_, _, result) = event.kind {
                 return result.content == "slow result" && !result.isError
             }
             return false
@@ -435,7 +485,7 @@ struct SubAgentTimeoutTests {
         }
 
         let timedOut = events.contains { event in
-            if case let .subAgentCompleted(_, _, result) = event {
+            if case let .subAgentCompleted(_, _, result) = event.kind {
                 return result.isError && result.content.contains("timed out")
             }
             return false
@@ -503,22 +553,22 @@ struct SubAgentNestingTests {
         }
 
         let outerStarted = events.contains { event in
-            if case let .subAgentStarted(_, name) = event { return name == "outer" }
+            if case let .subAgentStarted(_, name) = event.kind { return name == "outer" }
             return false
         }
         #expect(outerStarted)
 
         let innerNestedInOuter = events.contains { event in
-            if case let .subAgentEvent(_, outerName, innerEvent) = event, outerName == "outer" {
-                if case let .subAgentEvent(_, innerName, deepEvent) = innerEvent, innerName == "inner" {
-                    if case .delta("inner working") = deepEvent { return true }
+            if case let .subAgentEvent(_, outerName, innerEvent) = event.kind, outerName == "outer" {
+                if case let .subAgentEvent(_, innerName, deepEvent) = innerEvent.kind, innerName == "inner" {
+                    if case .delta("inner working") = deepEvent.kind { return true }
                 }
             }
             return false
         }
         #expect(innerNestedInOuter)
 
-        guard case let .finished(_, content, _, _) = events.last else {
+        guard case let .finished(_, content, _, _) = events.last?.kind else {
             Issue.record("Expected finished event")
             return
         }
@@ -602,9 +652,9 @@ struct SubAgentApprovalStreamingTests {
 
 private func containsNestedApprovalRequested(_ events: [StreamEvent], toolName: String) -> Bool {
     events.contains { event in
-        if case let .subAgentEvent(_, innerToolName, innerEvent) = event,
+        if case let .subAgentEvent(_, innerToolName, innerEvent) = event.kind,
            innerToolName == toolName,
-           case .toolApprovalRequested = innerEvent {
+           case .toolApprovalRequested = innerEvent.kind {
             return true
         }
         return false
@@ -613,9 +663,9 @@ private func containsNestedApprovalRequested(_ events: [StreamEvent], toolName: 
 
 private func containsNestedApprovalResolved(_ events: [StreamEvent], toolName: String) -> Bool {
     events.contains { event in
-        if case let .subAgentEvent(_, innerToolName, innerEvent) = event,
+        if case let .subAgentEvent(_, innerToolName, innerEvent) = event.kind,
            innerToolName == toolName,
-           case .toolApprovalResolved = innerEvent {
+           case .toolApprovalResolved = innerEvent.kind {
             return true
         }
         return false
@@ -629,7 +679,7 @@ private func containsCompletedToolCall(
     content: String
 ) -> Bool {
     events.contains { event in
-        if case let .toolCallCompleted(eventId, eventName, result) = event {
+        if case let .toolCallCompleted(eventId, eventName, result) = event.kind {
             return eventId == id && eventName == name && result.content == content && !result.isError
         }
         return false
@@ -684,7 +734,7 @@ struct SubAgentCancellationTests {
 
         for _ in 0 ..< 50 {
             let started = await collector.events.contains { event in
-                if case .subAgentStarted = event { return true }
+                if case .subAgentStarted = event.kind { return true }
                 return false
             }
             if started { break }
@@ -696,13 +746,13 @@ struct SubAgentCancellationTests {
 
         let events = await collector.events
         let hasNoFinished = !events.contains { event in
-            if case .finished = event { return true }
+            if case .finished = event.kind { return true }
             return false
         }
         #expect(hasNoFinished)
 
         let hasStarted = events.contains { event in
-            if case let .subAgentStarted(id, name) = event {
+            if case let .subAgentStarted(id, name) = event.kind {
                 return id == "call_block" && name == "blocking"
             }
             return false

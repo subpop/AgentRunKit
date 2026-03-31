@@ -23,6 +23,38 @@ public enum FinishReason: Sendable, Equatable, CustomStringConvertible {
     }
 }
 
+extension FinishReason: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case type, value
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(String.self, forKey: .type)
+        switch type {
+        case "completed": self = .completed
+        case "error": self = .error
+        case "custom": self = try .custom(container.decode(String.self, forKey: .value))
+        default:
+            throw DecodingError.dataCorruptedError(
+                forKey: .type, in: container,
+                debugDescription: "Unknown FinishReason type: \(type)"
+            )
+        }
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .completed: try container.encode("completed", forKey: .type)
+        case .error: try container.encode("error", forKey: .type)
+        case let .custom(value):
+            try container.encode("custom", forKey: .type)
+            try container.encode(value, forKey: .value)
+        }
+    }
+}
+
 public struct AgentResult: Sendable, Equatable {
     public let finishReason: FinishReason
     public let content: String

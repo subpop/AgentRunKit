@@ -98,12 +98,12 @@ struct StreamingIntegrationTests {
         }
 
         let deltas = events.compactMap { event -> String? in
-            if case let .delta(text) = event { return text }
+            if case let .delta(text) = event.kind { return text }
             return nil
         }
 
         let hasFinished = events.contains { event in
-            if case .finished = event { return true }
+            if case .finished = event.kind { return true }
             return false
         }
 
@@ -136,7 +136,7 @@ struct StreamingIntegrationTests {
             userMessage: "What is 7 + 8?",
             context: EmptyContext()
         ) {
-            switch event {
+            switch event.kind {
             case .toolCallStarted:
                 toolStarted = true
             case let .toolCallCompleted(_, name, result):
@@ -175,11 +175,11 @@ struct StreamingIntegrationTests {
             events.append(event)
         }
 
-        let hasFinished = events.contains { if case .finished = $0 { return true }; return false }
+        let hasFinished = events.contains { if case .finished = $0.kind { return true }; return false }
         #expect(hasFinished, "Should finish successfully")
 
         let toolCompleted = events.first { event in
-            if case let .toolCallCompleted(_, name, _) = event { return name == "echo" }
+            if case let .toolCallCompleted(_, name, _) = event.kind { return name == "echo" }
             return false
         }
         #expect(toolCompleted != nil, "Should execute echo tool")
@@ -288,7 +288,7 @@ struct ReasoningIntegrationTests {
             userMessage: "What is 12 + 15? Use the finish tool with the answer.",
             context: EmptyContext()
         ) {
-            switch event {
+            switch event.kind {
             case let .reasoningDelta(text):
                 reasoningDeltas.append(text)
             case let .finished(_, _, _, history):

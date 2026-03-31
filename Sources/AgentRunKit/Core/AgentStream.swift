@@ -111,7 +111,7 @@ public final class AgentStream<C: ToolContext> {
     }
 
     private func handle(_ event: StreamEvent, toolCallIdPath: [String], toolNamePath: [String]) {
-        switch event {
+        switch event.kind {
         case let .delta(text):
             content += text
         case let .reasoningDelta(text):

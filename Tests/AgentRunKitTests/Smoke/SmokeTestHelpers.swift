@@ -254,7 +254,7 @@ func assertSmokeStreamingAgentLoop(client: any LLMClient) async throws {
     var finishContent: String?
 
     for try await event in agent.stream(userMessage: "What is 7 + 8?", context: EmptyContext()) {
-        switch event {
+        switch event.kind {
         case .toolCallStarted:
             toolStarted = true
         case let .toolCallCompleted(_, name, result):
@@ -304,7 +304,7 @@ func assertSmokeChatStreamWithTools(client: any LLMClient) async throws {
     var finishedEvent: StreamEvent?
 
     for try await event in chat.stream("What is 13 + 29?", context: EmptyContext()) {
-        switch event {
+        switch event.kind {
         case let .delta(text):
             deltas.append(text)
         case let .toolCallStarted(name, _):
@@ -326,7 +326,7 @@ func assertSmokeChatStreamWithTools(client: any LLMClient) async throws {
 
     #expect(!deltas.joined().isEmpty)
 
-    guard case let .finished(_, content, reason, history) = finishedEvent else {
+    guard case let .finished(_, content, reason, history) = finishedEvent?.kind else {
         Issue.record("Expected .finished event")
         return
     }
@@ -436,17 +436,17 @@ func assertSmokeSubAgentStreamingEvents(client: any LLMClient) async throws {
     }
 
     let startedIndex = events.firstIndex {
-        if case let .subAgentStarted(_, toolName) = $0 { toolName == "delegate_calculator" } else { false }
+        if case let .subAgentStarted(_, toolName) = $0.kind { toolName == "delegate_calculator" } else { false }
     }
     let completedIndex = events.firstIndex {
-        if case let .subAgentCompleted(_, toolName, result) = $0 {
+        if case let .subAgentCompleted(_, toolName, result) = $0.kind {
             toolName == "delegate_calculator" && result.content.contains("15")
         } else {
             false
         }
     }
     let hasFinished = events.contains {
-        if case .finished = $0 { true } else { false }
+        if case .finished = $0.kind { true } else { false }
     }
 
     guard let start = startedIndex, let completed = completedIndex else {
@@ -713,7 +713,7 @@ func assertSmokeBudgetEvents(client: any LLMClient) async throws {
     var budgetAdvisoryCount = 0
 
     for try await event in agent.stream(userMessage: "What is 10 + 20?", context: EmptyContext()) {
-        switch event {
+        switch event.kind {
         case .budgetUpdated:
             budgetUpdatedCount += 1
         case .budgetAdvisory:
@@ -742,7 +742,7 @@ func assertSmokeIterationCompleted(client: any LLMClient) async throws {
     var iterationEvents: [(usage: TokenUsage, iteration: Int)] = []
 
     for try await event in agent.stream(userMessage: "What is 10 + 20?", context: EmptyContext()) {
-        if case let .iterationCompleted(usage, iteration) = event {
+        if case let .iterationCompleted(usage, iteration) = event.kind {
             iterationEvents.append((usage, iteration))
         }
     }
@@ -855,7 +855,7 @@ func assertSmokeStreamingApproval(client: any LLMClient) async throws {
             return .approve
         }
     ) {
-        switch event {
+        switch event.kind {
         case .toolApprovalRequested:
             approvalRequested = true
         case .toolApprovalResolved:

@@ -105,14 +105,14 @@ stream.send("Clean up the project", context: context, approvalHandler: handler)
 
 During streaming, approval emits two events per gated tool:
 
-- ``StreamEvent/toolApprovalRequested(_:)`` before the handler is called.
-- ``StreamEvent/toolApprovalResolved(toolCallId:decision:)`` after the handler returns.
+- ``StreamEvent/Kind/toolApprovalRequested(_:)`` before the handler is called.
+- ``StreamEvent/Kind/toolApprovalResolved(toolCallId:decision:)`` after the handler returns.
 
-These appear between ``StreamEvent/toolCallStarted(name:id:)`` and ``StreamEvent/toolCallCompleted(id:name:result:)``. ``AgentStream`` transitions the tool through `.running` to `.awaitingApproval` and back.
+These appear between ``StreamEvent/Kind/toolCallStarted(name:id:)`` and ``StreamEvent/Kind/toolCallCompleted(id:name:result:)``. ``AgentStream`` transitions the tool through `.running` to `.awaitingApproval` and back.
 
 ## Sub-Agent Propagation
 
-When a parent agent passes an approval handler, sub-agents invoked via ``SubAgentTool`` inherit the same handler. Each sub-agent maintains its own session allowlist. Nested approval events propagate through ``StreamEvent/subAgentEvent(toolCallId:toolName:event:)`` and appear in ``AgentStream`` with composite names like `"delegate > search"`.
+When a parent agent passes an approval handler, sub-agents invoked via ``SubAgentTool`` inherit the same handler. Each sub-agent maintains its own session allowlist. Nested approval events propagate through ``StreamEvent/Kind/subAgentEvent(toolCallId:toolName:event:)`` and appear in ``AgentStream`` with composite names like `"delegate > search"`.
 
 ## Cancellation
 

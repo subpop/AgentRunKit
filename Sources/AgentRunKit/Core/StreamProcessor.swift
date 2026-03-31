@@ -75,7 +75,7 @@ private struct AudioAccumulator {
 
     var finishedEvent: StreamEvent? {
         guard let id else { return nil }
-        return .audioFinished(id: id, expiresAt: expiresAt, data: data)
+        return .make(.audioFinished(id: id, expiresAt: expiresAt, data: data))
     }
 }
 
@@ -97,10 +97,10 @@ private struct StreamAccumulation {
         switch delta {
         case let .content(text):
             content += text
-            continuation.yield(.delta(text))
+            continuation.yield(.make(.delta(text)))
         case let .reasoning(text):
             reasoning += text
-            continuation.yield(.reasoningDelta(text))
+            continuation.yield(.make(.reasoningDelta(text)))
         case let .reasoningDetails(details):
             reasoningDetails.append(details)
         case let .toolCallStart(index, id, name):
@@ -112,10 +112,10 @@ private struct StreamAccumulation {
             audio.expiresAt = expiresAt
         case let .audioData(data):
             audio.data.append(data)
-            continuation.yield(.audioData(data))
+            continuation.yield(.make(.audioData(data)))
         case let .audioTranscript(text):
             audio.transcript += text
-            continuation.yield(.audioTranscript(text))
+            continuation.yield(.make(.audioTranscript(text)))
         case let .finished(iterationUsage):
             guard let iterationUsage else { return }
             totalUsage += iterationUsage
@@ -158,7 +158,7 @@ private struct StreamAccumulation {
         }
         toolCalls[index] = accumulator
         if policy.shouldEmitToolStart(name: name) {
-            continuation.yield(.toolCallStarted(name: name, id: id))
+            continuation.yield(.make(.toolCallStarted(name: name, id: id)))
         }
     }
 

@@ -30,9 +30,9 @@ extension Agent {
         guard var phase = budgetPhase else { return }
         let result = phase.afterResponse(usage: usage, messages: &messages)
         budgetPhase = phase
-        continuation?.yield(.budgetUpdated(budget: result.budget))
+        continuation?.yield(.make(.budgetUpdated(budget: result.budget)))
         if result.advisoryEmitted {
-            continuation?.yield(.budgetAdvisory(budget: result.budget))
+            continuation?.yield(.make(.budgetAdvisory(budget: result.budget)))
         }
     }
 
@@ -54,7 +54,7 @@ extension Agent {
                 }
             }
             messages.append(.tool(id: call.id, name: call.name, content: result.content))
-            continuation?.yield(.toolCallCompleted(id: call.id, name: call.name, result: result))
+            continuation?.yield(.make(.toolCallCompleted(id: call.id, name: call.name, result: result)))
         }
     }
 
@@ -174,7 +174,9 @@ extension Agent {
         try Task.checkCancellation()
 
         for entry in denied {
-            continuation.yield(.toolCallCompleted(id: entry.call.id, name: entry.call.name, result: entry.result))
+            continuation.yield(.make(.toolCallCompleted(
+                id: entry.call.id, name: entry.call.name, result: entry.result
+            )))
             allResults.append(entry)
         }
 

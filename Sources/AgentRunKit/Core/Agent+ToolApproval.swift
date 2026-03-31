@@ -49,9 +49,9 @@ extension Agent {
                 arguments: indexed.call.arguments,
                 toolDescription: tool.description
             )
-            continuation?.yield(.toolApprovalRequested(request))
+            continuation?.yield(.make(.toolApprovalRequested(request)))
             let decision = try await awaitApprovalDecision(for: request, using: handler)
-            continuation?.yield(.toolApprovalResolved(toolCallId: indexed.call.id, decision: decision))
+            continuation?.yield(.make(.toolApprovalResolved(toolCallId: indexed.call.id, decision: decision)))
 
             switch decision {
             case .approve:

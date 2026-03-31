@@ -278,7 +278,7 @@ private extension Agent {
                 &messages, lastTotalTokens: lastTotalTokens, totalUsage: &totalUsage
             )
             if compacted, let totalTokens = lastTotalTokens, let windowSize = client.contextWindowSize {
-                continuation.yield(.compacted(totalTokens: totalTokens, windowSize: windowSize))
+                continuation.yield(.make(.compacted(totalTokens: totalTokens, windowSize: windowSize)))
             }
             let iteration = try await processor.process(
                 messages: messages,
@@ -289,7 +289,7 @@ private extension Agent {
 
             if let usage = iteration.usage {
                 lastTotalTokens = usage.total
-                continuation.yield(.iterationCompleted(usage: usage, iteration: iterationNumber))
+                continuation.yield(.make(.iterationCompleted(usage: usage, iteration: iterationNumber)))
             }
 
             messages.append(.assistant(iteration.toAssistantMessage()))
@@ -354,7 +354,7 @@ private extension Agent {
         from toolCalls: [ToolCall], tokenUsage: TokenUsage, history: [ChatMessage]
     ) throws -> StreamEvent {
         guard let finishCall = toolCalls.first(where: { $0.name == "finish" }) else {
-            return .finished(tokenUsage: tokenUsage, content: nil, reason: nil, history: history)
+            return .make(.finished(tokenUsage: tokenUsage, content: nil, reason: nil, history: history))
         }
         let decoded: FinishArguments
         do {
@@ -362,12 +362,12 @@ private extension Agent {
         } catch {
             throw AgentError.finishDecodingFailed(message: String(describing: error))
         }
-        return .finished(
+        return .make(.finished(
             tokenUsage: tokenUsage,
             content: decoded.content,
             reason: FinishReason(decoded.reason ?? "completed"),
             history: history
-        )
+        ))
     }
 
     func parseFinishResult(

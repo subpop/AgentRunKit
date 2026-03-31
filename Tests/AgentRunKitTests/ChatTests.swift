@@ -19,9 +19,9 @@ struct ChatTests {
         }
 
         #expect(events.count == 3)
-        #expect(events[0] == .delta("Hello "))
-        #expect(events[1] == .delta("world!"))
-        guard case let .finished(tokenUsage, content, reason, history) = events[2] else {
+        #expect(events[0].kind == .delta("Hello "))
+        #expect(events[1].kind == .delta("world!"))
+        guard case let .finished(tokenUsage, content, reason, history) = events[2].kind else {
             Issue.record("Expected finished event")
             return
         }
@@ -29,6 +29,31 @@ struct ChatTests {
         #expect(content == nil)
         #expect(reason == nil)
         #expect(history.count == 2)
+    }
+
+    @Test
+    func emittedEventsCarryStage1EnvelopeMetadata() async throws {
+        let deltas: [StreamDelta] = [
+            .content("Hello "),
+            .content("world!"),
+            .finished(usage: TokenUsage(input: 10, output: 5))
+        ]
+        let client = StreamingMockLLMClient(streamSequences: [deltas])
+        let chat = Chat<EmptyContext>(client: client)
+
+        let startedAt = Date()
+        var events: [StreamEvent] = []
+        for try await event in chat.stream("Hi", context: EmptyContext()) {
+            events.append(event)
+        }
+        let endedAt = Date()
+
+        #expect(!events.isEmpty)
+        StreamEventInvariantAssertions.assertStage1RuntimeInvariants(
+            events,
+            startedAt: startedAt,
+            endedAt: endedAt
+        )
     }
 
     @Test
@@ -60,20 +85,20 @@ struct ChatTests {
             events.append(event)
         }
 
-        #expect(events.contains(.delta("Let me ")))
-        #expect(events.contains(.toolCallStarted(name: "echo", id: "call_1")))
+        #expect(events.contains { $0.kind == .delta("Let me ") })
+        #expect(events.contains { $0.kind == .toolCallStarted(name: "echo", id: "call_1") })
 
         let toolCompletedEvent = events.first { event in
-            if case let .toolCallCompleted(_, name, result) = event {
+            if case let .toolCallCompleted(_, name, result) = event.kind {
                 return name == "echo" && result.content.contains("Echo: hello")
             }
             return false
         }
         #expect(toolCompletedEvent != nil)
 
-        #expect(events.contains(.delta("The echo result was: Echo: hello")))
+        #expect(events.contains { $0.kind == .delta("The echo result was: Echo: hello") })
 
-        guard case let .finished(tokenUsage, _, _, _) = events.last else {
+        guard case let .finished(tokenUsage, _, _, _) = events.last?.kind else {
             Issue.record("Expected finished event")
             return
         }
@@ -109,7 +134,7 @@ struct ChatTests {
         }
 
         let toolCompletedEvent = events.first { event in
-            if case let .toolCallCompleted(_, name, result) = event {
+            if case let .toolCallCompleted(_, name, result) = event.kind {
                 return name == "failing" && result.isError
             }
             return false
@@ -139,7 +164,7 @@ struct ChatTests {
         }
 
         let toolCompletedEvent = events.first { event in
-            if case let .toolCallCompleted(_, _, result) = event {
+            if case let .toolCallCompleted(_, _, result) = event.kind {
                 return result.isError && result.content.contains("does not exist")
             }
             return false
@@ -267,14 +292,14 @@ struct ChatTests {
         var finalHistory: [ChatMessage] = []
         for try await event in chat.stream("Hi", context: EmptyContext()) {
             events.append(event)
-            if case let .finished(_, _, _, history) = event {
+            if case let .finished(_, _, _, history) = event.kind {
                 finalHistory = history
             }
         }
 
-        #expect(events.contains(.reasoningDelta("Let me think...")))
-        #expect(events.contains(.reasoningDelta(" Yes, I see.")))
-        #expect(events.contains(.delta("Here is my answer.")))
+        #expect(events.contains { $0.kind == .reasoningDelta("Let me think...") })
+        #expect(events.contains { $0.kind == .reasoningDelta(" Yes, I see.") })
+        #expect(events.contains { $0.kind == .delta("Here is my answer.") })
 
         let assistantMessage = finalHistory.compactMap { msg -> AssistantMessage? in
             if case let .assistant(assistant) = msg { return assistant }
@@ -374,12 +399,12 @@ struct ChatStreamingEdgeTests {
 
         var toolCallCompletedEvent: StreamEvent?
         for try await event in chat.stream("Hi", context: EmptyContext()) {
-            if case .toolCallCompleted = event {
+            if case .toolCallCompleted = event.kind {
                 toolCallCompletedEvent = event
             }
         }
 
-        guard case let .toolCallCompleted(id, name, result) = toolCallCompletedEvent else {
+        guard case let .toolCallCompleted(id, name, result) = toolCallCompletedEvent?.kind else {
             Issue.record("Expected toolCallCompleted event")
             return
         }
@@ -402,7 +427,7 @@ struct ChatStreamingEdgeTests {
         }
 
         #expect(events.count == 1)
-        guard case let .finished(tokenUsage, _, _, _) = events.first else {
+        guard case let .finished(tokenUsage, _, _, _) = events.first?.kind else {
             Issue.record("Expected finished event")
             return
         }
@@ -440,7 +465,7 @@ struct ChatStreamingEdgeTests {
         }
 
         let toolCompletedEvents = events.compactMap { event -> (String, String)? in
-            if case let .toolCallCompleted(_, name, result) = event {
+            if case let .toolCallCompleted(_, name, result) = event.kind {
                 return (name, result.content)
             }
             return nil
@@ -506,13 +531,13 @@ struct ChatAudioStreamingTests {
             events.append(event)
         }
 
-        #expect(events.contains(.audioTranscript("Hello ")))
-        #expect(events.contains(.audioTranscript("world")))
-        #expect(events.contains(.audioData(Data([1, 2, 3]))))
-        #expect(events.contains(.audioData(Data([4, 5, 6]))))
-        #expect(events.contains(.audioFinished(
+        #expect(events.contains { $0.kind == .audioTranscript("Hello ") })
+        #expect(events.contains { $0.kind == .audioTranscript("world") })
+        #expect(events.contains { $0.kind == .audioData(Data([1, 2, 3])) })
+        #expect(events.contains { $0.kind == .audioData(Data([4, 5, 6])) })
+        #expect(events.contains { $0.kind == .audioFinished(
             id: "audio_1", expiresAt: 1_700_000_000, data: Data([1, 2, 3, 4, 5, 6])
-        )))
+        ) })
     }
 
     @Test
@@ -528,7 +553,7 @@ struct ChatAudioStreamingTests {
 
         var finalHistory: [ChatMessage] = []
         for try await event in chat.stream("Hi", context: EmptyContext()) {
-            if case let .finished(_, _, _, history) = event {
+            if case let .finished(_, _, _, history) = event.kind {
                 finalHistory = history
             }
         }
@@ -552,7 +577,7 @@ struct ChatAudioStreamingTests {
 
         var finalHistory: [ChatMessage] = []
         for try await event in chat.stream("Hi", context: EmptyContext()) {
-            if case let .finished(_, _, _, history) = event {
+            if case let .finished(_, _, _, history) = event.kind {
                 finalHistory = history
             }
         }
@@ -579,7 +604,7 @@ struct ChatAudioStreamingTests {
         }
 
         let audioEvents = events.filter { event in
-            switch event {
+            switch event.kind {
             case .audioData, .audioTranscript, .audioFinished: true
             default: false
             }
@@ -618,13 +643,13 @@ struct ChatApprovalTests {
         #expect(count == 0)
 
         let requestedApproval = events.contains { event in
-            if case .toolApprovalRequested = event { return true }
+            if case .toolApprovalRequested = event.kind { return true }
             return false
         }
         #expect(!requestedApproval)
 
         let toolCompletedEvent = events.first { event in
-            if case let .toolCallCompleted(_, _, result) = event {
+            if case let .toolCallCompleted(_, _, result) = event.kind {
                 return result.isError && result.content.contains("does not exist")
             }
             return false
@@ -689,7 +714,7 @@ struct ChatApprovalTests {
         #expect(requests.map(\.toolName) == ["delegate", "child_noop"])
 
         let toolCompletedEvent = events.first { event in
-            if case let .toolCallCompleted(id, name, result) = event {
+            if case let .toolCallCompleted(id, name, result) = event.kind {
                 return id == "delegate_call" && name == "delegate"
                     && result.content == "child done" && !result.isError
             }

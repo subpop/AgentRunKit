@@ -19,9 +19,9 @@ struct AgentStreamingTests {
             events.append(event)
         }
 
-        #expect(events.contains(.delta("Processing your request...")))
+        #expect(events.contains { $0.kind == .delta("Processing your request...") })
 
-        guard case let .finished(tokenUsage, content, reason, history) = events.last else {
+        guard case let .finished(tokenUsage, content, reason, history) = events.last?.kind else {
             Issue.record("Expected finished event")
             return
         }
@@ -30,6 +30,32 @@ struct AgentStreamingTests {
         #expect(content == "Done!")
         #expect(reason == .completed)
         #expect(history.count == 2)
+    }
+
+    @Test
+    func emittedEventsCarryStage1EnvelopeMetadata() async throws {
+        let deltas: [StreamDelta] = [
+            .content("Processing your request..."),
+            .toolCallStart(index: 0, id: "call_1", name: "finish"),
+            .toolCallDelta(index: 0, arguments: #"{"content": "Done!", "reason": "completed"}"#),
+            .finished(usage: TokenUsage(input: 10, output: 5))
+        ]
+        let client = StreamingMockLLMClient(streamSequences: [deltas])
+        let agent = Agent<EmptyContext>(client: client, tools: [])
+
+        let startedAt = Date()
+        var events: [StreamEvent] = []
+        for try await event in agent.stream(userMessage: "Hello", context: EmptyContext()) {
+            events.append(event)
+        }
+        let endedAt = Date()
+
+        #expect(!events.isEmpty)
+        StreamEventInvariantAssertions.assertStage1RuntimeInvariants(
+            events,
+            startedAt: startedAt,
+            endedAt: endedAt
+        )
     }
 
     @Test
@@ -61,18 +87,18 @@ struct AgentStreamingTests {
             events.append(event)
         }
 
-        #expect(events.contains(.delta("Let me help...")))
-        #expect(events.contains(.toolCallStarted(name: "echo", id: "call_1")))
+        #expect(events.contains { $0.kind == .delta("Let me help...") })
+        #expect(events.contains { $0.kind == .toolCallStarted(name: "echo", id: "call_1") })
 
         let toolCompletedEvent = events.first { event in
-            if case let .toolCallCompleted(_, name, result) = event {
+            if case let .toolCallCompleted(_, name, result) = event.kind {
                 return name == "echo" && result.content.contains("Echo: hello")
             }
             return false
         }
         #expect(toolCompletedEvent != nil)
 
-        guard case let .finished(tokenUsage, content, _, history) = events.last else {
+        guard case let .finished(tokenUsage, content, _, history) = events.last?.kind else {
             Issue.record("Expected finished event")
             return
         }
@@ -113,7 +139,7 @@ struct AgentStreamingTests {
 
         var toolCompletedCount = 0
         for try await event in agent.stream(userMessage: "Double echo", context: EmptyContext()) {
-            if case .toolCallCompleted = event {
+            if case .toolCallCompleted = event.kind {
                 toolCompletedCount += 1
             }
         }
@@ -215,7 +241,7 @@ struct AgentStreamingTests {
 
         var foundErrorResult = false
         for try await event in agent.stream(userMessage: "Fail", context: EmptyContext()) {
-            if case let .toolCallCompleted(_, name, result) = event {
+            if case let .toolCallCompleted(_, name, result) = event.kind {
                 if name == "failing", result.isError {
                     foundErrorResult = true
                 }
@@ -242,7 +268,7 @@ struct AgentStreamingTests {
         }
 
         let finishToolStarted = events.contains { event in
-            if case let .toolCallStarted(name, _) = event {
+            if case let .toolCallStarted(name, _) = event.kind {
                 return name == "finish"
             }
             return false
@@ -276,12 +302,12 @@ struct AgentStreamingTests {
 
         var toolCallCompletedEvent: StreamEvent?
         for try await event in agent.stream(userMessage: "Hi", context: EmptyContext()) {
-            if case .toolCallCompleted = event {
+            if case .toolCallCompleted = event.kind {
                 toolCallCompletedEvent = event
             }
         }
 
-        guard case let .toolCallCompleted(id, name, result) = toolCallCompletedEvent else {
+        guard case let .toolCallCompleted(id, name, result) = toolCallCompletedEvent?.kind else {
             Issue.record("Expected toolCallCompleted event")
             return
         }
@@ -346,7 +372,7 @@ struct AgentStreamingTests {
 
         var completedNames: [String] = []
         for try await event in agent.stream(userMessage: "Go", context: EmptyContext()) {
-            if case let .toolCallCompleted(_, name, _) = event {
+            if case let .toolCallCompleted(_, name, _) = event.kind {
                 completedNames.append(name)
             }
         }
@@ -390,7 +416,7 @@ struct AgentStreamingTests {
 
         var history: [ChatMessage] = []
         for try await event in agent.stream(userMessage: "Go", context: EmptyContext()) {
-            if case let .finished(_, _, _, hist) = event { history = hist }
+            if case let .finished(_, _, _, hist) = event.kind { history = hist }
         }
 
         let toolMessages = history.compactMap { msg -> (name: String, content: String)? in
@@ -423,7 +449,7 @@ struct AgentStreamingTests {
         var toolCompletedNames: [String] = []
         var finishContent: String?
         for try await event in agent.stream(userMessage: "Go", context: EmptyContext()) {
-            switch event {
+            switch event.kind {
             case let .toolCallCompleted(_, name, _):
                 toolCompletedNames.append(name)
             case let .finished(_, content, _, _):
@@ -457,9 +483,9 @@ struct StreamingReasoningTests {
             events.append(event)
         }
 
-        #expect(events.contains(.reasoningDelta("Let me think about this...")))
-        #expect(events.contains(.reasoningDelta(" The user wants help.")))
-        #expect(events.contains(.delta("Hello!")))
+        #expect(events.contains { $0.kind == .reasoningDelta("Let me think about this...") })
+        #expect(events.contains { $0.kind == .reasoningDelta(" The user wants help.") })
+        #expect(events.contains { $0.kind == .delta("Hello!") })
     }
 
     @Test
@@ -482,11 +508,11 @@ struct StreamingReasoningTests {
         }
 
         let reasoningEvents = events.compactMap { event -> String? in
-            if case let .reasoningDelta(text) = event { return text }
+            if case let .reasoningDelta(text) = event.kind { return text }
             return nil
         }
         let contentEvents = events.compactMap { event -> String? in
-            if case let .delta(text) = event { return text }
+            if case let .delta(text) = event.kind { return text }
             return nil
         }
 
@@ -509,7 +535,7 @@ struct StreamingReasoningTests {
 
         var finalHistory: [ChatMessage] = []
         for try await event in agent.stream(userMessage: "Hi", context: EmptyContext()) {
-            if case let .finished(_, _, _, history) = event {
+            if case let .finished(_, _, _, history) = event.kind {
                 finalHistory = history
             }
         }
@@ -539,7 +565,7 @@ struct StreamingReasoningTests {
 
         var finalHistory: [ChatMessage] = []
         for try await event in agent.stream(userMessage: "Hi", context: EmptyContext()) {
-            if case let .finished(_, _, _, history) = event {
+            if case let .finished(_, _, _, history) = event.kind {
                 finalHistory = history
             }
         }
@@ -596,7 +622,7 @@ struct StreamingReasoningTests {
 
         var finalHistory: [ChatMessage] = []
         for try await event in agent.stream(userMessage: "Hi", context: EmptyContext()) {
-            if case let .finished(_, _, _, history) = event {
+            if case let .finished(_, _, _, history) = event.kind {
                 finalHistory = history
             }
         }
@@ -712,7 +738,7 @@ struct AgentIterationCompletedTests {
 
         var iterationEvents: [(usage: TokenUsage, iteration: Int)] = []
         for try await event in agent.stream(userMessage: "Go", context: EmptyContext()) {
-            if case let .iterationCompleted(usage, iteration) = event {
+            if case let .iterationCompleted(usage, iteration) = event.kind {
                 iterationEvents.append((usage, iteration))
             }
         }
@@ -746,7 +772,7 @@ struct AgentIterationCompletedTests {
 
         var iterationEvents: [(usage: TokenUsage, iteration: Int)] = []
         for try await event in agent.stream(userMessage: "Go", context: EmptyContext()) {
-            if case let .iterationCompleted(usage, iteration) = event {
+            if case let .iterationCompleted(usage, iteration) = event.kind {
                 iterationEvents.append((usage, iteration))
             }
         }
@@ -768,7 +794,7 @@ struct AgentIterationCompletedTests {
 
         var iterationEvents: [StreamEvent] = []
         for try await event in agent.stream(userMessage: "Go", context: EmptyContext()) {
-            if case .iterationCompleted = event {
+            if case .iterationCompleted = event.kind {
                 iterationEvents.append(event)
             }
         }
@@ -789,7 +815,7 @@ struct AgentIterationCompletedTests {
 
         var iterationCount = 0
         for try await event in agent.stream(userMessage: "Go", context: EmptyContext()) {
-            if case .iterationCompleted = event {
+            if case .iterationCompleted = event.kind {
                 iterationCount += 1
             }
         }
@@ -855,7 +881,7 @@ struct AgentStreamingTokenBudgetTests {
             events.append(event)
         }
 
-        guard case let .finished(_, content, _, _) = events.last else {
+        guard case let .finished(_, content, _, _) = events.last?.kind else {
             Issue.record("Expected finished event")
             return
         }
@@ -877,7 +903,7 @@ struct AgentStreamingTokenBudgetTests {
             events.append(event)
         }
 
-        guard case .finished = events.last else {
+        guard case .finished = events.last?.kind else {
             Issue.record("Expected finished event")
             return
         }
@@ -903,10 +929,13 @@ struct AgentAudioStreamingTests {
             events.append(event)
         }
 
-        #expect(events.contains(.audioTranscript("Response")))
-        #expect(events.contains(.audioData(Data([1, 2, 3]))))
-        #expect(events.contains(.audioFinished(id: "audio_1", expiresAt: 1_700_000_000, data: Data([1, 2, 3]))))
-        guard case .finished = events.last else {
+        #expect(events.contains { $0.kind == .audioTranscript("Response") })
+        #expect(events.contains { $0.kind == .audioData(Data([1, 2, 3])) })
+        let audioFinished = StreamEvent.Kind.audioFinished(
+            id: "audio_1", expiresAt: 1_700_000_000, data: Data([1, 2, 3])
+        )
+        #expect(events.contains { $0.kind == audioFinished })
+        guard case .finished = events.last?.kind else {
             Issue.record("Expected finished event")
             return
         }
@@ -927,7 +956,7 @@ struct AgentAudioStreamingTests {
 
         var finalHistory: [ChatMessage] = []
         for try await event in agent.stream(userMessage: "Hi", context: EmptyContext()) {
-            if case let .finished(_, _, _, history) = event {
+            if case let .finished(_, _, _, history) = event.kind {
                 finalHistory = history
             }
         }

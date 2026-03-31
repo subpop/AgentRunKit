@@ -633,7 +633,7 @@ struct StreamCompactionTests {
             events.append(event)
         }
         #expect(events.contains {
-            if case let .compacted(totalTokens, windowSize) = $0 {
+            if case let .compacted(totalTokens, windowSize) = $0.kind {
                 totalTokens == 750 && windowSize == 1000
             } else { false }
         })

@@ -50,6 +50,39 @@ public struct ContextBudget: Sendable, Equatable {
     }
 }
 
+extension ContextBudget: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case windowSize, currentUsage, softThreshold
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let windowSize = try container.decode(Int.self, forKey: .windowSize)
+        let currentUsage = try container.decode(Int.self, forKey: .currentUsage)
+        let softThreshold = try container.decodeIfPresent(Double.self, forKey: .softThreshold)
+        guard windowSize >= 1 else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .windowSize, in: container,
+                debugDescription: "windowSize must be >= 1, got \(windowSize)"
+            )
+        }
+        guard currentUsage >= 0 else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .currentUsage, in: container,
+                debugDescription: "currentUsage must be >= 0, got \(currentUsage)"
+            )
+        }
+        self.init(windowSize: windowSize, currentUsage: currentUsage, softThreshold: softThreshold)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(windowSize, forKey: .windowSize)
+        try container.encode(currentUsage, forKey: .currentUsage)
+        try container.encodeIfPresent(softThreshold, forKey: .softThreshold)
+    }
+}
+
 /// Configuration for context budget tracking and visibility.
 public struct ContextBudgetConfig: Sendable, Equatable {
     public let softThreshold: Double?

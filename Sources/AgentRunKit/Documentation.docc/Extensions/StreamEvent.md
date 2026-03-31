@@ -1,38 +1,21 @@
 # ``AgentRunKit/StreamEvent``
 
+Stable envelope for a streamed event.
+
+Each event carries identity and timing metadata around a semantic ``StreamEvent/Kind`` payload. Transcript order is the order of emission, not the timestamp sort order. Direct `Agent` and `Chat` streams leave `sessionID`, `runID`, and `parentEventID` unset until the session layer owns event construction.
+
 ## Topics
 
-### Content Events
+### Envelope
 
-- ``delta(_:)``
-- ``reasoningDelta(_:)``
+- ``init(id:timestamp:sessionID:runID:parentEventID:kind:)``
+- ``id``
+- ``timestamp``
+- ``sessionID``
+- ``runID``
+- ``parentEventID``
+- ``kind``
 
-### Tool Events
+### Semantic Payload
 
-- ``toolCallStarted(name:id:)``
-- ``toolCallCompleted(id:name:result:)``
-
-### Approval Events
-
-- ``toolApprovalRequested(_:)``
-- ``toolApprovalResolved(toolCallId:decision:)``
-
-### Audio Events
-
-- ``audioData(_:)``
-- ``audioTranscript(_:)``
-- ``audioFinished(id:expiresAt:data:)``
-
-### Sub-Agent Events
-
-- ``subAgentStarted(toolCallId:toolName:)``
-- ``subAgentEvent(toolCallId:toolName:event:)``
-- ``subAgentCompleted(toolCallId:toolName:result:)``
-
-### Lifecycle Events
-
-- ``finished(tokenUsage:content:reason:history:)``
-- ``iterationCompleted(usage:iteration:)``
-- ``compacted(totalTokens:windowSize:)``
-- ``budgetUpdated(budget:)``
-- ``budgetAdvisory(budget:)``
+- ``StreamEvent/Kind``

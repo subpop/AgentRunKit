@@ -109,7 +109,7 @@ public struct SubAgentTool<P: Codable & SchemaProviding & Sendable, InnerContext
         var finalReason: FinishReason?
         for try await event in stream {
             eventHandler(event)
-            if case let .finished(_, content, reason, _) = event {
+            if case let .finished(_, content, reason, _) = event.kind {
                 finalContent = content
                 finalReason = reason
             }

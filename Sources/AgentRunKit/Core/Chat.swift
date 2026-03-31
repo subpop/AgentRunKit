@@ -202,7 +202,9 @@ public struct Chat<C: ToolContext>: Sendable {
             messages.append(.assistant(iteration.toAssistantMessage()))
 
             if policy.shouldTerminateAfterIteration(toolCalls: iteration.toolCalls) {
-                continuation.yield(.finished(tokenUsage: totalUsage, content: nil, reason: nil, history: messages))
+                continuation.yield(.make(.finished(
+                    tokenUsage: totalUsage, content: nil, reason: nil, history: messages
+                )))
                 continuation.finish()
                 return
             }
@@ -212,7 +214,7 @@ public struct Chat<C: ToolContext>: Sendable {
                     call, context: context, approvalHandler: approvalHandler,
                     allowlist: &sessionAllowlist, continuation: continuation
                 )
-                continuation.yield(.toolCallCompleted(id: call.id, name: call.name, result: result))
+                continuation.yield(.make(.toolCallCompleted(id: call.id, name: call.name, result: result)))
                 messages.append(.tool(id: call.id, name: call.name, content: result.content))
             }
         }
@@ -263,9 +265,9 @@ private extension Chat {
             toolCallId: call.id, toolName: call.name,
             arguments: call.arguments, toolDescription: tool.description
         )
-        continuation.yield(.toolApprovalRequested(request))
+        continuation.yield(.make(.toolApprovalRequested(request)))
         let decision = try await awaitApprovalDecision(for: request, using: handler)
-        continuation.yield(.toolApprovalResolved(toolCallId: call.id, decision: decision))
+        continuation.yield(.make(.toolApprovalResolved(toolCallId: call.id, decision: decision)))
         try Task.checkCancellation()
 
         switch decision {

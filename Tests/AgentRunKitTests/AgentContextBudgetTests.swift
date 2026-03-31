@@ -373,7 +373,7 @@ struct ContextBudgetStreamEventTests {
         let agent = Agent<EmptyContext>(client: client, tools: [noopTool], configuration: config)
         var budgetEvents: [ContextBudget] = []
         for try await event in agent.stream(userMessage: "go", context: EmptyContext()) {
-            if case let .budgetUpdated(budget) = event {
+            if case let .budgetUpdated(budget) = event.kind {
                 budgetEvents.append(budget)
             }
         }
@@ -408,7 +408,7 @@ struct ContextBudgetStreamEventTests {
         let agent = Agent<EmptyContext>(client: client, tools: [noopTool], configuration: config)
         var advisoryEmitted = false
         for try await event in agent.stream(userMessage: "go", context: EmptyContext()) {
-            if case .budgetAdvisory = event { advisoryEmitted = true }
+            if case .budgetAdvisory = event.kind { advisoryEmitted = true }
         }
 
         #expect(advisoryEmitted)
@@ -427,7 +427,7 @@ struct ContextBudgetStreamEventTests {
         let agent = Agent<EmptyContext>(client: client, tools: [])
         var budgetEventCount = 0
         for try await event in agent.stream(userMessage: "go", context: EmptyContext()) {
-            switch event {
+            switch event.kind {
             case .budgetUpdated, .budgetAdvisory: budgetEventCount += 1
             default: break
             }
@@ -498,7 +498,7 @@ struct ContextBudgetStreamingPruneTests {
         let agent = Agent<EmptyContext>(client: client, tools: [noopTool], configuration: config)
         var pruneCompleted = false
         for try await event in agent.stream(userMessage: "go", context: EmptyContext()) {
-            if case let .toolCallCompleted(_, name, result) = event, name == "prune_context" {
+            if case let .toolCallCompleted(_, name, result) = event.kind, name == "prune_context" {
                 pruneCompleted = true
                 #expect(result.content.contains("Pruned 1"))
             }
@@ -570,7 +570,7 @@ struct ContextBudgetStreamingPruneTests {
 
         var disabledError: ToolResult?
         for try await event in agent.stream(userMessage: "go", context: EmptyContext()) {
-            if case let .toolCallCompleted(_, name, result) = event, name == "prune_context" {
+            if case let .toolCallCompleted(_, name, result) = event.kind, name == "prune_context" {
                 disabledError = result
             }
         }

@@ -17,7 +17,7 @@ let stream = agent.stream(
     approvalHandler: approvalHandler
 )
 for try await event in stream {
-    switch event {
+    switch event.kind {
     case .delta(let text):
         print(text, terminator: "")
     case .toolCallStarted(let name, _):
@@ -36,51 +36,79 @@ for try await event in stream {
 
 The stream yields events until the model calls `finish` or an error occurs. Cancelling the consuming task cancels the underlying LLM request.
 
-## StreamEvent Cases
+## StreamEvent Envelope
 
-``StreamEvent`` is a flat enum. Cases are grouped below by category.
+``StreamEvent`` is an envelope struct. The semantic event is carried by ``StreamEvent/kind`` as a ``StreamEvent/Kind`` value.
+
+Every event includes:
+
+| Property | Description |
+|---|---|
+| ``StreamEvent/id`` | Stable event identity for transcript rendering and correlation |
+| ``StreamEvent/timestamp`` | Emission time in UTC |
+| ``StreamEvent/sessionID`` | Optional session identity |
+| ``StreamEvent/runID`` | Optional run identity |
+| ``StreamEvent/parentEventID`` | Optional parent correlation identity |
+| ``StreamEvent/kind`` | The semantic payload |
+
+Today, direct `Agent` and `Chat` streams leave `sessionID`, `runID`, and `parentEventID` unset. A future session layer will populate those fields consistently.
+
+## StreamEvent Kinds
+
+Cases are grouped below by category.
 
 **Content:**
 
 | Case | Payload | Description |
 |---|---|---|
-| `.delta` | `String` | Incremental text token from the model |
-| `.reasoningDelta` | `String` | Incremental reasoning/thinking token |
+| ``StreamEvent/Kind/delta(_:)`` | `String` | Incremental text token from the model |
+| ``StreamEvent/Kind/reasoningDelta(_:)`` | `String` | Incremental reasoning or thinking token |
 
 **Tool calls:**
 
 | Case | Payload | Description |
 |---|---|---|
-| `.toolCallStarted` | `name`, `id` | Tool execution is beginning |
-| `.toolApprovalRequested` | ``ToolApprovalRequest`` | A gated tool call is waiting for approval |
-| `.toolApprovalResolved` | `toolCallId`, ``ToolApprovalDecision`` | Approval was granted, modified, or denied |
-| `.toolCallCompleted` | `id`, `name`, ``ToolResult`` | Tool execution finished |
+| ``StreamEvent/Kind/toolCallStarted(name:id:)`` | `name`, `id` | Tool execution is beginning |
+| ``StreamEvent/Kind/toolApprovalRequested(_:)`` | ``ToolApprovalRequest`` | A gated tool call is waiting for approval |
+| ``StreamEvent/Kind/toolApprovalResolved(toolCallId:decision:)`` | `toolCallId`, ``ToolApprovalDecision`` | Approval was granted, modified, or denied |
+| ``StreamEvent/Kind/toolCallCompleted(id:name:result:)`` | `id`, `name`, ``ToolResult`` | Tool execution finished |
 
 **Audio:**
 
 | Case | Payload | Description |
 |---|---|---|
-| `.audioData` | `Data` | Raw audio bytes (streaming) |
-| `.audioTranscript` | `String` | Transcript of generated audio |
-| `.audioFinished` | `id`, `expiresAt`, `Data` | Final audio segment |
+| ``StreamEvent/Kind/audioData(_:)`` | `Data` | Raw audio bytes, delivered incrementally |
+| ``StreamEvent/Kind/audioTranscript(_:)`` | `String` | Transcript of generated audio |
+| ``StreamEvent/Kind/audioFinished(id:expiresAt:data:)`` | `id`, `expiresAt`, `Data` | Final audio payload with metadata |
 
 **Sub-agents:**
 
 | Case | Payload | Description |
 |---|---|---|
-| `.subAgentStarted` | `toolCallId`, `toolName` | A sub-agent began executing |
-| `.subAgentEvent` | `toolCallId`, `toolName`, ``StreamEvent`` | Recursive event from a nested agent |
-| `.subAgentCompleted` | `toolCallId`, `toolName`, ``ToolResult`` | Sub-agent finished. See <doc:SubAgents>. |
+| ``StreamEvent/Kind/subAgentStarted(toolCallId:toolName:)`` | `toolCallId`, `toolName` | A sub-agent began executing |
+| ``StreamEvent/Kind/subAgentEvent(toolCallId:toolName:event:)`` | `toolCallId`, `toolName`, ``StreamEvent`` | Recursive event from a nested agent |
+| ``StreamEvent/Kind/subAgentCompleted(toolCallId:toolName:result:)`` | `toolCallId`, `toolName`, ``ToolResult`` | Sub-agent finished. See <doc:SubAgents>. |
 
 **Lifecycle:**
 
 | Case | Payload | Description |
 |---|---|---|
-| `.finished` | ``TokenUsage``, content, reason, history | Agent loop completed |
-| `.iterationCompleted` | ``TokenUsage``, iteration number | One generate/tool-call cycle completed |
-| `.compacted` | `totalTokens`, `windowSize` | Context was compacted to fit the window |
-| `.budgetUpdated` | ``ContextBudget`` | Latest budget snapshot after a provider response |
-| `.budgetAdvisory` | ``ContextBudget`` | Soft threshold was crossed |
+| ``StreamEvent/Kind/finished(tokenUsage:content:reason:history:)`` | ``TokenUsage``, content, reason, history | Agent loop completed |
+| ``StreamEvent/Kind/iterationCompleted(usage:iteration:)`` | ``TokenUsage``, iteration number | One generate or tool-call cycle completed |
+| ``StreamEvent/Kind/compacted(totalTokens:windowSize:)`` | `totalTokens`, `windowSize` | Context was compacted to fit the window |
+| ``StreamEvent/Kind/budgetUpdated(budget:)`` | ``ContextBudget`` | Latest budget snapshot after a provider response |
+| ``StreamEvent/Kind/budgetAdvisory(budget:)`` | ``ContextBudget`` | Soft threshold was crossed |
+
+## Canonical Transcript JSON
+
+Use ``StreamEventJSONCodec`` when you need stable transcript export or import:
+
+```swift
+let data = try StreamEventJSONCodec.encode(event)
+let restored = try StreamEventJSONCodec.decode(data)
+```
+
+This canonical codec uses the framework's fixed JSON settings for event transcripts. Plain `Codable` conformance remains available for ordinary Swift use, but transcript persistence should go through ``StreamEventJSONCodec``.
 
 ## AgentStream for SwiftUI
 

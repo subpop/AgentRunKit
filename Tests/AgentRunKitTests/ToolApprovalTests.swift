@@ -404,7 +404,7 @@ struct ToolApprovalAgentTests {
         for try await event in agent.stream(
             userMessage: "Go", context: EmptyContext(), approvalHandler: counter.handler
         ) {
-            if case let .toolCallCompleted(_, name, result) = event, name == "echo" {
+            if case let .toolCallCompleted(_, name, result) = event.kind, name == "echo" {
                 toolResults.append(result)
             }
         }
@@ -443,11 +443,11 @@ struct ToolApprovalStreamingTests {
         }
 
         let approvalRequested = events.contains {
-            if case .toolApprovalRequested = $0 { return true }
+            if case .toolApprovalRequested = $0.kind { return true }
             return false
         }
         let approvalResolved = events.contains {
-            if case .toolApprovalResolved = $0 { return true }
+            if case .toolApprovalResolved = $0.kind { return true }
             return false
         }
         #expect(approvalRequested)
@@ -476,7 +476,7 @@ struct ToolApprovalStreamingTests {
         for try await event in agent.stream(
             userMessage: "Go", context: EmptyContext(), approvalHandler: counter.handler
         ) {
-            if case let .toolCallCompleted(_, name, result) = event {
+            if case let .toolCallCompleted(_, name, result) = event.kind {
                 completedToolNames.append(name)
                 if name == "echo" {
                     #expect(result.isError)
@@ -509,7 +509,7 @@ struct ToolApprovalStreamingTests {
         for try await event in agent.stream(
             userMessage: "Go", context: EmptyContext(), approvalHandler: counter.handler
         ) {
-            switch event {
+            switch event.kind {
             case .toolCallStarted: eventNames.append("started")
             case .toolApprovalRequested: eventNames.append("requested")
             case .toolApprovalResolved: eventNames.append("resolved")

@@ -76,7 +76,7 @@
                 userMessage: "What is 99 + 1?",
                 context: EmptyContext()
             ) {
-                switch event {
+                switch event.kind {
                 case let .delta(text):
                     print("[DELTA] \(text)", terminator: "")
                 case let .toolCallStarted(name, _):

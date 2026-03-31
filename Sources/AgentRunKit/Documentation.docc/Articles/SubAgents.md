@@ -102,11 +102,11 @@ When the parent agent streams via `stream()`, sub-agent events propagate through
 
 | Event | When |
 |---|---|
-| `.subAgentStarted(toolCallId:toolName:)` | Child agent begins execution |
-| `.subAgentEvent(toolCallId:toolName:event:)` | Each event from the child, recursively nested for deeper hierarchies |
-| `.subAgentCompleted(toolCallId:toolName:result:)` | Child agent finishes |
+| ``StreamEvent/Kind/subAgentStarted(toolCallId:toolName:)`` | Child agent begins execution |
+| ``StreamEvent/Kind/subAgentEvent(toolCallId:toolName:event:)`` | Each event from the child, recursively nested for deeper hierarchies |
+| ``StreamEvent/Kind/subAgentCompleted(toolCallId:toolName:result:)`` | Child agent finishes |
 
-The `.subAgentEvent` case is `indirect`, so a three-level hierarchy produces nested events: the grandchild's deltas appear wrapped twice. See <doc:StreamingAndSwiftUI> for consuming these events in SwiftUI.
+The `subAgentEvent` case is `indirect`, so a three-level hierarchy produces nested events: the grandchild's deltas appear wrapped twice. The nested child event preserves its own envelope metadata, including its own `id` and `timestamp`. See <doc:StreamingAndSwiftUI> for consuming these events in SwiftUI.
 
 ## Error Propagation
 

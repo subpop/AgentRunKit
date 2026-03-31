@@ -582,7 +582,7 @@ struct TestLLMClientTests {
         }
 
         let finished = events.compactMap { event -> TokenUsage? in
-            guard case let .finished(tokenUsage, _, _, _) = event else { return nil }
+            guard case let .finished(tokenUsage, _, _, _) = event.kind else { return nil }
             return tokenUsage
         }
         #expect(!finished.isEmpty)
@@ -606,7 +606,7 @@ struct TestLLMClientTests {
             events.append(event)
         }
         let finished = events.compactMap { event -> TokenUsage? in
-            if case let .finished(usage, _, _, _) = event { return usage }
+            if case let .finished(usage, _, _, _) = event.kind { return usage }
             return nil
         }
         #expect(!finished.isEmpty)
@@ -627,16 +627,16 @@ struct TestLLMClientTests {
             events.append(event)
         }
 
-        #expect(events.contains(.toolCallStarted(name: "finish", id: "test_call_0")))
+        #expect(events.contains { $0.kind == .toolCallStarted(name: "finish", id: "test_call_0") })
         let toolCompleted = events.first { event in
-            if case let .toolCallCompleted(_, name, result) = event {
+            if case let .toolCallCompleted(_, name, result) = event.kind {
                 return name == "finish" && result.content.contains("Finish:")
             }
             return false
         }
         #expect(toolCompleted != nil)
         let finished = events.compactMap { event -> TokenUsage? in
-            if case let .finished(usage, _, _, _) = event { return usage }
+            if case let .finished(usage, _, _, _) = event.kind { return usage }
             return nil
         }
         #expect(!finished.isEmpty)
