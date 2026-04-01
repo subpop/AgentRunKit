@@ -59,6 +59,17 @@ struct OpenRouterSmokeTests {
         try await assertSmokeChatStreamWithTools(client: client)
     }
 
+    @Test func budgetHistoryIntegrity() async throws {
+        let budgetClient = OpenAIClient(
+            apiKey: apiKey,
+            model: model,
+            maxTokens: 1024,
+            contextWindowSize: 100,
+            baseURL: OpenAIClient.openRouterBaseURL
+        )
+        try await assertSmokeBudgetHistoryIntegrity(client: budgetClient)
+    }
+
     @Test func nestedStructuredOutput() async throws {
         try await assertSmokeNestedStructuredOutput(client: client)
     }

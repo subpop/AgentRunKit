@@ -55,6 +55,16 @@ struct AnthropicSmokeTests {
         try await assertSmokeChatStreamWithTools(client: client)
     }
 
+    @Test func budgetHistoryIntegrity() async throws {
+        let budgetClient = AnthropicClient(
+            apiKey: apiKey,
+            model: model,
+            maxTokens: 1024,
+            contextWindowSize: 100
+        )
+        try await assertSmokeBudgetHistoryIntegrity(client: budgetClient)
+    }
+
     @Test func cachingEnabled() async throws {
         let cachingClient = AnthropicClient(
             apiKey: apiKey,

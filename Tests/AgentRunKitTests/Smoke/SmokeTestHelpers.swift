@@ -729,6 +729,48 @@ func assertSmokeBudgetEvents(client: any LLMClient) async throws {
     #expect(budgetAdvisoryCount >= 1)
 }
 
+func assertSmokeBudgetHistoryIntegrity(client: any LLMClient) async throws {
+    let addTool = try makeSmokeAddTool()
+    let config = AgentConfiguration(
+        maxIterations: 5,
+        systemPrompt: """
+        You are a calculator assistant. When asked to add numbers, use the add tool. \
+        After getting the result, report it using the finish tool.
+        """,
+        contextBudget: ContextBudgetConfig(softThreshold: 0.25, enableVisibility: true)
+    )
+
+    let agent = Agent<EmptyContext>(client: client, tools: [addTool], configuration: config)
+
+    var budgetUpdatedCount = 0
+    var budgetAdvisoryCount = 0
+    var toolCompleted = false
+    var finishContent: String?
+
+    for try await event in agent.stream(userMessage: "What is 7 + 8?", context: EmptyContext()) {
+        switch event.kind {
+        case .budgetUpdated:
+            budgetUpdatedCount += 1
+        case .budgetAdvisory:
+            budgetAdvisoryCount += 1
+        case let .toolCallCompleted(_, name, result):
+            if name == "add" {
+                toolCompleted = true
+                #expect(result.content.contains("15"))
+            }
+        case let .finished(_, content, _, _):
+            finishContent = content
+        default:
+            break
+        }
+    }
+
+    #expect(toolCompleted)
+    #expect(budgetUpdatedCount >= 1)
+    #expect(budgetAdvisoryCount >= 1)
+    #expect(finishContent?.contains("15") == true)
+}
+
 func assertSmokeIterationCompleted(client: any LLMClient) async throws {
     let addTool = try makeSmokeAddTool()
     let config = AgentConfiguration(

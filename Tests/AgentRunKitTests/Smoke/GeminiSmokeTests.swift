@@ -54,6 +54,16 @@ struct GeminiSmokeTests {
         try await assertSmokeChatStreamWithTools(client: client)
     }
 
+    @Test func budgetHistoryIntegrity() async throws {
+        let budgetClient = GeminiClient(
+            apiKey: apiKey,
+            model: model,
+            maxOutputTokens: 1024,
+            contextWindowSize: 100
+        )
+        try await assertSmokeBudgetHistoryIntegrity(client: budgetClient)
+    }
+
     @Test func nestedStructuredOutput() async throws {
         try await assertSmokeNestedStructuredOutput(client: client)
     }

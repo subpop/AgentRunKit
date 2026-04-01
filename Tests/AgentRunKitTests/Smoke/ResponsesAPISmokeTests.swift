@@ -18,6 +18,17 @@ struct ResponsesAPISmokeTests {
         )
     }
 
+    func makeBudgetClient() -> ResponsesAPIClient {
+        ResponsesAPIClient(
+            apiKey: apiKey,
+            model: model,
+            maxOutputTokens: 1024,
+            contextWindowSize: 100,
+            baseURL: ResponsesAPIClient.openAIBaseURL,
+            store: false
+        )
+    }
+
     @Test func basicGenerate() async throws {
         try await assertSmokeGenerate(client: makeClient())
     }
@@ -60,6 +71,10 @@ struct ResponsesAPISmokeTests {
 
     @Test func chatStreamWithTools() async throws {
         try await assertSmokeChatStreamWithTools(client: makeClient())
+    }
+
+    @Test func budgetHistoryIntegrity() async throws {
+        try await assertSmokeBudgetHistoryIntegrity(client: makeBudgetClient())
     }
 
     @Test func nestedStructuredOutput() async throws {
