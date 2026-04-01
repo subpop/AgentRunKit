@@ -8,14 +8,16 @@ extension ResponsesAPIClient {
         tools: [ToolDefinition],
         extraFields: [String: JSONValue],
         onResponse: (@Sendable (HTTPURLResponse) -> Void)?,
+        requestMode: RunRequestMode = .auto,
         continuation: AsyncThrowingStream<StreamDelta, Error>.Continuation
     ) async throws {
-        if shouldResetConversationBeforeRequest(messages: messages, requestMode: .auto) {
+        if shouldResetConversationBeforeRequest(messages: messages, requestMode: requestMode) {
             resetConversation()
         }
         let request = try buildRequest(
             messages: messages, tools: tools,
-            stream: true, extraFields: extraFields
+            stream: true, extraFields: extraFields,
+            requestMode: requestMode
         )
         let urlRequest = try buildURLRequest(request)
         let (bytes, httpResponse) = try await HTTPRetry.performStream(

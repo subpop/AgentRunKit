@@ -87,6 +87,7 @@ private struct StreamAccumulation {
     var pendingArguments: [Int: String] = [:]
     var audio = AudioAccumulator()
     var usage: TokenUsage?
+    var yieldedEvent = false
 
     mutating func apply(
         _ delta: StreamDelta,
@@ -97,9 +98,11 @@ private struct StreamAccumulation {
         switch delta {
         case let .content(text):
             content += text
+            yieldedEvent = true
             continuation.yield(.make(.delta(text)))
         case let .reasoning(text):
             reasoning += text
+            yieldedEvent = true
             continuation.yield(.make(.reasoningDelta(text)))
         case let .reasoningDetails(details):
             reasoningDetails.append(details)
@@ -112,9 +115,11 @@ private struct StreamAccumulation {
             audio.expiresAt = expiresAt
         case let .audioData(data):
             audio.data.append(data)
+            yieldedEvent = true
             continuation.yield(.make(.audioData(data)))
         case let .audioTranscript(text):
             audio.transcript += text
+            yieldedEvent = true
             continuation.yield(.make(.audioTranscript(text)))
         case let .finished(iterationUsage):
             guard let iterationUsage else { return }
@@ -158,6 +163,7 @@ private struct StreamAccumulation {
         }
         toolCalls[index] = accumulator
         if policy.shouldEmitToolStart(name: name) {
+            yieldedEvent = true
             continuation.yield(.make(.toolCallStarted(name: name, id: id)))
         }
     }
@@ -180,23 +186,51 @@ struct StreamProcessor {
         messages: [ChatMessage],
         totalUsage: inout TokenUsage,
         continuation: AsyncThrowingStream<StreamEvent, Error>.Continuation,
-        requestContext: RequestContext? = nil
+        requestContext: RequestContext? = nil,
+        requestMode: RunRequestMode = .auto
+    ) async throws -> StreamIteration {
+        var emittedOutput = false
+        return try await process(
+            messages: messages,
+            totalUsage: &totalUsage,
+            emittedOutput: &emittedOutput,
+            continuation: continuation,
+            requestContext: requestContext,
+            requestMode: requestMode
+        )
+    }
+
+    func process(
+        messages: [ChatMessage],
+        totalUsage: inout TokenUsage,
+        emittedOutput: inout Bool,
+        continuation: AsyncThrowingStream<StreamEvent, Error>.Continuation,
+        requestContext: RequestContext? = nil,
+        requestMode: RunRequestMode = .auto
     ) async throws -> StreamIteration {
         var state = StreamAccumulation()
 
-        for try await delta in client.stream(
-            messages: messages,
-            tools: toolDefinitions,
-            requestContext: requestContext
-        ) {
-            try Task.checkCancellation()
-            state.apply(delta, policy: policy, totalUsage: &totalUsage, continuation: continuation)
+        do {
+            for try await delta in client.streamForRun(
+                messages: messages,
+                tools: toolDefinitions,
+                requestContext: requestContext,
+                requestMode: requestMode
+            ) {
+                try Task.checkCancellation()
+                state.apply(delta, policy: policy, totalUsage: &totalUsage, continuation: continuation)
+            }
+        } catch {
+            emittedOutput = state.yieldedEvent
+            throw error
         }
 
         guard state.pendingArguments.isEmpty else {
+            emittedOutput = state.yieldedEvent
             throw AgentError.malformedStream(.orphanedToolCallArguments(indices: state.pendingArguments.keys.sorted()))
         }
 
+        emittedOutput = true
         state.finishAudio(continuation: continuation)
         return state.iteration
     }

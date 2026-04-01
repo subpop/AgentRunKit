@@ -291,8 +291,8 @@ extension Agent {
                 continuation: continuation
             )
             let iteration = try await processor.process(
-                messages: messages, totalUsage: &totalUsage, continuation: continuation,
-                requestContext: options.requestContext
+                messages: messages, totalUsage: &totalUsage,
+                continuation: continuation, requestContext: options.requestContext
             )
 
             if let usage = iteration.usage {

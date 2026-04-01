@@ -95,6 +95,15 @@ extension ResponsesAPIClient {
         tools: [ToolDefinition],
         requestContext: RequestContext?
     ) -> AsyncThrowingStream<StreamDelta, Error> {
+        stream(messages: messages, tools: tools, requestContext: requestContext, requestMode: .auto)
+    }
+
+    nonisolated func stream(
+        messages: [ChatMessage],
+        tools: [ToolDefinition],
+        requestContext: RequestContext?,
+        requestMode: RunRequestMode
+    ) -> AsyncThrowingStream<StreamDelta, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
@@ -103,6 +112,7 @@ extension ResponsesAPIClient {
                         tools: tools,
                         extraFields: requestContext?.extraFields ?? [:],
                         onResponse: requestContext?.onResponse,
+                        requestMode: requestMode,
                         continuation: continuation
                     )
                 } catch {

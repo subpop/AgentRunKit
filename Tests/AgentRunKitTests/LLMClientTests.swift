@@ -55,7 +55,10 @@ private actor FallbackRequestModeMockLLMClient: LLMClient {
         tools _: [ToolDefinition],
         requestContext _: RequestContext?
     ) -> AsyncThrowingStream<StreamDelta, Error> {
-        AsyncThrowingStream { $0.finish() }
+        let (stream, continuation) = AsyncThrowingStream<StreamDelta, Error>.makeStream()
+        continuation.yield(.content("fallback"))
+        continuation.finish()
+        return stream
     }
 }
 
@@ -76,6 +79,27 @@ struct LLMClientRequestModeTests {
 
         #expect(response.content == "hello")
         #expect(await client.generateCallCount == 1)
+    }
+
+    @Test
+    func streamForRunFallsBackToPlainStream() async throws {
+        let client = FallbackRequestModeMockLLMClient(
+            response: AssistantMessage(content: "")
+        )
+
+        var collected = ""
+        for try await delta in client.streamForRun(
+            messages: [.user("Hi")],
+            tools: [],
+            requestContext: nil,
+            requestMode: .forceFullRequest
+        ) {
+            if case let .content(text) = delta {
+                collected += text
+            }
+        }
+
+        #expect(collected == "fallback")
     }
 }
 

@@ -301,6 +301,60 @@ struct ResponsesServerSideStateTests {
     }
 }
 
+struct ResponsesStreamingCursorTests {
+    @Test
+    func streamingForceFullRequestBypassesStaleCursor() async throws {
+        let baseURL = try #require(URL(string: "https://responses-stream-force.test/v1"))
+        let requestURL = baseURL.appendingPathComponent("responses")
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ResponsesTestURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+
+        let completedJSON = """
+        {"type":"response.completed","response":{"id":"resp_002","status":"completed",\
+        "output":[{"type":"message","content":[{"type":"output_text","text":"Hi"}]}],\
+        "usage":{"input_tokens":10,"output_tokens":5}}}
+        """
+        let sseBody = "data: \(completedJSON)\n\n"
+
+        ResponsesTestURLProtocol.register(url: requestURL) { _ in
+            let response = try #require(HTTPURLResponse(
+                url: requestURL,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "text/event-stream"]
+            ))
+            return (response, Data(sseBody.utf8))
+        }
+        defer { ResponsesTestURLProtocol.unregister(url: requestURL) }
+
+        let client = ResponsesAPIClient(
+            apiKey: "test-key",
+            model: "gpt-4.1",
+            baseURL: baseURL,
+            session: session,
+            retryPolicy: .none,
+            store: true
+        )
+
+        await client.setLastResponseId("resp_001")
+        await client.setLastMessageCount(5)
+
+        let stream = client.stream(
+            messages: [.user("Hi")],
+            tools: [],
+            requestContext: nil,
+            requestMode: .forceFullRequest
+        )
+        for try await _ in stream {}
+
+        let requestBody = try ResponsesTestURLProtocol.recordedBody(for: requestURL)
+        #expect(requestBody["previous_response_id"] == nil)
+        #expect(await client.lastResponseId == "resp_002")
+        #expect(await client.lastMessageCount == 2)
+    }
+}
+
 struct ResponsesAgentRunRecoveryTests {
     @Test
     func rewrittenHistoryForcesFullRequestThenResumesDeltaMode() async throws {

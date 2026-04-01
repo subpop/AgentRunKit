@@ -13,6 +13,24 @@ protocol HistoryRewriteAwareClient: LLMClient {
         requestContext: RequestContext?,
         requestMode: RunRequestMode
     ) async throws -> AssistantMessage
+
+    func stream(
+        messages: [ChatMessage],
+        tools: [ToolDefinition],
+        requestContext: RequestContext?,
+        requestMode: RunRequestMode
+    ) -> AsyncThrowingStream<StreamDelta, Error>
+}
+
+extension HistoryRewriteAwareClient {
+    func stream(
+        messages: [ChatMessage],
+        tools: [ToolDefinition],
+        requestContext: RequestContext?,
+        requestMode _: RunRequestMode
+    ) -> AsyncThrowingStream<StreamDelta, Error> {
+        stream(messages: messages, tools: tools, requestContext: requestContext)
+    }
 }
 
 extension LLMClient {
@@ -38,5 +56,22 @@ extension LLMClient {
             responseFormat: responseFormat,
             requestContext: requestContext
         )
+    }
+
+    func streamForRun(
+        messages: [ChatMessage],
+        tools: [ToolDefinition],
+        requestContext: RequestContext?,
+        requestMode: RunRequestMode
+    ) -> AsyncThrowingStream<StreamDelta, Error> {
+        if let capableClient = self as? any HistoryRewriteAwareClient {
+            return capableClient.stream(
+                messages: messages,
+                tools: tools,
+                requestContext: requestContext,
+                requestMode: requestMode
+            )
+        }
+        return stream(messages: messages, tools: tools, requestContext: requestContext)
     }
 }
