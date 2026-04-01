@@ -29,6 +29,7 @@
             responseFormat: ResponseFormat?,
             requestContext _: RequestContext?
         ) async throws -> AssistantMessage {
+            try messages.validateForLLMRequest()
             if responseFormat != nil {
                 throw AgentError.llmError(
                     .other("FoundationModelsClient does not support responseFormat")
@@ -52,6 +53,7 @@
             AsyncThrowingStream { continuation in
                 let task = Task {
                     do {
+                        try messages.validateForLLMRequest()
                         let mapped = FMMessageMapper.map(messages)
                         let adapters: [any FoundationModels.Tool] = try tools.map {
                             try FMToolAdapter(wrapping: $0, context: context)

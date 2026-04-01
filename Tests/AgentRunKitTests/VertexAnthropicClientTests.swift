@@ -197,6 +197,49 @@ struct VertexAnthropicResponseTests {
     }
 }
 
+struct VertexAnthropicHistoryValidationTests {
+    private let malformedHistory: [ChatMessage] = [
+        .user("Hi"),
+        .assistant(AssistantMessage(
+            content: "",
+            toolCalls: [ToolCall(id: "call_1", name: "lookup", arguments: "{}")]
+        )),
+    ]
+
+    @Test
+    func generateRejectsMalformedHistory() async {
+        let client = VertexAnthropicClient(
+            projectID: "p",
+            location: "l",
+            model: "m",
+            tokenProvider: { "tok" }
+        )
+
+        await #expect(throws: AgentError.malformedHistory(.unfinishedToolCallBatch(ids: ["call_1"]))) {
+            _ = try await client.generate(
+                messages: malformedHistory,
+                tools: [],
+                responseFormat: nil,
+                requestContext: nil
+            )
+        }
+    }
+
+    @Test
+    func streamRejectsMalformedHistory() async {
+        let client = VertexAnthropicClient(
+            projectID: "p",
+            location: "l",
+            model: "m",
+            tokenProvider: { "tok" }
+        )
+
+        await #expect(throws: AgentError.malformedHistory(.unfinishedToolCallBatch(ids: ["call_1"]))) {
+            for try await _ in client.stream(messages: malformedHistory, tools: [], requestContext: nil) {}
+        }
+    }
+}
+
 private enum TestVertexAnthropicOutput: SchemaProviding {
     static var jsonSchema: JSONSchema {
         .object(properties: ["value": .string()], required: ["value"])

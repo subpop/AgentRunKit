@@ -8,6 +8,7 @@ extension OpenAIClient {
         onResponse: (@Sendable (HTTPURLResponse) -> Void)?,
         continuation: AsyncThrowingStream<StreamDelta, Error>.Continuation
     ) async throws {
+        try messages.validateForLLMRequest()
         let request = buildRequest(messages: messages, tools: tools, stream: true, extraFields: extraFields)
         let urlRequest = try buildURLRequest(request)
         let (bytes, httpResponse) = try await HTTPRetry.performStream(

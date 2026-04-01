@@ -87,6 +87,43 @@
             let client = FoundationModelsClient<EmptyContext>(context: EmptyContext())
             #expect(client.mergeInstructions(nil) == nil)
         }
+
+        @Test func generateRejectsMalformedHistory() async {
+            guard #available(macOS 26, iOS 26, *) else { return }
+            let client = FoundationModelsClient<EmptyContext>(context: EmptyContext())
+            let malformedHistory: [ChatMessage] = [
+                .user("Hi"),
+                .assistant(AssistantMessage(
+                    content: "",
+                    toolCalls: [ToolCall(id: "call_1", name: "lookup", arguments: "{}")]
+                )),
+            ]
+
+            await #expect(throws: AgentError.malformedHistory(.unfinishedToolCallBatch(ids: ["call_1"]))) {
+                _ = try await client.generate(
+                    messages: malformedHistory,
+                    tools: [],
+                    responseFormat: nil,
+                    requestContext: nil
+                )
+            }
+        }
+
+        @Test func streamRejectsMalformedHistory() async {
+            guard #available(macOS 26, iOS 26, *) else { return }
+            let client = FoundationModelsClient<EmptyContext>(context: EmptyContext())
+            let malformedHistory: [ChatMessage] = [
+                .user("Hi"),
+                .assistant(AssistantMessage(
+                    content: "",
+                    toolCalls: [ToolCall(id: "call_1", name: "lookup", arguments: "{}")]
+                )),
+            ]
+
+            await #expect(throws: AgentError.malformedHistory(.unfinishedToolCallBatch(ids: ["call_1"]))) {
+                for try await _ in client.stream(messages: malformedHistory, tools: [], requestContext: nil) {}
+            }
+        }
     }
 
     private struct DummySchema: SchemaProviding, Codable {

@@ -341,6 +341,72 @@ struct ChatTests {
     }
 
     @Test
+    func reusingUnresolvedToolCallHistoryThrows() async throws {
+        let firstClient = MockLLMClient(responses: [
+            AssistantMessage(content: "", toolCalls: [
+                ToolCall(id: "call_1", name: "lookup", arguments: "{}"),
+            ]),
+        ])
+        let firstChat = Chat<EmptyContext>(client: firstClient)
+        let (_, history) = try await firstChat.send("First message")
+
+        let secondClient = ChatCapturingMockLLMClient(responses: [
+            AssistantMessage(content: "unreachable"),
+        ])
+        let secondChat = Chat<EmptyContext>(client: secondClient)
+
+        await #expect(throws: AgentError.malformedHistory(.unfinishedToolCallBatch(ids: ["call_1"]))) {
+            _ = try await secondChat.send("Second message", history: history)
+        }
+    }
+
+    @Test
+    func replayingUserDefinedFinishToolHistoryRemainsValid() async throws {
+        let finishTool = try Tool<EchoParams, EchoOutput, EmptyContext>(
+            name: "finish",
+            description: "User-defined finish tool",
+            executor: { params, _ in EchoOutput(echoed: "Finish: \(params.message)") }
+        )
+        let lookupTool = try Tool<EchoParams, EchoOutput, EmptyContext>(
+            name: "lookup",
+            description: "Lookup tool",
+            executor: { params, _ in EchoOutput(echoed: "Lookup: \(params.message)") }
+        )
+        let history: [ChatMessage] = [
+            .user("First message"),
+            .assistant(AssistantMessage(content: "", toolCalls: [
+                ToolCall(id: "finish_1", name: "finish", arguments: #"{"message":"done"}"#),
+                ToolCall(id: "lookup_1", name: "lookup", arguments: #"{"message":"details"}"#),
+            ])),
+            .tool(id: "finish_1", name: "finish", content: "Finish: done"),
+            .tool(id: "lookup_1", name: "lookup", content: "Lookup: details"),
+        ]
+
+        let secondClient = ChatCapturingMockLLMClient(responses: [
+            AssistantMessage(content: "Second response"),
+        ])
+        let secondChat = Chat<EmptyContext>(client: secondClient, tools: [finishTool, lookupTool])
+
+        _ = try await secondChat.send("Second message", history: history)
+
+        let capturedMessages = await secondClient.capturedMessages
+        #expect(capturedMessages.count == 5)
+        guard case let .assistant(message) = capturedMessages[1] else {
+            Issue.record("Expected assistant history entry")
+            return
+        }
+        #expect(message.toolCalls.map(\.name) == ["finish", "lookup"])
+        guard case .tool(id: "finish_1", name: "finish", content: "Finish: done") = capturedMessages[2] else {
+            Issue.record("Expected finish tool result to remain in history")
+            return
+        }
+        guard case .tool(id: "lookup_1", name: "lookup", content: "Lookup: details") = capturedMessages[3] else {
+            Issue.record("Expected lookup tool result to remain in history")
+            return
+        }
+    }
+
+    @Test
     func streamMaxToolRoundsProducesStructuralFinishedEvent() async throws {
         let echoTool = try Tool<EchoParams, EchoOutput, EmptyContext>(
             name: "echo",

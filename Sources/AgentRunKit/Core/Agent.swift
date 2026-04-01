@@ -104,6 +104,13 @@ public final class Agent<C: ToolContext>: Sendable {
     }
 }
 
+struct RunLoopState {
+    var messages: [ChatMessage]
+    var historyWasRewrittenLocally: Bool = false
+    var budgetPhase: ContextBudgetPhase?
+    var sessionAllowlist: Set<String> = []
+}
+
 extension Agent {
     func run(
         userMessage: String,
@@ -136,67 +143,51 @@ extension Agent {
             configuration.approvalPolicy == .none || options.approvalHandler != nil,
             "approvalHandler is required when approvalPolicy is not .none"
         )
-        var messages = buildInitialMessages(
+        var state = RunLoopState(messages: buildInitialMessages(
             userMessage: userMessage, history: history,
             systemPromptOverride: options.systemPromptOverride
-        )
+        ))
+        try state.messages.validateForAgentHistory()
 
         var totalUsage = TokenUsage()
         var lastTotalTokens: Int?
-        var sessionAllowlist: Set<String> = []
         var compactor = ContextCompactor(
             client: client, toolDefinitions: toolDefinitions, configuration: configuration
         )
-        var budgetPhase = try makeBudgetPhase()
-        var historyWasRewrittenLocally = false
+        state.budgetPhase = try makeBudgetPhase()
 
         for iteration in 1 ... configuration.maxIterations {
             try Task.checkCancellation()
 
             let response = try await executeRunIteration(
-                messages: &messages,
+                messages: &state.messages,
                 totalUsage: &totalUsage,
                 lastTotalTokens: &lastTotalTokens,
                 compactor: &compactor,
-                historyWasRewrittenLocally: &historyWasRewrittenLocally,
+                historyWasRewrittenLocally: &state.historyWasRewrittenLocally,
                 requestContext: options.requestContext
             )
-            let budgetUsage = try requireBudgetUsage(response.tokenUsage, budgetPhase: budgetPhase)
+            let budgetUsage = try requireBudgetUsage(response.tokenUsage, budgetPhase: state.budgetPhase)
 
-            if let finishCall = response.toolCalls.first(where: { $0.name == "finish" }) {
+            if let finishCall = try exclusiveFinishCall(in: response.toolCalls) {
                 return try parseFinishResult(
                     finishCall,
                     tokenUsage: totalUsage,
                     iterations: iteration,
-                    history: messages
+                    history: state.messages
                 )
             }
 
-            if let tokenBudget = options.tokenBudget, totalUsage.total > tokenBudget {
-                return makeTerminalResult(
-                    reason: .tokenBudgetExceeded(budget: tokenBudget, used: totalUsage.total),
-                    tokenUsage: totalUsage,
-                    iterations: iteration,
-                    history: messages
-                )
-            }
-
-            let pruneCalls = response.toolCalls.filter { $0.name == "prune_context" }
-            let regularCalls = response.toolCalls.filter { $0.name != "finish" && $0.name != "prune_context" }
-
-            let pruneRewroteHistory = executePruneCalls(
-                pruneCalls,
-                messages: &messages
-            )
-            if pruneRewroteHistory {
-                historyWasRewrittenLocally = true
-            }
-            try await executeAndAppendResults(
-                regularCalls, context: context, messages: &messages,
-                approvalHandler: options.approvalHandler, allowlist: &sessionAllowlist
-            )
-            if let budgetUsage {
-                applyBudgetPhase(&budgetPhase, usage: budgetUsage, messages: &messages)
+            if let terminalResult = try await finalizeRunIteration(
+                toolCalls: response.toolCalls,
+                context: context,
+                iteration: iteration,
+                totalUsage: totalUsage,
+                budgetUsage: budgetUsage,
+                options: options,
+                state: &state
+            ) {
+                return terminalResult
             }
         }
 
@@ -204,8 +195,52 @@ extension Agent {
             reason: .maxIterationsReached(limit: configuration.maxIterations),
             tokenUsage: totalUsage,
             iterations: configuration.maxIterations,
-            history: messages
+            history: state.messages
         )
+    }
+
+    func finalizeRunIteration(
+        toolCalls: [ToolCall],
+        context: C,
+        iteration: Int,
+        totalUsage: TokenUsage,
+        budgetUsage: TokenUsage?,
+        options: InvocationOptions,
+        state: inout RunLoopState
+    ) async throws -> AgentResult? {
+        let indexedCalls = indexedExecutableToolCalls(from: toolCalls)
+        let pruneCalls = indexedCalls.filter { $0.call.name == "prune_context" }
+        let regularCalls = indexedCalls.filter { $0.call.name != "prune_context" }
+
+        let pruneOutcome = executePruneCalls(pruneCalls, messages: &state.messages)
+        if pruneOutcome.historyWasRewritten {
+            state.historyWasRewrittenLocally = true
+        }
+        let regularResults = try await executeResults(
+            regularCalls,
+            context: context,
+            messages: state.messages,
+            approvalHandler: options.approvalHandler,
+            allowlist: &state.sessionAllowlist
+        )
+        appendToolResults(
+            (pruneOutcome.results + regularResults).sorted { $0.index < $1.index },
+            messages: &state.messages
+        )
+        if let budgetUsage {
+            applyBudgetPhase(&state.budgetPhase, usage: budgetUsage, messages: &state.messages)
+        }
+        try state.messages.validateForAgentHistory()
+
+        if let tokenBudget = options.tokenBudget, totalUsage.total > tokenBudget {
+            return makeTerminalResult(
+                reason: .tokenBudgetExceeded(budget: tokenBudget, used: totalUsage.total),
+                tokenUsage: totalUsage,
+                iterations: iteration,
+                history: state.messages
+            )
+        }
+        return nil
     }
 
     func stream(
@@ -268,63 +303,61 @@ extension Agent {
         options: InvocationOptions,
         continuation: AsyncThrowingStream<StreamEvent, Error>.Continuation
     ) async throws {
-        var messages = buildInitialMessages(
+        var state = StreamingLoopState(messages: buildInitialMessages(
             userMessage: userMessage, history: history, systemPromptOverride: options.systemPromptOverride
-        )
+        ))
+        try state.messages.validateForAgentHistory()
         var totalUsage = TokenUsage()
         var lastTotalTokens: Int?
-        var sessionAllowlist: Set<String> = []
         let policy = StreamPolicy.agent
         let processor = StreamProcessor(client: client, toolDefinitions: toolDefinitions, policy: policy)
         var compactor = ContextCompactor(client: client, toolDefinitions: toolDefinitions, configuration: configuration)
-        var budgetPhase = try makeBudgetPhase()
+        state.budgetPhase = try makeBudgetPhase()
 
         for iterationNumber in 1 ... configuration.maxIterations {
             try Task.checkCancellation()
 
-            let compactionOutcome = await compactor.compactOrTruncateIfNeeded(
-                &messages, lastTotalTokens: lastTotalTokens, totalUsage: &totalUsage
-            )
-            emitCompactionEventIfNeeded(
-                compactionOutcome.emitsCompactionEvent,
+            await compactStreamingMessagesIfNeeded(
+                &state.messages,
+                totalUsage: &totalUsage,
                 lastTotalTokens: lastTotalTokens,
+                compactor: &compactor,
                 continuation: continuation
             )
             let iteration = try await processor.process(
-                messages: messages, totalUsage: &totalUsage,
+                messages: state.messages,
+                totalUsage: &totalUsage,
                 continuation: continuation, requestContext: options.requestContext
             )
 
             if let usage = iteration.usage {
                 continuation.yield(.make(.iterationCompleted(usage: usage, iteration: iterationNumber)))
             }
-            messages.append(.assistant(iteration.toAssistantMessage()))
+            state.messages.append(.assistant(iteration.toAssistantMessage()))
+            let budgetUsage = try requireBudgetUsage(iteration.usage, budgetPhase: state.budgetPhase)
 
-            let filteredTools = StreamPolicy.agent.executableToolCalls(from: iteration.toolCalls)
-            let pruneCalls = filteredTools.filter { $0.name == "prune_context" }
-            let regularCalls = filteredTools.filter { $0.name != "prune_context" }
-            let budgetUsage = try requireBudgetUsage(iteration.usage, budgetPhase: budgetPhase)
-
-            if let budgetUsage {
-                applyBudgetPhase(&budgetPhase, usage: budgetUsage, messages: &messages, continuation: continuation)
-            }
-
-            if try finishIfTerminated(iteration, usage: totalUsage, history: messages, continuation: continuation) {
+            if let finishCall = try exclusiveFinishCall(in: iteration.toolCalls) {
+                try finishStreaming(
+                    continuation: continuation,
+                    event: parseFinishEvent(from: finishCall, tokenUsage: totalUsage, history: state.messages)
+                )
                 return
             }
 
-            executePruneCalls(pruneCalls, messages: &messages, continuation: continuation)
-            try await executeStreamingAndAppendResults(
-                regularCalls,
+            try await finalizeStreamingIteration(
+                toolCalls: iteration.toolCalls,
                 context: context,
-                messages: &messages,
+                budgetUsage: budgetUsage,
+                options: options,
                 continuation: continuation,
-                approvalHandler: options.approvalHandler,
-                allowlist: &sessionAllowlist
+                state: &state
             )
 
             if finishIfOverBudget(
-                options.tokenBudget, totalUsage: totalUsage, history: messages, continuation: continuation
+                options.tokenBudget,
+                totalUsage: totalUsage,
+                history: state.messages,
+                continuation: continuation
             ) {
                 return
             }
@@ -337,7 +370,7 @@ extension Agent {
                 tokenUsage: totalUsage,
                 content: nil,
                 reason: .maxIterationsReached(limit: configuration.maxIterations),
-                history: messages
+                history: state.messages
             )
         )
     }
@@ -357,27 +390,21 @@ extension Agent {
     }
 
     func parseFinishEvent(
-        from toolCalls: [ToolCall], tokenUsage: TokenUsage, history: [ChatMessage]
+        from finishCall: ToolCall,
+        tokenUsage: TokenUsage,
+        history: [ChatMessage]
     ) throws -> StreamEvent {
-        guard let finishCall = toolCalls.first(where: { $0.name == "finish" }) else {
-            return makeFinishedEvent(
-                tokenUsage: tokenUsage,
-                content: nil,
-                reason: nil,
-                history: history
-            )
-        }
         let decoded: FinishArguments
         do {
             decoded = try JSONDecoder().decode(FinishArguments.self, from: finishCall.argumentsData)
         } catch {
             throw AgentError.finishDecodingFailed(message: String(describing: error))
         }
-        return makeFinishedEvent(
+        return try makeFinishedEvent(
             tokenUsage: tokenUsage,
             content: decoded.content,
             reason: FinishReason(decoded.reason ?? "completed"),
-            history: history
+            history: history.sanitizedTerminalHistory()
         )
     }
 
@@ -395,7 +422,7 @@ extension Agent {
         ))
     }
 
-    private func emitCompactionEventIfNeeded(
+    func emitCompactionEventIfNeeded(
         _ compacted: Bool,
         lastTotalTokens: Int?,
         continuation: AsyncThrowingStream<StreamEvent, Error>.Continuation
@@ -406,20 +433,20 @@ extension Agent {
         continuation.yield(.make(.compacted(totalTokens: totalTokens, windowSize: windowSize)))
     }
 
-    private func finishIfTerminated(
-        _ iteration: StreamIteration,
-        usage: TokenUsage,
-        history: [ChatMessage],
-        continuation: AsyncThrowingStream<StreamEvent, Error>.Continuation
-    ) throws -> Bool {
-        guard StreamPolicy.agent.shouldTerminateAfterIteration(toolCalls: iteration.toolCalls) else {
-            return false
+    func exclusiveFinishCall(in toolCalls: [ToolCall]) throws -> ToolCall? {
+        let finishCalls = toolCalls.filter { $0.name == "finish" }
+        guard !finishCalls.isEmpty else { return nil }
+        guard finishCalls.count == 1, toolCalls.count == 1 else {
+            throw AgentError.malformedHistory(.finishMustBeExclusive)
         }
-        try finishStreaming(
-            continuation: continuation,
-            event: parseFinishEvent(from: iteration.toolCalls, tokenUsage: usage, history: history)
-        )
-        return true
+        return finishCalls[0]
+    }
+
+    func indexedExecutableToolCalls(from toolCalls: [ToolCall]) -> [IndexedToolCall] {
+        toolCalls.enumerated().compactMap { offset, call in
+            guard StreamPolicy.agent.shouldExecuteTool(name: call.name) else { return nil }
+            return IndexedToolCall(index: offset, call: call)
+        }
     }
 
     private func finishIfOverBudget(

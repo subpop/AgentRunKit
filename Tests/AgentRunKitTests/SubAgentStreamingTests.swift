@@ -834,7 +834,7 @@ struct SubAgentInheritHistoryStreamingTests {
         for try await _ in parentAgent.stream(userMessage: "Go", context: ctx) {}
 
         let captured = await childClient.capturedMessages
-        #expect(captured.count == 4)
+        #expect(captured.count == 3)
         guard case let .system(prompt) = captured[0] else {
             Issue.record("Expected child system message first")
             return
@@ -845,11 +845,7 @@ struct SubAgentInheritHistoryStreamingTests {
             return
         }
         #expect(userMsg == "Go")
-        guard case .assistant = captured[2] else {
-            Issue.record("Expected parent assistant message")
-            return
-        }
-        guard case let .user(taskMsg) = captured[3] else {
+        guard case let .user(taskMsg) = captured[2] else {
             Issue.record("Expected child task message last")
             return
         }

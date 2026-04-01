@@ -46,6 +46,7 @@ public struct AnthropicClient: LLMClient, Sendable {
         responseFormat: ResponseFormat?,
         requestContext: RequestContext?
     ) async throws -> AssistantMessage {
+        try messages.validateForLLMRequest()
         if responseFormat != nil {
             throw AgentError.llmError(.other("AnthropicClient does not support responseFormat"))
         }

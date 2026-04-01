@@ -76,6 +76,7 @@ public struct VertexGoogleClient: LLMClient, Sendable {
         responseFormat: ResponseFormat?,
         requestContext: RequestContext?
     ) async throws -> AssistantMessage {
+        try messages.validateForLLMRequest()
         let request = try gemini.buildRequest(
             messages: messages,
             tools: tools,
@@ -121,6 +122,7 @@ public struct VertexGoogleClient: LLMClient, Sendable {
         onResponse: (@Sendable (HTTPURLResponse) -> Void)?,
         continuation: AsyncThrowingStream<StreamDelta, Error>.Continuation
     ) async throws {
+        try messages.validateForLLMRequest()
         let request = try gemini.buildRequest(
             messages: messages, tools: tools, extraFields: extraFields
         )

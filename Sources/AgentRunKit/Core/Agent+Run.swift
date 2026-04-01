@@ -90,12 +90,12 @@ extension Agent {
         } catch {
             throw AgentError.finishDecodingFailed(message: String(describing: error))
         }
-        return AgentResult(
+        return try AgentResult(
             finishReason: FinishReason(decoded.reason ?? "completed"),
             content: decoded.content,
             totalTokenUsage: tokenUsage,
             iterations: iterations,
-            history: history
+            history: history.sanitizedTerminalHistory()
         )
     }
 

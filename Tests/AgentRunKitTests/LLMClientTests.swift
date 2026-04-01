@@ -103,6 +103,66 @@ struct LLMClientRequestModeTests {
     }
 }
 
+private let malformedToolHistory: [ChatMessage] = [
+    .user("Hi"),
+    .assistant(AssistantMessage(
+        content: "",
+        toolCalls: [ToolCall(id: "call_1", name: "lookup", arguments: "{}")]
+    )),
+]
+
+struct ProviderHistoryValidationTests {
+    private func assertGenerateRejectsMalformedHistory(client: any LLMClient) async {
+        await #expect(throws: AgentError.malformedHistory(.unfinishedToolCallBatch(ids: ["call_1"]))) {
+            _ = try await client.generate(
+                messages: malformedToolHistory,
+                tools: [],
+                responseFormat: nil,
+                requestContext: nil
+            )
+        }
+    }
+
+    private func assertStreamRejectsMalformedHistory(client: any LLMClient) async {
+        await #expect(throws: AgentError.malformedHistory(.unfinishedToolCallBatch(ids: ["call_1"]))) {
+            for try await _ in client.stream(messages: malformedToolHistory, tools: [], requestContext: nil) {}
+        }
+    }
+
+    @Test
+    func openAIBoundariesRejectMalformedHistory() async {
+        let client = OpenAIClient(apiKey: "test-key", model: "test-model", baseURL: OpenAIClient.openAIBaseURL)
+        await assertGenerateRejectsMalformedHistory(client: client)
+        await assertStreamRejectsMalformedHistory(client: client)
+    }
+
+    @Test
+    func anthropicBoundariesRejectMalformedHistory() async {
+        let client = AnthropicClient(apiKey: "test-key", model: "test-model")
+        await assertGenerateRejectsMalformedHistory(client: client)
+        await assertStreamRejectsMalformedHistory(client: client)
+    }
+
+    @Test
+    func geminiBoundariesRejectMalformedHistory() async {
+        let client = GeminiClient(apiKey: "test-key", model: "test-model")
+        await assertGenerateRejectsMalformedHistory(client: client)
+        await assertStreamRejectsMalformedHistory(client: client)
+    }
+
+    @Test
+    func responsesBoundariesRejectMalformedHistory() async {
+        let client = ResponsesAPIClient(
+            apiKey: "test-key",
+            model: "test-model",
+            baseURL: ResponsesAPIClient.openAIBaseURL,
+            store: false
+        )
+        await assertGenerateRejectsMalformedHistory(client: client)
+        await assertStreamRejectsMalformedHistory(client: client)
+    }
+}
+
 struct OpenAIClientRequestTests {
     @Test
     func requestEncodesCorrectly() throws {

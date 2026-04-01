@@ -79,6 +79,7 @@ public struct VertexAnthropicClient: LLMClient, Sendable {
         responseFormat: ResponseFormat?,
         requestContext: RequestContext?
     ) async throws -> AssistantMessage {
+        try messages.validateForLLMRequest()
         if responseFormat != nil {
             throw AgentError.llmError(.other("VertexAnthropicClient does not support responseFormat"))
         }
@@ -128,6 +129,7 @@ public struct VertexAnthropicClient: LLMClient, Sendable {
         onResponse: (@Sendable (HTTPURLResponse) -> Void)?,
         continuation: AsyncThrowingStream<StreamDelta, Error>.Continuation
     ) async throws {
+        try messages.validateForLLMRequest()
         let request = try anthropic.buildRequest(
             messages: messages, tools: tools,
             stream: true, extraFields: extraFields

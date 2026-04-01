@@ -1,8 +1,11 @@
 import AgentRunKit
 @testable import AgentRunKitMLX
 import Foundation
+import MLX
 import MLXLMCommon
+import MLXNN
 import Testing
+import Tokenizers
 
 struct MLXMessageMapperTests {
     @Test func systemMessage() {
@@ -309,5 +312,170 @@ struct MLXParameterMergingTests {
         #expect(merged.topP == Float(0.95))
         #expect(merged.maxTokens == 2048)
         #expect(merged.repetitionPenalty == Float(1.1))
+    }
+}
+
+struct MLXClientHistoryValidationTests {
+    private let malformedHistory: [ChatMessage] = [
+        .user("Hi"),
+        .assistant(AssistantMessage(
+            content: "",
+            toolCalls: [ToolCall(id: "call_1", name: "lookup", arguments: "{}")]
+        )),
+    ]
+
+    @Test
+    func generateRejectsMalformedHistory() async {
+        let client = makeMLXClient()
+
+        await #expect(throws: AgentError.malformedHistory(.unfinishedToolCallBatch(ids: ["call_1"]))) {
+            _ = try await client.generate(
+                messages: malformedHistory,
+                tools: [],
+                responseFormat: nil,
+                requestContext: nil
+            )
+        }
+    }
+
+    @Test
+    func streamRejectsMalformedHistory() async {
+        let client = makeMLXClient()
+
+        await #expect(throws: AgentError.malformedHistory(.unfinishedToolCallBatch(ids: ["call_1"]))) {
+            for try await _ in client.stream(messages: malformedHistory, tools: [], requestContext: nil) {}
+        }
+    }
+
+    private func makeMLXClient() -> MLXClient {
+        let context = ModelContext(
+            configuration: ModelConfiguration(id: "test"),
+            model: DummyLanguageModel(),
+            processor: DummyInputProcessor(),
+            tokenizer: DummyTokenizer()
+        )
+        return MLXClient(container: ModelContainer(context: context))
+    }
+}
+
+private final class DummyLanguageModel: Module, LanguageModel {
+    func prepare(_ input: LMInput, cache _: [KVCache], windowSize _: Int?) throws -> PrepareResult {
+        .tokens(input.text)
+    }
+
+    func callAsFunction(_ inputs: MLXArray, cache: [KVCache]?) -> MLXArray {
+        _ = inputs
+        _ = cache
+        return MLXArray([0])
+    }
+
+    func newCache(parameters _: GenerateParameters?) -> [KVCache] {
+        []
+    }
+}
+
+private struct DummyInputProcessor: UserInputProcessor {
+    func prepare(input _: UserInput) throws -> LMInput {
+        LMInput(tokens: MLXArray([0]))
+    }
+}
+
+private struct DummyTokenizer: Tokenizer {
+    func tokenize(text: String) -> [String] {
+        text.split(separator: " ").map(String.init)
+    }
+
+    func encode(text _: String) -> [Int] {
+        [0]
+    }
+
+    func encode(text _: String, addSpecialTokens _: Bool) -> [Int] {
+        [0]
+    }
+
+    func decode(tokens: [Int], skipSpecialTokens _: Bool) -> String {
+        tokens.map(String.init).joined(separator: " ")
+    }
+
+    func convertTokenToId(_ token: String) -> Int? {
+        Int(token)
+    }
+
+    func convertIdToToken(_ id: Int) -> String? {
+        String(id)
+    }
+
+    var bosToken: String? {
+        nil
+    }
+
+    var bosTokenId: Int? {
+        nil
+    }
+
+    var eosToken: String? {
+        nil
+    }
+
+    var eosTokenId: Int? {
+        nil
+    }
+
+    var unknownToken: String? {
+        nil
+    }
+
+    var unknownTokenId: Int? {
+        nil
+    }
+
+    func applyChatTemplate(messages _: [Tokenizers.Message]) throws -> [Int] {
+        [0]
+    }
+
+    func applyChatTemplate(messages _: [Tokenizers.Message], tools _: [Tokenizers.ToolSpec]?) throws -> [Int] {
+        [0]
+    }
+
+    func applyChatTemplate(
+        messages _: [Tokenizers.Message],
+        tools _: [Tokenizers.ToolSpec]?,
+        additionalContext _: [String: any Sendable]?
+    ) throws -> [Int] {
+        [0]
+    }
+
+    func applyChatTemplate(
+        messages _: [Tokenizers.Message],
+        chatTemplate _: Tokenizers.ChatTemplateArgument
+    ) throws -> [Int] {
+        [0]
+    }
+
+    func applyChatTemplate(messages _: [Tokenizers.Message], chatTemplate _: String) throws -> [Int] {
+        [0]
+    }
+
+    func applyChatTemplate(
+        messages _: [Tokenizers.Message],
+        chatTemplate _: Tokenizers.ChatTemplateArgument?,
+        addGenerationPrompt _: Bool,
+        truncation _: Bool,
+        maxLength _: Int?,
+        tools _: [Tokenizers.ToolSpec]?
+    ) throws -> [Int] {
+        [0]
+    }
+
+    func applyChatTemplate(
+        messages _: [Tokenizers.Message],
+        chatTemplate _: Tokenizers.ChatTemplateArgument?,
+        addGenerationPrompt _: Bool,
+        truncation _: Bool,
+        maxLength _: Int?,
+        tools _: [Tokenizers.ToolSpec]?,
+        additionalContext _: [String: any Sendable]?
+    ) throws -> [Int] {
+        [0]
     }
 }

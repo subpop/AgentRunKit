@@ -11,6 +11,7 @@ extension ResponsesAPIClient {
         requestMode: RunRequestMode = .auto,
         continuation: AsyncThrowingStream<StreamDelta, Error>.Continuation
     ) async throws {
+        try messages.validateForLLMRequest()
         if shouldResetConversationBeforeRequest(messages: messages, requestMode: requestMode) {
             resetConversation()
         }

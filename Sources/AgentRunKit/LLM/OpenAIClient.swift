@@ -43,6 +43,7 @@ public struct OpenAIClient: LLMClient, Sendable {
         responseFormat: ResponseFormat?,
         requestContext: RequestContext?
     ) async throws -> AssistantMessage {
+        try messages.validateForLLMRequest()
         let request = buildRequest(
             messages: messages,
             tools: tools,

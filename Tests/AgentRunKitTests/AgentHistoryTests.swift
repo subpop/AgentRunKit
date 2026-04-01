@@ -44,13 +44,9 @@ struct AgentHistoryTests {
         let agent = Agent<EmptyContext>(client: client, tools: [])
         let result = try await agent.run(userMessage: "Test", context: EmptyContext())
 
-        #expect(result.history.count == 2)
+        #expect(result.history.count == 1)
         guard case .user = result.history[0] else {
             Issue.record("Expected user message first in history")
-            return
-        }
-        guard case .assistant = result.history[1] else {
-            Issue.record("Expected assistant message second in history")
             return
         }
     }
@@ -116,7 +112,7 @@ struct AgentHistoryTests {
         let agent = Agent<EmptyContext>(client: client, tools: [echoTool])
         let result = try await agent.run(userMessage: "Test", context: EmptyContext())
 
-        #expect(result.history.count == 4)
+        #expect(result.history.count == 3)
 
         guard case .user = result.history[0] else {
             Issue.record("Expected user message first in history")
@@ -136,11 +132,6 @@ struct AgentHistoryTests {
         #expect(id == "call_1")
         #expect(name == "echo")
         #expect(content.contains("Echo: hello"))
-
-        guard case .assistant = result.history[3] else {
-            Issue.record("Expected final assistant message fourth")
-            return
-        }
     }
 
     @Test
@@ -164,7 +155,7 @@ struct AgentHistoryTests {
         )
 
         let capturedMessages = await client2.capturedMessages
-        #expect(capturedMessages.count == 3)
+        #expect(capturedMessages.count == 2)
 
         guard case let .user(first) = capturedMessages[0] else {
             Issue.record("Expected first user message")
@@ -172,18 +163,13 @@ struct AgentHistoryTests {
         }
         #expect(first == "First message")
 
-        guard case .assistant = capturedMessages[1] else {
-            Issue.record("Expected assistant from first run")
-            return
-        }
-
-        guard case let .user(second) = capturedMessages[2] else {
+        guard case let .user(second) = capturedMessages[1] else {
             Issue.record("Expected second user message")
             return
         }
         #expect(second == "Second message")
 
-        #expect(result2.history.count == 4)
+        #expect(result2.history.count == 2)
     }
 }
 

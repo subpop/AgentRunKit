@@ -2,49 +2,49 @@
 import Foundation
 import Testing
 
+@MainActor
+private func makeAgentStream(
+    streamSequences: [[StreamDelta]]
+) -> AgentStream<EmptyContext> {
+    let client = StreamingMockLLMClient(streamSequences: streamSequences)
+    let agent = Agent<EmptyContext>(client: client, tools: [])
+    return AgentStream(agent: agent)
+}
+
+@MainActor
+private func makeAgentStreamWithTools(
+    streamSequences: [[StreamDelta]],
+    tools: [any AnyTool<EmptyContext>]
+) -> AgentStream<EmptyContext> {
+    let client = StreamingMockLLMClient(streamSequences: streamSequences)
+    let agent = Agent<EmptyContext>(client: client, tools: tools)
+    return AgentStream(agent: agent)
+}
+
+@MainActor
+private func awaitStreamCompletion(_ stream: AgentStream<some ToolContext>) async {
+    while stream.isStreaming {
+        await Task.yield()
+    }
+}
+
+@MainActor
+private func waitForStreamCondition(
+    timeout: Duration = .seconds(1),
+    condition: @MainActor () -> Bool
+) async -> Bool {
+    let clock = ContinuousClock()
+    let deadline = clock.now + timeout
+    while clock.now < deadline {
+        if condition() {
+            return true
+        }
+        await Task.yield()
+    }
+    return condition()
+}
+
 struct AgentStreamTests {
-    @MainActor
-    private func makeStream(
-        streamSequences: [[StreamDelta]]
-    ) -> AgentStream<EmptyContext> {
-        let client = StreamingMockLLMClient(streamSequences: streamSequences)
-        let agent = Agent<EmptyContext>(client: client, tools: [])
-        return AgentStream(agent: agent)
-    }
-
-    @MainActor
-    private func makeStreamWithTools(
-        streamSequences: [[StreamDelta]],
-        tools: [any AnyTool<EmptyContext>]
-    ) -> AgentStream<EmptyContext> {
-        let client = StreamingMockLLMClient(streamSequences: streamSequences)
-        let agent = Agent<EmptyContext>(client: client, tools: tools)
-        return AgentStream(agent: agent)
-    }
-
-    @MainActor
-    private func awaitCompletion(_ stream: AgentStream<EmptyContext>) async {
-        while stream.isStreaming {
-            await Task.yield()
-        }
-    }
-
-    @MainActor
-    private func waitUntil(
-        timeout: Duration = .seconds(1),
-        condition: @MainActor () -> Bool
-    ) async -> Bool {
-        let clock = ContinuousClock()
-        let deadline = clock.now + timeout
-        while clock.now < deadline {
-            if condition() {
-                return true
-            }
-            await Task.yield()
-        }
-        return condition()
-    }
-
     @MainActor @Test
     func contentAccumulatesFromDeltas() async {
         let deltas: [StreamDelta] = [
@@ -54,10 +54,10 @@ struct AgentStreamTests {
             .toolCallDelta(index: 0, arguments: #"{"content": "done"}"#),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]
-        let stream = makeStream(streamSequences: [deltas])
+        let stream = makeAgentStream(streamSequences: [deltas])
 
         stream.send("Hi", context: EmptyContext())
-        await awaitCompletion(stream)
+        await awaitStreamCompletion(stream)
 
         #expect(stream.content == "Hello world")
     }
@@ -72,10 +72,10 @@ struct AgentStreamTests {
             .toolCallDelta(index: 0, arguments: #"{"content": "done"}"#),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]
-        let stream = makeStream(streamSequences: [deltas])
+        let stream = makeAgentStream(streamSequences: [deltas])
 
         stream.send("Think", context: EmptyContext())
-        await awaitCompletion(stream)
+        await awaitStreamCompletion(stream)
 
         #expect(stream.reasoning == "Let me think")
         #expect(stream.content == "Answer")
@@ -100,13 +100,13 @@ struct AgentStreamTests {
             .finished(usage: TokenUsage(input: 20, output: 10)),
         ]
 
-        let stream = makeStreamWithTools(
+        let stream = makeAgentStreamWithTools(
             streamSequences: [firstDeltas, secondDeltas],
             tools: [echoTool]
         )
 
         stream.send("Echo hello", context: EmptyContext())
-        await awaitCompletion(stream)
+        await awaitStreamCompletion(stream)
 
         let echoCall = stream.toolCalls.first { $0.name == "echo" }
         #expect(echoCall != nil)
@@ -136,13 +136,13 @@ struct AgentStreamTests {
             .finished(usage: TokenUsage(input: 20, output: 10)),
         ]
 
-        let stream = makeStreamWithTools(
+        let stream = makeAgentStreamWithTools(
             streamSequences: [firstDeltas, secondDeltas],
             tools: [failTool]
         )
 
         stream.send("Do it", context: EmptyContext())
-        await awaitCompletion(stream)
+        await awaitStreamCompletion(stream)
 
         let failCall = stream.toolCalls.first { $0.name == "fail_tool" }
         #expect(failCall != nil)
@@ -161,10 +161,10 @@ struct AgentStreamTests {
             .toolCallDelta(index: 0, arguments: #"{"content": "All done", "reason": "completed"}"#),
             .finished(usage: TokenUsage(input: 50, output: 25)),
         ]
-        let stream = makeStream(streamSequences: [deltas])
+        let stream = makeAgentStream(streamSequences: [deltas])
 
         stream.send("Go", context: EmptyContext())
-        await awaitCompletion(stream)
+        await awaitStreamCompletion(stream)
 
         #expect(stream.tokenUsage?.input == 50)
         #expect(stream.tokenUsage?.output == 25)
@@ -193,7 +193,7 @@ struct AgentStreamTests {
         let stream = AgentStream(agent: agent)
 
         stream.send("Loop", context: EmptyContext())
-        await awaitCompletion(stream)
+        await awaitStreamCompletion(stream)
 
         #expect(stream.finishReason == .maxIterationsReached(limit: 2))
         #expect(stream.error == nil)
@@ -216,7 +216,7 @@ struct AgentStreamTests {
         let stream = AgentStream(agent: agent)
 
         stream.send("Budget", context: EmptyContext(), tokenBudget: 50)
-        await awaitCompletion(stream)
+        await awaitStreamCompletion(stream)
 
         #expect(stream.finishReason == .tokenBudgetExceeded(budget: 50, used: 80))
         #expect(stream.error == nil)
@@ -242,11 +242,11 @@ struct AgentStreamTests {
         let stream = AgentStream(agent: agent)
 
         stream.send("First", context: EmptyContext())
-        await awaitCompletion(stream)
+        await awaitStreamCompletion(stream)
         #expect(stream.content == "First")
 
         stream.send("Second", context: EmptyContext())
-        await awaitCompletion(stream)
+        await awaitStreamCompletion(stream)
         #expect(stream.content == "Second")
         #expect(stream.tokenUsage?.input == 20)
     }
@@ -259,11 +259,11 @@ struct AgentStreamTests {
             .toolCallDelta(index: 0, arguments: #"{"content": "done"}"#),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]
-        let stream = makeStream(streamSequences: [deltas])
+        let stream = makeAgentStream(streamSequences: [deltas])
 
         stream.send("Hi", context: EmptyContext())
         stream.cancel()
-        await awaitCompletion(stream)
+        await awaitStreamCompletion(stream)
 
         #expect(!stream.isStreaming)
         #expect(stream.content.isEmpty)
@@ -276,7 +276,7 @@ struct AgentStreamTests {
         let stream = AgentStream(agent: agent)
 
         stream.send("Hi", context: EmptyContext())
-        await awaitCompletion(stream)
+        await awaitStreamCompletion(stream)
 
         #expect(stream.error != nil)
         #expect(!stream.isStreaming)
@@ -290,13 +290,13 @@ struct AgentStreamTests {
             .toolCallDelta(index: 0, arguments: #"{"content": "done"}"#),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]
-        let stream = makeStream(streamSequences: [deltas])
+        let stream = makeAgentStream(streamSequences: [deltas])
 
         #expect(!stream.isStreaming)
         stream.send("Hi", context: EmptyContext())
         #expect(stream.isStreaming)
 
-        await awaitCompletion(stream)
+        await awaitStreamCompletion(stream)
         #expect(!stream.isStreaming)
     }
 
@@ -307,10 +307,10 @@ struct AgentStreamTests {
             .toolCallDelta(index: 0, arguments: #"{"content": "fallback result"}"#),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]
-        let stream = makeStream(streamSequences: [deltas])
+        let stream = makeAgentStream(streamSequences: [deltas])
 
         stream.send("Hi", context: EmptyContext())
-        await awaitCompletion(stream)
+        await awaitStreamCompletion(stream)
 
         #expect(stream.content == "fallback result")
     }
@@ -323,10 +323,10 @@ struct AgentStreamTests {
             .toolCallDelta(index: 0, arguments: #"{"content": "from finish"}"#),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]
-        let stream = makeStream(streamSequences: [deltas])
+        let stream = makeAgentStream(streamSequences: [deltas])
 
         stream.send("Hi", context: EmptyContext())
-        await awaitCompletion(stream)
+        await awaitStreamCompletion(stream)
 
         #expect(stream.content == "From deltas")
     }
@@ -350,13 +350,13 @@ struct AgentStreamTests {
             .finished(usage: TokenUsage(input: 20, output: 10)),
         ]
 
-        let stream = makeStreamWithTools(
+        let stream = makeAgentStreamWithTools(
             streamSequences: [firstDeltas, secondDeltas],
             tools: [echoTool]
         )
 
         stream.send("Go", context: EmptyContext())
-        await awaitCompletion(stream)
+        await awaitStreamCompletion(stream)
 
         #expect(stream.iterationUsages.count == 2)
         #expect(stream.iterationUsages[0] == TokenUsage(input: 10, output: 5))
@@ -381,34 +381,44 @@ struct AgentStreamTests {
         let stream = AgentStream(agent: agent)
 
         stream.send("First", context: EmptyContext())
-        await awaitCompletion(stream)
+        await awaitStreamCompletion(stream)
         #expect(stream.iterationUsages.count == 1)
 
         stream.send("Second", context: EmptyContext())
-        await awaitCompletion(stream)
+        await awaitStreamCompletion(stream)
         #expect(stream.iterationUsages.count == 1)
         #expect(stream.iterationUsages[0] == TokenUsage(input: 20, output: 10))
     }
 
     @MainActor @Test
-    func contextBudgetUpdatedFromBudgetEvents() async {
-        let deltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "finish"),
-            .toolCallDelta(index: 0, arguments: #"{"content": "done"}"#),
+    func contextBudgetUpdatedFromBudgetEvents() async throws {
+        let echoTool = try Tool<EchoParams, EchoOutput, EmptyContext>(
+            name: "echo",
+            description: "Echoes input",
+            executor: { params, _ in EchoOutput(echoed: params.message) }
+        )
+        let firstDeltas: [StreamDelta] = [
+            .toolCallStart(index: 0, id: "call_1", name: "echo"),
+            .toolCallDelta(index: 0, arguments: #"{"message":"hi"}"#),
             .finished(usage: TokenUsage(input: 700, output: 100)),
         ]
+        let secondDeltas: [StreamDelta] = [
+            .toolCallStart(index: 0, id: "finish_1", name: "finish"),
+            .toolCallDelta(index: 0, arguments: #"{"content":"done"}"#),
+            .finished(usage: TokenUsage(input: 10, output: 10)),
+        ]
         let client = StreamingMockLLMClient(
-            streamSequences: [deltas],
+            streamSequences: [firstDeltas, secondDeltas],
             contextWindowSize: 1000
         )
         let config = AgentConfiguration(
             contextBudget: ContextBudgetConfig(softThreshold: 0.75)
         )
-        let agent = Agent<EmptyContext>(client: client, tools: [], configuration: config)
+        let agent = Agent<EmptyContext>(client: client, tools: [echoTool], configuration: config)
         let stream = AgentStream(agent: agent)
 
         stream.send("Budget", context: EmptyContext())
-        await awaitCompletion(stream)
+        await awaitStreamCompletion(stream)
 
         #expect(stream.contextBudget == ContextBudget(
             windowSize: 1000,
@@ -418,34 +428,49 @@ struct AgentStreamTests {
     }
 
     @MainActor @Test
-    func contextBudgetResetsOnNewSend() async {
+    func contextBudgetResetsOnNewSend() async throws {
+        let echoTool = try Tool<EchoParams, EchoOutput, EmptyContext>(
+            name: "echo",
+            description: "Echoes input",
+            executor: { params, _ in EchoOutput(echoed: params.message) }
+        )
         let firstDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "finish"),
-            .toolCallDelta(index: 0, arguments: #"{"content": "done1"}"#),
+            .toolCallStart(index: 0, id: "call_1", name: "echo"),
+            .toolCallDelta(index: 0, arguments: #"{"message":"hi"}"#),
             .finished(usage: TokenUsage(input: 700, output: 100)),
         ]
+        let firstFinishDeltas: [StreamDelta] = [
+            .toolCallStart(index: 0, id: "finish_1", name: "finish"),
+            .toolCallDelta(index: 0, arguments: #"{"content":"done1"}"#),
+            .finished(usage: TokenUsage(input: 10, output: 10)),
+        ]
         let secondDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_2", name: "finish"),
-            .toolCallDelta(index: 0, arguments: #"{"content": "done2"}"#),
+            .toolCallStart(index: 0, id: "call_2", name: "echo"),
+            .toolCallDelta(index: 0, arguments: #"{"message":"again"}"#),
+            .finished(usage: TokenUsage(input: 200, output: 100)),
+        ]
+        let secondFinishDeltas: [StreamDelta] = [
+            .toolCallStart(index: 0, id: "finish_2", name: "finish"),
+            .toolCallDelta(index: 0, arguments: #"{"content":"done2"}"#),
             .finished(usage: TokenUsage(input: 200, output: 100)),
         ]
         let client = StreamingMockLLMClient(
-            streamSequences: [firstDeltas, secondDeltas],
+            streamSequences: [firstDeltas, firstFinishDeltas, secondDeltas, secondFinishDeltas],
             contextWindowSize: 1000
         )
         let config = AgentConfiguration(
             contextBudget: ContextBudgetConfig(softThreshold: 0.75)
         )
-        let agent = Agent<EmptyContext>(client: client, tools: [], configuration: config)
+        let agent = Agent<EmptyContext>(client: client, tools: [echoTool], configuration: config)
         let stream = AgentStream(agent: agent)
 
         stream.send("First", context: EmptyContext())
-        await awaitCompletion(stream)
+        await awaitStreamCompletion(stream)
         #expect(stream.contextBudget?.currentUsage == 800)
 
         stream.send("Second", context: EmptyContext())
         #expect(stream.contextBudget == nil)
-        await awaitCompletion(stream)
+        await awaitStreamCompletion(stream)
         #expect(stream.contextBudget?.currentUsage == 300)
     }
 }
@@ -484,27 +509,6 @@ private actor FailingStreamMockLLMClient: LLMClient {
 
 @MainActor
 struct AgentStreamApprovalTests {
-    private func awaitCompletion(_ stream: AgentStream<some ToolContext>) async {
-        while stream.isStreaming {
-            await Task.yield()
-        }
-    }
-
-    private func waitUntil(
-        timeout: Duration = .seconds(1),
-        condition: @MainActor () -> Bool
-    ) async -> Bool {
-        let clock = ContinuousClock()
-        let deadline = clock.now + timeout
-        while clock.now < deadline {
-            if condition() {
-                return true
-            }
-            await Task.yield()
-        }
-        return false
-    }
-
     @MainActor @Test
     func toolCallTransitionsThroughAwaitingApproval() async throws {
         let echoTool = try Tool<EchoParams, EchoOutput, EmptyContext>(
@@ -532,7 +536,7 @@ struct AgentStreamApprovalTests {
 
         stream.send("Echo hello", context: EmptyContext(), approvalHandler: handler.handler)
 
-        let sawAwaitingApproval = await waitUntil {
+        let sawAwaitingApproval = await waitForStreamCondition {
             if let echoCall = stream.toolCalls.first(where: { $0.name == "echo" }),
                case .awaitingApproval = echoCall.state {
                 return true
@@ -541,7 +545,7 @@ struct AgentStreamApprovalTests {
         }
 
         await handler.resume()
-        await awaitCompletion(stream)
+        await awaitStreamCompletion(stream)
 
         #expect(sawAwaitingApproval)
 
@@ -606,7 +610,7 @@ struct AgentStreamApprovalTests {
             approvalHandler: handler.handler
         )
 
-        let sawNestedAwaitingApproval = await waitUntil {
+        let sawNestedAwaitingApproval = await waitForStreamCondition {
             if let nestedCall = stream.toolCalls.first(where: { $0.name == "delegate > echo" }),
                case .awaitingApproval = nestedCall.state {
                 return true
@@ -616,7 +620,7 @@ struct AgentStreamApprovalTests {
         #expect(sawNestedAwaitingApproval)
 
         await handler.resume()
-        await awaitCompletion(stream)
+        await awaitStreamCompletion(stream)
 
         let nestedCall = try #require(stream.toolCalls.first(where: { $0.name == "delegate > echo" }))
         if case let .completed(result) = nestedCall.state {

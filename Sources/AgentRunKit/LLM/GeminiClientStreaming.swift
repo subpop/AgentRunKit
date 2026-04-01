@@ -8,6 +8,7 @@ extension GeminiClient {
         onResponse: (@Sendable (HTTPURLResponse) -> Void)?,
         continuation: AsyncThrowingStream<StreamDelta, Error>.Continuation
     ) async throws {
+        try messages.validateForLLMRequest()
         let request = try buildRequest(
             messages: messages, tools: tools, extraFields: extraFields
         )

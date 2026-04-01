@@ -414,6 +414,54 @@ struct ContextBudgetStreamEventTests {
         #expect(advisoryEmitted)
     }
 
+    @Test func streamedBudgetAnnotationsStayAfterResolvedToolBatch() async throws {
+        let noopTool = try Tool<NoopParams, NoopOutput, EmptyContext>(
+            name: "noop", description: "noop", executor: { _, _ in NoopOutput() }
+        )
+        let client = BudgetStreamingMockLLMClient(
+            streamSequences: [
+                [
+                    .toolCallStart(index: 0, id: "call_1", name: "noop"),
+                    .toolCallDelta(index: 0, arguments: "{}"),
+                    .finished(usage: TokenUsage(input: 700, output: 100)),
+                ],
+                [
+                    .toolCallStart(index: 0, id: "f", name: "finish"),
+                    .toolCallDelta(index: 0, arguments: #"{"content":"done"}"#),
+                    .finished(usage: TokenUsage(input: 800, output: 100)),
+                ],
+            ],
+            contextWindowSize: 1000
+        )
+        let config = AgentConfiguration(
+            contextBudget: ContextBudgetConfig(softThreshold: 0.75, enableVisibility: true)
+        )
+        let agent = Agent<EmptyContext>(client: client, tools: [noopTool], configuration: config)
+
+        for try await _ in agent.stream(userMessage: "go", context: EmptyContext()) {}
+
+        let secondCallMessages = await client.allCapturedMessages[1]
+        let assistantIndex = try #require(secondCallMessages.firstIndex {
+            if case let .assistant(message) = $0 {
+                return message.toolCalls.map(\.id) == ["call_1"]
+            }
+            return false
+        })
+        let toolIndex = try #require(secondCallMessages.firstIndex {
+            if case let .tool(id, _, _) = $0 { return id == "call_1" }
+            return false
+        })
+        let annotationIndex = try #require(secondCallMessages.firstIndex {
+            if case let .user(content) = $0 {
+                return content.contains("Context budget advisory")
+            }
+            return false
+        })
+
+        #expect(toolIndex == assistantIndex + 1)
+        #expect(annotationIndex > toolIndex)
+    }
+
     @Test func noBudgetEventsWhenUnconfigured() async throws {
         let client = BudgetStreamingMockLLMClient(
             streamSequences: [

@@ -58,6 +58,7 @@ public struct Chat<C: ToolContext>: Sendable {
     ) async throws -> (response: AssistantMessage, history: [ChatMessage]) {
         var messages = buildMessages(userMessage: message, history: history)
         let truncatedMessages = truncateIfNeeded(messages)
+        try truncatedMessages.validateForLLMRequest()
         let response = try await client.generate(
             messages: truncatedMessages,
             tools: toolDefinitions,
@@ -77,6 +78,7 @@ public struct Chat<C: ToolContext>: Sendable {
         try T.validateSchema()
         var messages = buildMessages(userMessage: .user(message), history: history)
         let truncatedMessages = truncateIfNeeded(messages)
+        try truncatedMessages.validateForLLMRequest()
         let response = try await client.generate(
             messages: truncatedMessages,
             tools: [],
@@ -97,6 +99,7 @@ public struct Chat<C: ToolContext>: Sendable {
         try T.validateSchema()
         var messages = buildMessages(userMessage: .user(parts), history: history)
         let truncatedMessages = truncateIfNeeded(messages)
+        try truncatedMessages.validateForLLMRequest()
         let response = try await client.generate(
             messages: truncatedMessages,
             tools: [],
@@ -192,6 +195,7 @@ public struct Chat<C: ToolContext>: Sendable {
             try Task.checkCancellation()
 
             let truncatedMessages = truncateIfNeeded(messages)
+            try truncatedMessages.validateForLLMRequest()
             let iteration = try await processor.process(
                 messages: truncatedMessages,
                 totalUsage: &totalUsage,

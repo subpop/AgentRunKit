@@ -67,6 +67,7 @@ extension ResponsesAPIClient {
         requestContext: RequestContext?,
         requestMode: RunRequestMode
     ) async throws -> AssistantMessage {
+        try messages.validateForLLMRequest()
         if shouldResetConversationBeforeRequest(messages: messages, requestMode: requestMode) {
             resetConversation()
         }

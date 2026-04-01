@@ -115,6 +115,7 @@ public struct MLXClient: LLMClient, Sendable {
         tools: [ToolDefinition],
         requestContext: RequestContext?
     ) async throws -> AsyncStream<Generation> {
+        try messages.validateForLLMRequest()
         let toolSpecs = tools.map(MLXMessageMapper.toolSpec)
         let messageDicts = MLXMessageMapper.mapMessages(messages)
         let mergedParams = MLXMessageMapper.mergeParameters(

@@ -43,6 +43,7 @@ public struct GeminiClient: LLMClient, Sendable {
         responseFormat: ResponseFormat?,
         requestContext: RequestContext?
     ) async throws -> AssistantMessage {
+        try messages.validateForLLMRequest()
         let request = try buildRequest(
             messages: messages,
             tools: tools,

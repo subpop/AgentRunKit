@@ -260,11 +260,14 @@ struct AgentTokenBudgetTests {
         #expect(result.finishReason == .tokenBudgetExceeded(budget: 50, used: 80))
         #expect(result.content == nil)
         #expect(result.iterations == 1)
-        #expect(result.history.count == 2)
-        guard case .assistant = result.history.last else {
-            Issue.record("Expected final history entry to be the over-budget assistant response")
+        #expect(result.history.count == 3)
+        guard case let .tool(id, name, content) = result.history.last else {
+            Issue.record("Expected final history entry to be the completed tool result")
             return
         }
+        #expect(id == "call_1")
+        #expect(name == "noop")
+        #expect(!content.isEmpty)
     }
 
     @Test

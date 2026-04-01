@@ -33,6 +33,35 @@ struct AgentStreamingTests {
     }
 
     @Test
+    func finishedStreamHistoryCanBeReused() async throws {
+        let firstDeltas: [StreamDelta] = [
+            .toolCallStart(index: 0, id: "call_1", name: "finish"),
+            .toolCallDelta(index: 0, arguments: #"{"content":"done"}"#),
+            .finished(usage: nil),
+        ]
+        let firstClient = StreamingMockLLMClient(streamSequences: [firstDeltas])
+        let firstAgent = Agent<EmptyContext>(client: firstClient, tools: [])
+
+        var history: [ChatMessage] = []
+        for try await event in firstAgent.stream(userMessage: "First", context: EmptyContext()) {
+            if case let .finished(_, _, _, finishedHistory) = event.kind {
+                history = finishedHistory
+            }
+        }
+
+        let secondClient = CapturingMockLLMClient(responses: [
+            AssistantMessage(content: "", toolCalls: [
+                ToolCall(id: "call_2", name: "finish", arguments: #"{"content":"again"}"#),
+            ]),
+        ])
+        let secondAgent = Agent<EmptyContext>(client: secondClient, tools: [])
+        _ = try await secondAgent.run(userMessage: "Second", history: history, context: EmptyContext())
+
+        let capturedMessages = await secondClient.capturedMessages
+        #expect(capturedMessages == [.user("First"), .user("Second")])
+    }
+
+    @Test
     func emittedEventsCarryStage1EnvelopeMetadata() async throws {
         let deltas: [StreamDelta] = [
             .content("Processing your request..."),
@@ -105,7 +134,7 @@ struct AgentStreamingTests {
         #expect(tokenUsage.input == 30)
         #expect(tokenUsage.output == 15)
         #expect(content == "Echoed successfully")
-        #expect(history.count == 4)
+        #expect(history.count == 3)
     }
 
     @Test
@@ -209,10 +238,7 @@ struct AgentStreamingTests {
         do {
             try await task.value
         } catch is CancellationError {
-            // Expected
-        } catch {
-            // Other errors during cancellation are acceptable
-        }
+        } catch {}
 
         let events = await collector.events
         #expect(events.count >= 1, "Should have received at least one event before cancellation")
@@ -340,7 +366,9 @@ struct AgentStreamingTests {
         }
         #expect(prompt == "You are helpful.")
     }
+}
 
+struct AgentStreamingToolOrderingTests {
     @Test
     func parallelToolsEmitCompletionEventsInCompletionOrder() async throws {
         let slowTool = try Tool<EchoParams, EchoOutput, EmptyContext>(
@@ -419,7 +447,9 @@ struct AgentStreamingTests {
 
         var history: [ChatMessage] = []
         for try await event in agent.stream(userMessage: "Go", context: EmptyContext()) {
-            if case let .finished(_, _, _, hist) = event.kind { history = hist }
+            if case let .finished(_, _, _, hist) = event.kind {
+                history = hist
+            }
         }
 
         let toolMessages = history.compactMap { msg -> (name: String, content: String)? in
@@ -432,7 +462,7 @@ struct AgentStreamingTests {
     }
 
     @Test
-    func streamingFinishSkipsSiblingTools() async throws {
+    func streamingFinishWithSiblingToolThrows() async throws {
         let echoTool = try Tool<EchoParams, EchoOutput, EmptyContext>(
             name: "echo",
             description: "Echoes input",
@@ -449,21 +479,9 @@ struct AgentStreamingTests {
         let client = StreamingMockLLMClient(streamSequences: [deltas])
         let agent = Agent<EmptyContext>(client: client, tools: [echoTool])
 
-        var toolCompletedNames: [String] = []
-        var finishContent: String?
-        for try await event in agent.stream(userMessage: "Go", context: EmptyContext()) {
-            switch event.kind {
-            case let .toolCallCompleted(_, name, _):
-                toolCompletedNames.append(name)
-            case let .finished(_, content, _, _):
-                finishContent = content
-            default:
-                break
-            }
+        await #expect(throws: AgentError.malformedHistory(.finishMustBeExclusive)) {
+            for try await _ in agent.stream(userMessage: "Go", context: EmptyContext()) {}
         }
-
-        #expect(toolCompletedNames.isEmpty)
-        #expect(finishContent == "done")
     }
 }
 
