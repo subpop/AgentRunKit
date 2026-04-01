@@ -179,7 +179,7 @@ struct ContextCompactor {
     func compactedMessages(from messages: [ChatMessage], summary: String) -> [ChatMessage] {
         let taskContext = extractTaskContext(messages)
         let recentContext = extractRecentContext(messages)
-        let bridge = Self.bridgeMessage(summary: summary)
+        let bridge = Self.bridgeMessage(summary: Self.extractSummary(from: summary))
         let acknowledgment = AssistantMessage(content: "Understood. Resuming from the checkpoint.")
 
         var compacted = taskContext
@@ -209,6 +209,17 @@ struct ContextCompactor {
 }
 
 private extension ContextCompactor {
+    static func extractSummary(from response: String) -> String {
+        guard let startRange = response.range(of: "<summary>"),
+              let endRange = response[startRange.upperBound...].range(of: "</summary>")
+        else {
+            return response
+        }
+        let content = response[startRange.upperBound ..< endRange.lowerBound]
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? response : trimmed
+    }
+
     static func stripMedia(_ messages: [ChatMessage]) -> [ChatMessage] {
         messages.map { message in
             guard case let .userMultimodal(parts) = message else { return message }
@@ -264,35 +275,61 @@ private extension ContextCompactor {
 
     static var summarizationPrompt: String {
         """
+        CRITICAL: Respond with TEXT ONLY. Do NOT call any tools. \
+        Tool calls will be rejected and will waste this turn.
+
         You are performing a CONTEXT CHECKPOINT. Create a detailed handoff summary that \
         another instance of yourself could use to seamlessly resume this task.
 
-        Your summary must include:
+        Your summary must include ALL of the following sections:
 
-        1. Task & Objective: What is the goal? What were the original instructions?
+        1. Task and Objective
+           What is the goal? What were the original instructions?
 
-        2. Current Progress: What has been accomplished so far?
+        2. All User Messages
+           Reproduce every user message (not tool results) in order. \
+        Use direct quotes. This prevents task drift across compaction boundaries.
+
+        3. Current Progress
            - Key actions taken and their outcomes
            - Tools called and their significant results
            - Decisions made and their rationale
 
-        3. Current State: What is the exact state right now?
+        4. Files and Code
+           - Every file path that has been read, created, or modified
+           - Function signatures, type definitions, and code snippets that matter \
+        for continuing the work (not just file names)
+
+        5. Errors and Fixes
+           - Problems encountered and how they were resolved
+           - User feedback or corrections that changed the approach
+
+        6. Current State
            - What is working and verified?
            - What files or resources have been modified?
            - Any important data, values, or configurations
 
-        4. Remaining Work: What still needs to be done?
+        7. Remaining Work
            - Outstanding tasks in priority order
            - Known issues or blockers
 
-        5. Critical Context: Anything essential that must not be lost
-           - Constraints, preferences, or requirements from the user
-           - Dependencies between components
-           - Non-obvious gotchas discovered during the work
+        8. Next Step
+           - What should happen immediately when work resumes?
+           - If the user gave specific instructions about what to do next, \
+        quote their exact words
 
-        Write as if briefing a colleague who will take over immediately. Be specific — include \
-        file paths, function names, and concrete values rather than vague descriptions. \
-        Do not use any tools.
+        Structure your response in two parts:
+
+        First, an <analysis> block where you work through each section above. \
+        This is your drafting scratchpad. Be thorough.
+
+        Then, a <summary> block containing the final polished checkpoint. \
+        Only the summary will be preserved in context. The analysis will be discarded.
+
+        Write as if briefing a colleague who will take over immediately. Be specific: \
+        include file paths, function names, and concrete values rather than vague descriptions.
+
+        Do not call any tools. Respond with plain text only.
         """
     }
 }
