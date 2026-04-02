@@ -128,6 +128,146 @@ struct ChatMessageTerminalHistoryTests {
         }
         #expect(message.content == "Final answer")
         #expect(message.toolCalls.isEmpty)
+        #expect(message.continuity == nil)
+    }
+
+    @Test
+    func terminalFinishStrippingKeepsAssistantContinuity() throws {
+        let history: [ChatMessage] = [
+            .user("Hi"),
+            .assistant(AssistantMessage(
+                content: "Final answer",
+                toolCalls: [ToolCall(id: "finish_1", name: "finish", arguments: #"{"content":"done"}"#)],
+                continuity: AssistantContinuity(
+                    substrate: .responses,
+                    payload: .object([
+                        "response_id": .string("resp_123"),
+                    ])
+                )
+            )),
+        ]
+
+        let sanitized = try history.sanitizedTerminalHistory()
+
+        #expect(sanitized.count == 2)
+        guard case let .assistant(message) = sanitized[1] else {
+            Issue.record("Expected assistant message")
+            return
+        }
+        #expect(message.content == "Final answer")
+        #expect(message.toolCalls.isEmpty)
+        #expect(message.continuity == AssistantContinuity(
+            substrate: .responses,
+            payload: .object([
+                "response_id": .string("resp_123"),
+            ])
+        ))
+    }
+
+    @Test
+    func terminalFinishStrippingKeepsReasoningOnlyAssistant() throws {
+        let history: [ChatMessage] = [
+            .user("Hi"),
+            .assistant(AssistantMessage(
+                content: "",
+                toolCalls: [ToolCall(id: "finish_1", name: "finish", arguments: #"{"content":"done"}"#)],
+                reasoning: ReasoningContent(content: "Reasoning only"),
+                continuity: AssistantContinuity(
+                    substrate: .anthropicMessages,
+                    payload: .object([
+                        "thinking": .string("Reasoning only"),
+                        "signature": .string("sig_123"),
+                    ])
+                )
+            )),
+        ]
+
+        let sanitized = try history.sanitizedTerminalHistory()
+
+        #expect(sanitized.count == 2)
+        guard case let .assistant(message) = sanitized[1] else {
+            Issue.record("Expected assistant message")
+            return
+        }
+        #expect(message.content.isEmpty)
+        #expect(message.toolCalls.isEmpty)
+        #expect(message.reasoning == ReasoningContent(content: "Reasoning only"))
+        #expect(message.continuity == AssistantContinuity(
+            substrate: .anthropicMessages,
+            payload: .object([
+                "thinking": .string("Reasoning only"),
+                "signature": .string("sig_123"),
+            ])
+        ))
+    }
+
+    @Test
+    func terminalFinishStrippingKeepsReasoningDetailsOnlyAssistant() throws {
+        let history: [ChatMessage] = [
+            .user("Hi"),
+            .assistant(AssistantMessage(
+                content: "",
+                toolCalls: [ToolCall(id: "finish_1", name: "finish", arguments: #"{"content":"done"}"#)],
+                reasoningDetails: [
+                    .object([
+                        "type": .string("reasoning.encrypted"),
+                        "encrypted": .string("blob=="),
+                        "index": .int(0),
+                    ])
+                ],
+                continuity: AssistantContinuity(
+                    substrate: .responses,
+                    payload: .object([
+                        "response_id": .string("resp_123"),
+                    ])
+                )
+            )),
+        ]
+
+        let sanitized = try history.sanitizedTerminalHistory()
+
+        #expect(sanitized.count == 2)
+        guard case let .assistant(message) = sanitized[1] else {
+            Issue.record("Expected assistant message")
+            return
+        }
+        #expect(message.content.isEmpty)
+        #expect(message.toolCalls.isEmpty)
+        #expect(message.reasoning == nil)
+        #expect(message.reasoningDetails == [
+            .object([
+                "type": .string("reasoning.encrypted"),
+                "encrypted": .string("blob=="),
+                "index": .int(0),
+            ])
+        ])
+        #expect(message.continuity == AssistantContinuity(
+            substrate: .responses,
+            payload: .object([
+                "response_id": .string("resp_123"),
+            ])
+        ))
+    }
+
+    @Test
+    func terminalFinishOnlyAssistantIsRemovedEvenWithContinuity() throws {
+        let history: [ChatMessage] = [
+            .user("Hi"),
+            .assistant(AssistantMessage(
+                content: "",
+                toolCalls: [ToolCall(id: "finish_1", name: "finish", arguments: #"{"content":"done"}"#)],
+                continuity: AssistantContinuity(
+                    substrate: .responses,
+                    payload: .object([
+                        "response_id": .string("resp_123"),
+                    ])
+                )
+            )),
+        ]
+
+        let sanitized = try history.sanitizedTerminalHistory()
+
+        #expect(sanitized == [.user("Hi")])
     }
 
     @Test

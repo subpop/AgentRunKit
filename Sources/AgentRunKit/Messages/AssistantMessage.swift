@@ -7,18 +7,21 @@ public struct AssistantMessage: Sendable, Equatable, Codable {
     public let tokenUsage: TokenUsage?
     public let reasoning: ReasoningContent?
     public let reasoningDetails: [JSONValue]?
+    public let continuity: AssistantContinuity?
 
     public init(
         content: String,
         toolCalls: [ToolCall] = [],
         tokenUsage: TokenUsage? = nil,
         reasoning: ReasoningContent? = nil,
-        reasoningDetails: [JSONValue]? = nil
+        reasoningDetails: [JSONValue]? = nil,
+        continuity: AssistantContinuity? = nil
     ) {
         self.content = content
         self.toolCalls = toolCalls
         self.tokenUsage = tokenUsage
         self.reasoning = reasoning
         self.reasoningDetails = reasoningDetails
+        self.continuity = continuity
     }
 }

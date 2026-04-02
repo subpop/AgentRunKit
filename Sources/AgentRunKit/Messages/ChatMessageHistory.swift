@@ -170,7 +170,8 @@ private extension AssistantMessage {
             toolCalls: toolCalls.filter { $0.name != "finish" },
             tokenUsage: tokenUsage,
             reasoning: reasoning,
-            reasoningDetails: reasoningDetails
+            reasoningDetails: reasoningDetails,
+            continuity: continuity
         )
     }
 

@@ -48,6 +48,7 @@ struct AssistantMessageTests {
         #expect(msg.toolCalls.isEmpty)
         #expect(msg.tokenUsage == nil)
         #expect(msg.reasoning == nil)
+        #expect(msg.continuity == nil)
     }
 
     @Test
@@ -171,6 +172,35 @@ struct CodableRoundTripTests {
         #expect(decoded == original)
         #expect(decoded.reasoningDetails?.count == 2)
     }
+
+    @Test
+    func assistantMessageWithContinuityRoundTrip() throws {
+        let original = AssistantMessage(
+            content: "Result",
+            continuity: AssistantContinuity(
+                substrate: .responses,
+                payload: .object([
+                    "response_id": .string("resp_123"),
+                    "items": .array([
+                        .object([
+                            "type": .string("message"),
+                            "status": .string("completed"),
+                        ])
+                    ]),
+                ])
+            )
+        )
+        let data = try JSONEncoder().encode(original)
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let decoded = try JSONDecoder().decode(AssistantMessage.self, from: data)
+
+        let continuity = try #require(json["continuity"] as? [String: Any])
+        #expect(continuity["substrate"] as? String == "responses")
+        let payload = try #require(continuity["payload"] as? [String: Any])
+        #expect(payload["response_id"] as? String == "resp_123")
+
+        #expect(decoded == original)
+    }
 }
 
 struct ChatMessageTests {
@@ -199,7 +229,18 @@ struct ChatMessageTests {
 
     @Test
     func assistantMessageRoundTrip() throws {
-        let msg = AssistantMessage(content: "Hi", toolCalls: [], tokenUsage: TokenUsage(input: 10, output: 5))
+        let msg = AssistantMessage(
+            content: "Hi",
+            toolCalls: [],
+            tokenUsage: TokenUsage(input: 10, output: 5),
+            continuity: AssistantContinuity(
+                substrate: .anthropicMessages,
+                payload: .object([
+                    "thinking": .string("step"),
+                    "signature": .string("sig"),
+                ])
+            )
+        )
         let original = ChatMessage.assistant(msg)
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(ChatMessage.self, from: data)
@@ -207,6 +248,8 @@ struct ChatMessageTests {
 
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         #expect(json?["role"] as? String == "assistant")
+        let continuity = try #require(json?["continuity"] as? [String: Any])
+        #expect(continuity["substrate"] as? String == "anthropicMessages")
     }
 
     @Test
