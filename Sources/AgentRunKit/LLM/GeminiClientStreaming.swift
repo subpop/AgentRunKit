@@ -61,6 +61,14 @@ extension GeminiClient {
                 await state.flushThinkingBlock()
                 let toolIndex = await state.incrementToolCallCount()
                 let callId = functionCall.id ?? "gemini_call_\(toolIndex)"
+                if let signature = part.thoughtSignature, !signature.isEmpty {
+                    continuation.yield(.reasoningDetails([
+                        GeminiReasoningDetail.functionCallSignature(
+                            toolCallID: callId,
+                            signature: signature
+                        )
+                    ]))
+                }
                 continuation.yield(.toolCallStart(
                     index: toolIndex, id: callId, name: functionCall.name
                 ))

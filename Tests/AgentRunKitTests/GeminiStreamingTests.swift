@@ -86,6 +86,29 @@ struct GeminiStreamingTests {
     }
 
     @Test
+    func functionCallStreamingEmitsThoughtSignatureDetail() async throws {
+        let lines = [
+            "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"id\":\"call_01\",\"name\":\"get_weather\",\"args\":{\"city\":\"NYC\"}},\"thoughtSignature\":\"sig_fc\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":20,\"candidatesTokenCount\":15}}",
+        ]
+        let deltas = try await collectDeltas(from: lines)
+
+        let detailDeltas = deltas.filter {
+            if case .reasoningDetails = $0 { return true }; return false
+        }
+        #expect(detailDeltas.count == 1)
+        if case let .reasoningDetails(details) = detailDeltas[0] {
+            #expect(details.count == 1)
+            if case let .object(dict) = details[0] {
+                #expect(dict["type"] == .string("gemini.function_call"))
+                #expect(dict["tool_call_id"] == .string("call_01"))
+                #expect(dict["thought_signature"] == .string("sig_fc"))
+            } else {
+                Issue.record("Expected function-call reasoning detail")
+            }
+        }
+    }
+
+    @Test
     func thinkingStreaming() async throws {
         let lines = [
             "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Let me think...\",\"thought\":true}]}}]}",
@@ -148,7 +171,7 @@ struct GeminiStreamingTests {
         #expect(finishedDeltas.count == 1)
         if case let .finished(usage) = finishedDeltas[0] {
             #expect(usage?.input == 100)
-            #expect(usage?.output == 40)
+            #expect(usage?.output == 50)
             #expect(usage?.reasoning == 10)
             #expect(usage?.cacheRead == 20)
         }

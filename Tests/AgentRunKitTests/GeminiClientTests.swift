@@ -433,6 +433,28 @@ struct GeminiMessageMapperTests {
     }
 
     @Test
+    func assistantFunctionCallThoughtSignatureRoundTrips() throws {
+        let msg = AssistantMessage(
+            content: "",
+            toolCalls: [
+                ToolCall(id: "call_sig", name: "search", arguments: "{\"q\":\"test\"}")
+            ],
+            reasoningDetails: [
+                GeminiReasoningDetail.functionCallSignature(
+                    toolCallID: "call_sig",
+                    signature: "sig_fc"
+                )
+            ]
+        )
+        let (_, mapped) = try GeminiMessageMapper.mapMessages([.assistant(msg)])
+
+        #expect(mapped.count == 1)
+        #expect(mapped[0].parts.count == 1)
+        #expect(mapped[0].parts[0].functionCall?.id == "call_sig")
+        #expect(mapped[0].parts[0].thoughtSignature == "sig_fc")
+    }
+
+    @Test
     func multimodalThrows() {
         do {
             _ = try GeminiMessageMapper.mapMessages([

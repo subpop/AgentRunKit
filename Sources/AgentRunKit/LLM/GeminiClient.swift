@@ -222,6 +222,12 @@ extension GeminiClient {
                 }()
                 let arguments = try encodeFunctionCallArgs(functionCall.args)
                 toolCalls.append(ToolCall(id: callId, name: functionCall.name, arguments: arguments))
+                if let signature = part.thoughtSignature, !signature.isEmpty {
+                    reasoningDetails.append(GeminiReasoningDetail.functionCallSignature(
+                        toolCallID: callId,
+                        signature: signature
+                    ))
+                }
             } else if let text = part.text {
                 if part.thought == true {
                     reasoningText = reasoningText.map { $0 + "\n" + text } ?? text

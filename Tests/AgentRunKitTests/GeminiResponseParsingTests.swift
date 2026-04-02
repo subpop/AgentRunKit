@@ -93,7 +93,7 @@ struct GeminiResponseParsingTests {
             Issue.record("Expected object in reasoning details")
         }
         #expect(msg.tokenUsage?.reasoning == 50)
-        #expect(msg.tokenUsage?.output == 150)
+        #expect(msg.tokenUsage?.output == 200)
     }
 
     @Test
@@ -285,7 +285,7 @@ struct GeminiResponseParsingTests {
         #expect(msg.reasoning?.content == "Think first\nThink again")
         #expect(msg.reasoningDetails?.count == 2)
         #expect(msg.tokenUsage?.reasoning == 40)
-        #expect(msg.tokenUsage?.output == 80)
+        #expect(msg.tokenUsage?.output == 120)
     }
 
     @Test
@@ -396,5 +396,47 @@ struct GeminiResponseParsingTests {
         }
         #expect(inputDict["city"] == .string("NYC"))
         #expect(inputDict["units"] == .string("celsius"))
+    }
+}
+
+struct GeminiFunctionCallReasoningDetailsTests {
+    private func makeClient() -> GeminiClient {
+        GeminiClient(apiKey: "test-key", model: "gemini-2.5-pro")
+    }
+
+    @Test
+    func functionCallThoughtSignatureIsPreservedInReasoningDetails() throws {
+        let json = """
+        {
+            "candidates": [{
+                "content": {
+                    "role": "model",
+                    "parts": [
+                        {
+                            "functionCall": {"id": "call_sig", "name": "search", "args": {"q": "test"}},
+                            "thoughtSignature": "sig_fc"
+                        }
+                    ]
+                },
+                "finishReason": "STOP"
+            }],
+            "usageMetadata": {
+                "promptTokenCount": 40,
+                "candidatesTokenCount": 20
+            }
+        }
+        """
+        let msg = try makeClient().parseResponse(Data(json.utf8))
+
+        #expect(msg.toolCalls.count == 1)
+        #expect(msg.toolCalls[0].id == "call_sig")
+        #expect(msg.reasoningDetails?.count == 1)
+        if case let .object(dict) = msg.reasoningDetails?[0] {
+            #expect(dict["type"] == .string("gemini.function_call"))
+            #expect(dict["tool_call_id"] == .string("call_sig"))
+            #expect(dict["thought_signature"] == .string("sig_fc"))
+        } else {
+            Issue.record("Expected function-call reasoning detail")
+        }
     }
 }

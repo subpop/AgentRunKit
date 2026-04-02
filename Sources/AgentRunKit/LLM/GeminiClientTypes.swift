@@ -170,12 +170,10 @@ struct GeminiUsageMetadata: Decodable {
     let cachedContentTokenCount: Int?
 
     var tokenUsage: TokenUsage {
-        let thoughts = thoughtsTokenCount ?? 0
-        let candidates = candidatesTokenCount ?? 0
-        return TokenUsage(
+        TokenUsage(
             input: promptTokenCount ?? 0,
-            output: max(0, candidates - thoughts),
-            reasoning: thoughts,
+            output: candidatesTokenCount ?? 0,
+            reasoning: thoughtsTokenCount ?? 0,
             cacheRead: cachedContentTokenCount
         )
     }
@@ -189,6 +187,38 @@ struct GeminiErrorDetail: Decodable {
     let code: Int
     let message: String
     let status: String
+}
+
+enum GeminiReasoningDetail {
+    private static let functionCallSignatureType = "gemini.function_call"
+
+    static func functionCallSignature(
+        toolCallID: String,
+        signature: String
+    ) -> JSONValue {
+        .object([
+            "type": .string(functionCallSignatureType),
+            "tool_call_id": .string(toolCallID),
+            "thought_signature": .string(signature)
+        ])
+    }
+
+    static func functionCallSignatures(
+        from details: [JSONValue]
+    ) -> [String: String] {
+        var signatures: [String: String] = [:]
+        for detail in details {
+            guard case let .object(dict) = detail,
+                  case .string(functionCallSignatureType) = dict["type"],
+                  case let .string(toolCallID) = dict["tool_call_id"],
+                  case let .string(signature) = dict["thought_signature"]
+            else {
+                continue
+            }
+            signatures[toolCallID] = signature
+        }
+        return signatures
+    }
 }
 
 enum GeminiMessageMapper {
@@ -253,6 +283,9 @@ enum GeminiMessageMapper {
         _ msg: AssistantMessage
     ) throws -> GeminiContent {
         var parts: [GeminiPart] = []
+        let functionCallSignatures = GeminiReasoningDetail.functionCallSignatures(
+            from: msg.reasoningDetails ?? []
+        )
 
         if let details = msg.reasoningDetails {
             for detail in details {
@@ -282,7 +315,8 @@ enum GeminiMessageMapper {
             parts.append(GeminiPart(
                 functionCall: GeminiFunctionCall(
                     id: call.id, name: call.name, args: args
-                )
+                ),
+                thoughtSignature: functionCallSignatures[call.id]
             ))
         }
 
