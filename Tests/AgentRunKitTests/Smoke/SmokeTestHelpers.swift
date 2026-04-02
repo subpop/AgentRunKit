@@ -532,14 +532,25 @@ struct SmokeBookReview: Codable, SchemaProviding {
 func assertSmokeNestedStructuredOutput(client: any LLMClient) async throws {
     let chat = Chat<EmptyContext>(client: client)
     let (review, history) = try await chat.send(
-        "Write a short review of '1984' by George Orwell. Rate it 1-5. Include at least 2 tags.",
+        """
+        Return a book review object with these exact fields:
+        title: 1984
+        author.name: George Orwell
+        author.birthYear: 1903
+        rating: 5
+        tags: classic, dystopian
+        sequel: null
+        """,
         returning: SmokeBookReview.self
     )
 
-    #expect(!review.title.isEmpty)
-    #expect(!review.author.name.isEmpty)
-    #expect(review.rating >= 1 && review.rating <= 5)
-    #expect(review.tags.count >= 2)
+    #expect(review.title == "1984")
+    #expect(review.author.name == "George Orwell")
+    #expect(review.author.birthYear == 1903)
+    #expect(review.rating == 5)
+    #expect(review.tags.contains("classic"))
+    #expect(review.tags.contains("dystopian"))
+    #expect(review.sequel == nil)
     #expect(history.count >= 2)
 }
 
@@ -681,29 +692,59 @@ func assertSmokeToolResultTruncation(client: any LLMClient) async throws {
 
 func assertSmokeMaxMessages(client: any LLMClient) async throws {
     let addTool = try makeSmokeAddTool()
+    let oldestPrompt = "Historical note alpha."
+    let droppedPrompt = "Historical note beta."
+    let retainedPrompt = "Historical note gamma."
+    let seededHistory: [ChatMessage] = [
+        .user(oldestPrompt),
+        .assistant(AssistantMessage(content: "Noted alpha.")),
+        .user(droppedPrompt),
+        .assistant(AssistantMessage(content: "Noted beta.")),
+        .user(retainedPrompt),
+        .assistant(AssistantMessage(content: "Noted gamma.")),
+    ]
     let config = AgentConfiguration(
         maxIterations: 10,
         systemPrompt: """
         You are a calculator assistant. When asked to add numbers, use the add tool. \
-        Perform each addition one at a time in sequence. \
         After all additions, report the last result using the finish tool.
         """,
-        maxMessages: 6
+        maxMessages: 3
     )
 
     let agent = Agent<EmptyContext>(client: client, tools: [addTool], configuration: config)
     let result = try await agent.run(
-        userMessage: "Add 1+1, then add 2+2, then add 3+3. Report the last result.",
+        userMessage: "What is 2 + 2? Report the last result.",
+        history: seededHistory,
         context: EmptyContext()
     )
 
     let hasSystem = result.history.contains { $0.isSystem }
+    let retainedOldestPrompt = result.history.contains { message in
+        guard case let .user(content) = message else { return false }
+        return content == oldestPrompt
+    }
+    let retainedDroppedPrompt = result.history.contains { message in
+        guard case let .user(content) = message else { return false }
+        return content == droppedPrompt
+    }
+    let addResultRetained = result.history.contains { message in
+        guard case let .tool(_, name, content) = message else { return false }
+        return name == "add" && content.contains("4")
+    }
     #expect(hasSystem)
-    #expect(result.history.count <= 8)
+    #expect(!retainedOldestPrompt)
+    #expect(!retainedDroppedPrompt)
+    #expect(addResultRetained)
+    try result.history.validateForAgentHistory()
 }
 
 func assertSmokeBudgetEvents(client: any LLMClient) async throws {
     let addTool = try makeSmokeAddTool()
+    let padding = Array(
+        repeating: "This sentence exists to exercise context budget handling.",
+        count: 24
+    ).joined(separator: " ")
     let config = AgentConfiguration(
         maxIterations: 5,
         systemPrompt: """
@@ -718,7 +759,14 @@ func assertSmokeBudgetEvents(client: any LLMClient) async throws {
     var budgetUpdatedCount = 0
     var budgetAdvisoryCount = 0
 
-    for try await event in agent.stream(userMessage: "What is 10 + 20?", context: EmptyContext()) {
+    for try await event in agent.stream(
+        userMessage: """
+        \(padding)
+
+        What is 10 + 20? Use the add tool and then report the result using the finish tool.
+        """,
+        context: EmptyContext()
+    ) {
         switch event.kind {
         case .budgetUpdated:
             budgetUpdatedCount += 1
