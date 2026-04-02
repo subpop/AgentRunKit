@@ -21,9 +21,9 @@ Any type conforming to ``LLMClient`` works with ``Agent``, ``Chat``, and ``SubAg
 | Provider | Auth | Structured Output | Reasoning | Prompt Caching | Transcription |
 |---|---|---|---|---|---|
 | ``OpenAIClient`` | Bearer token (optional) | Yes | Yes (o1/o3) | No | Yes |
-| ``AnthropicClient`` | x-api-key (required) | No | Yes (budget) | Yes | No |
+| ``AnthropicClient`` | x-api-key (required) | No | Yes (manual budget) | Yes | No |
 | ``GeminiClient`` | URL query param (required) | Yes | Yes (levels) | No | No |
-| ``VertexAnthropicClient`` | OAuth closure (required) | No | Yes | Yes | No |
+| ``VertexAnthropicClient`` | OAuth closure (required) | No | Yes (manual budget) | Yes | No |
 | ``VertexGoogleClient`` | OAuth closure (required) | Yes | Yes | No | No |
 | ``ResponsesAPIClient`` | Bearer token (optional) | Yes | Yes | No | No |
 
@@ -58,7 +58,7 @@ let client = OpenAIClient(
 ```swift
 let client = AnthropicClient(
     apiKey: "sk-ant-...",
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-4-6",
     maxTokens: 4096
 )
 ```
@@ -78,7 +78,7 @@ let client = GeminiClient(
 let client = VertexAnthropicClient(
     projectID: "my-project",
     location: "us-east5",
-    model: "claude-sonnet-4@20250514",
+    model: "claude-sonnet-4-6",
     tokenProvider: { try await fetchOAuthToken() }
 )
 ```
@@ -150,12 +150,15 @@ Six effort-level presets map to provider-specific reasoning controls:
 
 `.xhigh`, `.high`, `.medium`, `.low`, `.minimal`, `.none`
 
-For Anthropic's token-budget style, use the `.budget(_:)` factory:
+AgentRunKit currently encodes Anthropic thinking with the manual `budget_tokens` mode. Anthropic's Claude 4.6
+models recommend adaptive thinking in current provider docs, but that mode is not yet exposed by the framework.
+
+For the currently supported Anthropic budget-based path, use the `.budget(_:)` factory:
 
 ```swift
 let client = AnthropicClient(
     apiKey: "sk-ant-...",
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-4-6",
     maxTokens: 16384,
     reasoningConfig: .budget(10000)
 )
