@@ -20,7 +20,7 @@ Any type conforming to ``LLMClient`` works with ``Agent``, ``Chat``, and ``SubAg
 
 | Provider | Auth | Structured Output | Reasoning | Prompt Caching | Transcription |
 |---|---|---|---|---|---|
-| ``OpenAIClient`` | Bearer token (optional) | Yes | Yes (o1/o3) | No | Yes |
+| ``OpenAIClient`` | Bearer token (optional) | Yes | Yes (GPT-5/o-series) | No | Yes |
 | ``AnthropicClient`` | x-api-key (required) | No | Yes (manual budget) | Yes | No |
 | ``GeminiClient`` | URL query param (required) | Yes | Yes (levels) | No | No |
 | ``VertexAnthropicClient`` | OAuth closure (required) | No | Yes (manual budget) | Yes | No |
@@ -48,7 +48,7 @@ For custom endpoints, use `OpenAIClient.proxy(baseURL:)`.
 ```swift
 let client = OpenAIClient(
     apiKey: "sk-...",
-    model: "gpt-4o",
+    model: "gpt-5.4",
     baseURL: OpenAIClient.openAIBaseURL
 )
 ```
@@ -68,7 +68,7 @@ let client = AnthropicClient(
 ```swift
 let client = GeminiClient(
     apiKey: "AIza...",
-    model: "gemini-2.5-pro"
+    model: "gemini-3.1-pro-preview"
 )
 ```
 
@@ -89,7 +89,7 @@ let client = VertexAnthropicClient(
 let client = VertexGoogleClient(
     projectID: "my-project",
     location: "us-central1",
-    model: "gemini-2.5-pro",
+    model: "gemini-3.1-pro-preview",
     tokenProvider: { try await fetchOAuthToken() }
 )
 ```
@@ -99,7 +99,7 @@ let client = VertexGoogleClient(
 ```swift
 let client = ResponsesAPIClient(
     apiKey: "sk-...",
-    model: "gpt-4o",
+    model: "gpt-5.4",
     baseURL: ResponsesAPIClient.openAIBaseURL
 )
 ```
@@ -164,12 +164,12 @@ let client = AnthropicClient(
 )
 ```
 
-OpenAI reasoning models (o1, o3) and Gemini use effort levels:
+OpenAI reasoning-capable models such as GPT-5.4 and o-series models, plus Gemini, use effort levels:
 
 ```swift
 let client = OpenAIClient(
     apiKey: "sk-...",
-    model: "o3",
+    model: "gpt-5.4",
     baseURL: OpenAIClient.openAIBaseURL,
     reasoningConfig: .high
 )

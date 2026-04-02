@@ -29,7 +29,7 @@ struct WeatherParams: Codable, SchemaProviding, Sendable {
 
 let client = OpenAIClient(
     apiKey: "sk-...",
-    model: "gpt-4o",
+    model: "gpt-5.4",
     baseURL: OpenAIClient.openAIBaseURL
 )
 

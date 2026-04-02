@@ -13,9 +13,9 @@ Two values drive compaction. Set `contextWindowSize` on the client so the framew
 ```swift
 let client = OpenAIClient(
     apiKey: "sk-...",
-    model: "gpt-4o",
+    model: "gpt-5.4",
     baseURL: OpenAIClient.openAIBaseURL,
-    contextWindowSize: 128_000
+    contextWindowSize: 1_050_000
 )
 
 let config = AgentConfiguration(

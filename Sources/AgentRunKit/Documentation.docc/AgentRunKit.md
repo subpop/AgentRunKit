@@ -19,7 +19,7 @@ AgentRunKit provides a complete agent loop (generate a response, execute tool ca
 ```swift
 import AgentRunKit
 
-let client = OpenAIClient(apiKey: "sk-...", model: "gpt-4o", baseURL: OpenAIClient.openAIBaseURL)
+let client = OpenAIClient(apiKey: "sk-...", model: "gpt-5.4", baseURL: OpenAIClient.openAIBaseURL)
 
 let weatherTool = try Tool<WeatherParams, String, EmptyContext>(
     name: "get_weather",

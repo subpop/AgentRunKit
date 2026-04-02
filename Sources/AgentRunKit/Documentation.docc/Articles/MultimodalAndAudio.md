@@ -88,11 +88,11 @@ for try await event in agent.stream(userMessage: "Tell me a story.", context: ct
 ### Setup
 
 ```swift
-let provider = OpenAITTSProvider(apiKey: "sk-...", model: "tts-1")
+let provider = OpenAITTSProvider(apiKey: "sk-...", model: "gpt-4o-mini-tts")
 let tts = TTSClient(provider: provider, maxConcurrent: 4)
 ```
 
-``OpenAITTSProvider`` accepts `baseURL`, `maxChunkCharacters`, `defaultVoice`, and `defaultFormat` in its initializer. The defaults are: model `tts-1`, voice `alloy`, format `.mp3`, chunk size `4096`.
+``OpenAITTSProvider`` accepts `baseURL`, `maxChunkCharacters`, `defaultVoice`, and `defaultFormat` in its initializer. AgentRunKit currently defaults the `model` parameter to `tts-1`, but OpenAI's current recommended speech-generation model is `gpt-4o-mini-tts`. The other defaults are voice `alloy`, format `.mp3`, and chunk size `4096`.
 
 ### Generating Audio
 
