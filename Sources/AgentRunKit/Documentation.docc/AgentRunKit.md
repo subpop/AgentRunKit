@@ -77,6 +77,7 @@ For a complete walkthrough, see <doc:GettingStarted>.
 - ``LLMClient``
 - ``OpenAIClient``
 - ``AnthropicClient``
+- ``AnthropicReasoningOptions``
 - ``GeminiClient``
 - ``VertexAnthropicClient``
 - ``VertexGoogleClient``

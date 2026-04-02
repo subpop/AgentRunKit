@@ -11,6 +11,7 @@ public struct AnthropicClient: LLMClient, Sendable {
     let session: URLSession
     let retryPolicy: RetryPolicy
     let reasoningConfig: ReasoningConfig?
+    let anthropicReasoning: AnthropicReasoningOptions
     let interleavedThinking: Bool
     let cachingEnabled: Bool
 
@@ -24,6 +25,7 @@ public struct AnthropicClient: LLMClient, Sendable {
         session: URLSession = .shared,
         retryPolicy: RetryPolicy = .default,
         reasoningConfig: ReasoningConfig? = nil,
+        anthropicReasoning: AnthropicReasoningOptions = .manual,
         interleavedThinking: Bool = true,
         cachingEnabled: Bool = false
     ) {
@@ -36,6 +38,7 @@ public struct AnthropicClient: LLMClient, Sendable {
         self.session = session
         self.retryPolicy = retryPolicy
         self.reasoningConfig = reasoningConfig
+        self.anthropicReasoning = anthropicReasoning
         self.interleavedThinking = interleavedThinking
         self.cachingEnabled = cachingEnabled
     }
@@ -90,6 +93,35 @@ public struct AnthropicClient: LLMClient, Sendable {
 extension AnthropicClient {
     static let anthropicAPIVersion = "2023-06-01"
     static let interleavedThinkingBeta = "interleaved-thinking-2025-05-14"
+    static let directInterleavedUnsupportedModels: Set<String> = [
+        "claude-opus-4-6"
+    ]
+    static let vertexInterleavedUnsupportedModels: Set<String> = [
+        "claude-opus-4-6",
+        "claude-haiku-4-5@20251001"
+    ]
+    static let adaptiveUnsupportedModels: Set<String> = [
+        "claude-haiku-4-5",
+        "claude-haiku-4-5-20251001",
+        "claude-opus-4-5",
+        "claude-opus-4-5-20251101",
+        "claude-opus-4-5@20251101",
+        "claude-opus-4-1",
+        "claude-opus-4-1-20250805",
+        "claude-opus-4-1@20250805",
+        "claude-opus-4-0",
+        "claude-opus-4-20250514",
+        "claude-opus-4@20250514",
+        "claude-sonnet-4-5",
+        "claude-sonnet-4-5-20250929",
+        "claude-sonnet-4-5@20250929",
+        "claude-sonnet-4-0",
+        "claude-sonnet-4-20250514",
+        "claude-sonnet-4@20250514",
+        "claude-3-7-sonnet",
+        "claude-3-7-sonnet-20250219",
+        "claude-3-7-sonnet@20250219"
+    ]
 
     public static let anthropicBaseURL = URL(string: "https://api.anthropic.com/v1")!
 
@@ -97,10 +129,12 @@ extension AnthropicClient {
         messages: [ChatMessage],
         tools: [ToolDefinition],
         stream: Bool = false,
+        transport: AnthropicTransport = .direct,
         extraFields: [String: JSONValue] = [:]
     ) throws -> AnthropicRequest {
         var (systemBlocks, anthropicMessages) = try AnthropicMessageMapper.mapMessages(messages)
         var toolDefs: [AnthropicToolDefinition]? = tools.isEmpty ? nil : tools.map(AnthropicToolDefinition.init)
+        let reasoningPlan = try buildReasoningPlan(transport: transport)
 
         if cachingEnabled {
             if var last = systemBlocks?.popLast() {
@@ -114,14 +148,15 @@ extension AnthropicClient {
             markSecondToLastUserMessage(&anthropicMessages)
         }
 
-        return try AnthropicRequest(
+        return AnthropicRequest(
             model: modelIdentifier,
             messages: anthropicMessages,
             system: systemBlocks,
             tools: toolDefs,
             maxTokens: maxTokens,
             stream: stream ? true : nil,
-            thinking: buildThinkingConfig(),
+            thinking: reasoningPlan.thinking,
+            outputConfig: reasoningPlan.outputConfig,
             extraFields: extraFields
         )
     }
@@ -140,8 +175,7 @@ extension AnthropicClient {
         }
     }
 
-    func buildThinkingConfig() throws -> AnthropicThinkingConfig? {
-        guard let config = reasoningConfig else { return nil }
+    func buildManualThinkingConfig(_ config: ReasoningConfig) throws -> AnthropicThinkingConfig {
         if config.effort == .none, config.budgetTokens == nil { return .disabled }
 
         let rawBudget = config.budgetTokens ?? effortToBudget(config.effort)
@@ -158,6 +192,28 @@ extension AnthropicClient {
         return .enabled(budgetTokens: capped)
     }
 
+    func buildReasoningPlan(transport: AnthropicTransport) throws -> AnthropicReasoningPlan {
+        guard let reasoningConfig else { return AnthropicReasoningPlan() }
+        if reasoningConfig.effort == .none, reasoningConfig.budgetTokens == nil {
+            return AnthropicReasoningPlan(thinking: .disabled)
+        }
+
+        switch anthropicReasoning.mode {
+        case .manual:
+            let thinking = try buildManualThinkingConfig(reasoningConfig)
+            try validateManualThinking(transport: transport, thinking: thinking)
+            return AnthropicReasoningPlan(thinking: thinking)
+        case .adaptive:
+            try validateAdaptiveReasoning(reasoningConfig)
+            return try AnthropicReasoningPlan(
+                thinking: .adaptive,
+                outputConfig: AnthropicOutputConfig(
+                    effort: anthropicOutputEffort(for: reasoningConfig.effort)
+                )
+            )
+        }
+    }
+
     private func effortToBudget(_ effort: ReasoningConfig.Effort) -> Int {
         switch effort {
         case .xhigh: 32768
@@ -169,14 +225,88 @@ extension AnthropicClient {
         }
     }
 
+    private func anthropicOutputEffort(
+        for effort: ReasoningConfig.Effort
+    ) throws -> AnthropicOutputEffort {
+        switch effort {
+        case .xhigh: .max
+        case .high: .high
+        case .medium: .medium
+        case .low: .low
+        case .minimal:
+            throw AgentError.llmError(.other(
+                "Anthropic adaptive thinking does not support ReasoningConfig.Effort.minimal. "
+                    + "Use .low or manual budget-based thinking instead."
+            ))
+        case .none:
+            throw AgentError.llmError(.other(
+                "Anthropic adaptive thinking requires a non-.none reasoning effort."
+            ))
+        }
+    }
+
+    private func validateAdaptiveReasoning(_ config: ReasoningConfig) throws {
+        if config.budgetTokens != nil {
+            throw AgentError.llmError(.other(
+                "Anthropic adaptive thinking does not support explicit budgetTokens. "
+                    + "Use anthropicReasoning: .manual with .budget(...) or remove the budget override."
+            ))
+        }
+
+        guard let modelIdentifier else { return }
+        if Self.adaptiveUnsupportedModels.contains(modelIdentifier) {
+            throw AgentError.llmError(.other(
+                "Anthropic adaptive thinking is only supported on Claude Opus 4.6 and Claude Sonnet 4.6. "
+                    + "Model \(modelIdentifier) should use manual thinking instead."
+            ))
+        }
+    }
+
+    private func validateManualThinking(
+        transport: AnthropicTransport,
+        thinking: AnthropicThinkingConfig
+    ) throws {
+        guard interleavedThinking, thinking.budgetTokens != nil else { return }
+
+        if let modelIdentifier, Self.directInterleavedUnsupportedModels.contains(modelIdentifier) {
+            throw AgentError.llmError(.other(
+                "Anthropic manual interleaved thinking is unavailable on \(modelIdentifier). "
+                    + "Use anthropicReasoning: .adaptive instead."
+            ))
+        }
+
+        if transport == .vertex,
+           let modelIdentifier,
+           Self.vertexInterleavedUnsupportedModels.contains(modelIdentifier) {
+            throw AgentError.llmError(.other(
+                "Anthropic manual interleaved thinking is unsupported on Vertex AI for model \(modelIdentifier). "
+                    + "Disable interleavedThinking or use a model that supports the interleaved-thinking beta."
+            ))
+        }
+    }
+
+    func applyBetaHeaders(
+        for request: AnthropicRequest,
+        into headers: inout [String: String]
+    ) {
+        guard interleavedThinking, request.thinking?.budgetTokens != nil else {
+            return
+        }
+
+        let existing = headers["anthropic-beta"]?
+            .split(separator: ",")
+            .map { String($0).trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty } ?? []
+        let merged = Array(Set(existing).union([Self.interleavedThinkingBeta])).sorted()
+        headers["anthropic-beta"] = merged.joined(separator: ",")
+    }
+
     func buildURLRequest(_ request: AnthropicRequest) throws -> URLRequest {
         let url = baseURL.appendingPathComponent("messages")
         var headers = additionalHeaders()
         headers["x-api-key"] = apiKey
         headers["anthropic-version"] = Self.anthropicAPIVersion
-        if interleavedThinking, reasoningConfig != nil {
-            headers["anthropic-beta"] = Self.interleavedThinkingBeta
-        }
+        applyBetaHeaders(for: request, into: &headers)
         return try buildJSONPostRequest(url: url, body: request, headers: headers)
     }
 
@@ -236,5 +366,25 @@ extension AnthropicClient {
             reasoning: reasoningText.map { ReasoningContent(content: $0) },
             reasoningDetails: reasoningDetails.isEmpty ? nil : reasoningDetails
         )
+    }
+}
+
+extension AnthropicClient {
+    struct AnthropicReasoningPlan {
+        let thinking: AnthropicThinkingConfig?
+        let outputConfig: AnthropicOutputConfig?
+
+        init(
+            thinking: AnthropicThinkingConfig? = nil,
+            outputConfig: AnthropicOutputConfig? = nil
+        ) {
+            self.thinking = thinking
+            self.outputConfig = outputConfig
+        }
+    }
+
+    enum AnthropicTransport {
+        case direct
+        case vertex
     }
 }

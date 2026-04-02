@@ -120,6 +120,28 @@ struct AnthropicSmokeTests {
         try await assertSmokeReasoningGenerate(client: thinkingClient)
     }
 
+    @Test func adaptiveReasoningStream() async throws {
+        let thinkingClient = AnthropicClient(
+            apiKey: apiKey,
+            model: model,
+            maxTokens: 16384,
+            reasoningConfig: .high,
+            anthropicReasoning: .adaptive
+        )
+        try await assertSmokeReasoningStream(client: thinkingClient)
+    }
+
+    @Test func adaptiveReasoningGenerate() async throws {
+        let thinkingClient = AnthropicClient(
+            apiKey: apiKey,
+            model: model,
+            maxTokens: 16384,
+            reasoningConfig: .high,
+            anthropicReasoning: .adaptive
+        )
+        try await assertSmokeReasoningGenerate(client: thinkingClient)
+    }
+
     @Test func approvalGate() async throws {
         try await assertSmokeApprovalGate(client: client)
     }

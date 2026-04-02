@@ -6,13 +6,19 @@ struct VertexAnthropicURLTests {
     private func makeClient(
         projectID: String = "test-project",
         location: String = "us-east5",
-        model: String = "claude-sonnet-4-6"
+        model: String = "claude-sonnet-4-6",
+        reasoningConfig: ReasoningConfig? = nil,
+        anthropicReasoning: AnthropicReasoningOptions = .manual,
+        interleavedThinking: Bool = true
     ) -> VertexAnthropicClient {
         VertexAnthropicClient(
             projectID: projectID,
             location: location,
             model: model,
-            tokenProvider: { "test-token-123" }
+            tokenProvider: { "test-token-123" },
+            reasoningConfig: reasoningConfig,
+            anthropicReasoning: anthropicReasoning,
+            interleavedThinking: interleavedThinking
         )
     }
 
@@ -84,6 +90,38 @@ struct VertexAnthropicURLTests {
         #expect(urlRequest.url?.host == "europe-west4-aiplatform.googleapis.com")
         #expect(urlRequest.url?.absoluteString.contains("/locations/europe-west4/") == true)
     }
+
+    @Test
+    func betaHeaderWhenManualInterleavedThinking() throws {
+        let client = makeClient(reasoningConfig: .high, interleavedThinking: true)
+        let request = try client.anthropic.buildRequest(
+            messages: [.user("Hi")],
+            tools: [],
+            transport: .vertex
+        )
+        let wrapped = VertexAnthropicRequest(inner: request)
+        let urlRequest = try client.buildVertexURLRequest(wrapped, stream: false, token: "tok")
+
+        #expect(urlRequest.value(forHTTPHeaderField: "anthropic-beta") == "interleaved-thinking-2025-05-14")
+    }
+
+    @Test
+    func adaptiveThinkingDoesNotSendBetaHeader() throws {
+        let client = makeClient(
+            reasoningConfig: .high,
+            anthropicReasoning: .adaptive,
+            interleavedThinking: true
+        )
+        let request = try client.anthropic.buildRequest(
+            messages: [.user("Hi")],
+            tools: [],
+            transport: .vertex
+        )
+        let wrapped = VertexAnthropicRequest(inner: request)
+        let urlRequest = try client.buildVertexURLRequest(wrapped, stream: false, token: "tok")
+
+        #expect(urlRequest.value(forHTTPHeaderField: "anthropic-beta") == nil)
+    }
 }
 
 struct VertexAnthropicRequestTests {
@@ -154,6 +192,51 @@ struct VertexAnthropicRequestTests {
 
         #expect(json["stream"] as? Bool == true)
         #expect(json["anthropic_version"] as? String == "vertex-2023-10-16")
+    }
+
+    @Test
+    func adaptiveThinkingPreservesOutputConfig() throws {
+        let client = VertexAnthropicClient(
+            projectID: "p",
+            location: "l",
+            model: "claude-sonnet-4-6",
+            tokenProvider: { "tok" },
+            reasoningConfig: .xhigh,
+            anthropicReasoning: .adaptive
+        )
+        let request = try client.anthropic.buildRequest(
+            messages: [.user("Hi")],
+            tools: [],
+            transport: .vertex
+        )
+        let wrapped = VertexAnthropicRequest(inner: request)
+        let data = try JSONEncoder().encode(wrapped)
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        let thinking = json["thinking"] as? [String: Any]
+        #expect(thinking?["type"] as? String == "adaptive")
+        let outputConfig = json["output_config"] as? [String: Any]
+        #expect(outputConfig?["effort"] as? String == "max")
+    }
+
+    @Test
+    func manualInterleavedThinkingRejectsUnsupportedVertexModel() {
+        let client = VertexAnthropicClient(
+            projectID: "p",
+            location: "l",
+            model: "claude-haiku-4-5@20251001",
+            tokenProvider: { "tok" },
+            reasoningConfig: .high,
+            interleavedThinking: true
+        )
+
+        #expect(throws: AgentError.self) {
+            _ = try client.anthropic.buildRequest(
+                messages: [.user("Hi")],
+                tools: [],
+                transport: .vertex
+            )
+        }
     }
 }
 

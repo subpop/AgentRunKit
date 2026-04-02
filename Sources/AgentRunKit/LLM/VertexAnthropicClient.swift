@@ -22,6 +22,7 @@ public struct VertexAnthropicClient: LLMClient, Sendable {
         session: URLSession = .shared,
         retryPolicy: RetryPolicy = .default,
         reasoningConfig: ReasoningConfig? = nil,
+        anthropicReasoning: AnthropicReasoningOptions = .manual,
         interleavedThinking: Bool = true,
         cachingEnabled: Bool = false
     ) {
@@ -40,6 +41,7 @@ public struct VertexAnthropicClient: LLMClient, Sendable {
             session: session,
             retryPolicy: retryPolicy,
             reasoningConfig: reasoningConfig,
+            anthropicReasoning: anthropicReasoning,
             interleavedThinking: interleavedThinking,
             cachingEnabled: cachingEnabled
         )
@@ -55,6 +57,7 @@ public struct VertexAnthropicClient: LLMClient, Sendable {
         session: URLSession = .shared,
         retryPolicy: RetryPolicy = .default,
         reasoningConfig: ReasoningConfig? = nil,
+        anthropicReasoning: AnthropicReasoningOptions = .manual,
         interleavedThinking: Bool = true,
         cachingEnabled: Bool = false
     ) {
@@ -68,6 +71,7 @@ public struct VertexAnthropicClient: LLMClient, Sendable {
             session: session,
             retryPolicy: retryPolicy,
             reasoningConfig: reasoningConfig,
+            anthropicReasoning: anthropicReasoning,
             interleavedThinking: interleavedThinking,
             cachingEnabled: cachingEnabled
         )
@@ -86,6 +90,7 @@ public struct VertexAnthropicClient: LLMClient, Sendable {
         let request = try anthropic.buildRequest(
             messages: messages,
             tools: tools,
+            transport: .vertex,
             extraFields: requestContext?.extraFields ?? [:]
         )
         let token = try await tokenProvider()
@@ -132,7 +137,7 @@ public struct VertexAnthropicClient: LLMClient, Sendable {
         try messages.validateForLLMRequest()
         let request = try anthropic.buildRequest(
             messages: messages, tools: tools,
-            stream: true, extraFields: extraFields
+            stream: true, transport: .vertex, extraFields: extraFields
         )
         let token = try await tokenProvider()
         let urlRequest = try buildVertexURLRequest(
@@ -169,7 +174,8 @@ public struct VertexAnthropicClient: LLMClient, Sendable {
         }
         let url = baseURL.appendingPathComponent(basePath)
 
-        let headers = ["Authorization": "Bearer \(token)"]
+        var headers = ["Authorization": "Bearer \(token)"]
+        anthropic.applyBetaHeaders(for: request.inner, into: &headers)
         return try buildJSONPostRequest(url: url, body: request, headers: headers)
     }
 }
@@ -190,6 +196,7 @@ struct VertexAnthropicRequest: Encodable {
             maxTokens: inner.maxTokens,
             stream: inner.stream,
             thinking: inner.thinking,
+            outputConfig: inner.outputConfig,
             extraFields: inner.extraFields
         )
         try withoutModel.encode(to: encoder)

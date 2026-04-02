@@ -8,6 +8,7 @@ struct AnthropicRequest: Encodable {
     let maxTokens: Int
     let stream: Bool?
     let thinking: AnthropicThinkingConfig?
+    let outputConfig: AnthropicOutputConfig?
     let extraFields: [String: JSONValue]
 
     private static let validExtraFields: Set<String> = [
@@ -16,6 +17,7 @@ struct AnthropicRequest: Encodable {
 
     enum CodingKeys: String, CodingKey {
         case model, messages, system, tools, stream, thinking
+        case outputConfig = "output_config"
         case maxTokens = "max_tokens"
     }
 
@@ -28,6 +30,7 @@ struct AnthropicRequest: Encodable {
         try container.encode(maxTokens, forKey: .maxTokens)
         try container.encodeIfPresent(stream, forKey: .stream)
         try container.encodeIfPresent(thinking, forKey: .thinking)
+        try container.encodeIfPresent(outputConfig, forKey: .outputConfig)
 
         if !extraFields.isEmpty {
             let invalidKeys = extraFields.keys.filter { !Self.validExtraFields.contains($0) }
@@ -155,12 +158,13 @@ struct AnthropicToolDefinition: Encodable {
 
 enum AnthropicThinkingConfig: Encodable {
     case enabled(budgetTokens: Int)
+    case adaptive
     case disabled
 
     var budgetTokens: Int? {
         switch self {
         case let .enabled(tokens): tokens
-        case .disabled: nil
+        case .adaptive, .disabled: nil
         }
     }
 
@@ -175,10 +179,20 @@ enum AnthropicThinkingConfig: Encodable {
         case let .enabled(budgetTokens):
             try container.encode("enabled", forKey: .type)
             try container.encode(budgetTokens, forKey: .budgetTokens)
+        case .adaptive:
+            try container.encode("adaptive", forKey: .type)
         case .disabled:
             try container.encode("disabled", forKey: .type)
         }
     }
+}
+
+struct AnthropicOutputConfig: Encodable {
+    let effort: AnthropicOutputEffort
+}
+
+enum AnthropicOutputEffort: String, Encodable {
+    case low, medium, high, max
 }
 
 struct AnthropicResponse: Decodable {

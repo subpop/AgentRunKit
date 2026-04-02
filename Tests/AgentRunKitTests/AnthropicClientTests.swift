@@ -12,11 +12,19 @@ private func encodeRequest(_ request: AnthropicRequest) throws -> [String: Any] 
 
 struct AnthropicRequestSerializationTests {
     private func makeClient(
-        reasoningConfig: ReasoningConfig? = nil, interleavedThinking: Bool = false, maxTokens: Int = 8192
+        model: String = "claude-sonnet-4-6",
+        reasoningConfig: ReasoningConfig? = nil,
+        anthropicReasoning: AnthropicReasoningOptions = .manual,
+        interleavedThinking: Bool = false,
+        maxTokens: Int = 8192
     ) -> AnthropicClient {
         AnthropicClient(
-            apiKey: "test-key", model: "claude-sonnet-4-6", maxTokens: maxTokens,
-            reasoningConfig: reasoningConfig, interleavedThinking: interleavedThinking
+            apiKey: "test-key",
+            model: model,
+            maxTokens: maxTokens,
+            reasoningConfig: reasoningConfig,
+            anthropicReasoning: anthropicReasoning,
+            interleavedThinking: interleavedThinking
         )
     }
 
@@ -133,7 +141,7 @@ struct AnthropicRequestSerializationTests {
     }
 
     @Test
-    func thinkingConfigEncodes() throws {
+    func manualThinkingConfigEncodes() throws {
         let client = makeClient(reasoningConfig: .high, maxTokens: 65536)
         let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
         let json = try encodeRequest(request)
@@ -141,6 +149,23 @@ struct AnthropicRequestSerializationTests {
         let thinking = json["thinking"] as? [String: Any]
         #expect(thinking?["type"] as? String == "enabled")
         #expect(thinking?["budget_tokens"] as? Int == 16384)
+        #expect(json["output_config"] == nil)
+    }
+
+    @Test
+    func adaptiveThinkingEncodes() throws {
+        let client = makeClient(
+            reasoningConfig: .high,
+            anthropicReasoning: .adaptive
+        )
+        let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
+        let json = try encodeRequest(request)
+
+        let thinking = json["thinking"] as? [String: Any]
+        #expect(thinking?["type"] as? String == "adaptive")
+
+        let outputConfig = json["output_config"] as? [String: Any]
+        #expect(outputConfig?["effort"] as? String == "high")
     }
 
     @Test
@@ -200,6 +225,43 @@ struct AnthropicRequestSerializationTests {
 
         #expect(json["model"] as? String == "claude-sonnet-4-6")
     }
+
+    @Test
+    func adaptiveThinkingRejectsExplicitBudgetTokens() {
+        let client = makeClient(
+            reasoningConfig: .budget(4096),
+            anthropicReasoning: .adaptive
+        )
+
+        #expect(throws: AgentError.self) {
+            _ = try client.buildRequest(messages: [.user("Hi")], tools: [])
+        }
+    }
+
+    @Test
+    func adaptiveThinkingRejectsMinimalEffort() {
+        let client = makeClient(
+            reasoningConfig: .minimal,
+            anthropicReasoning: .adaptive
+        )
+
+        #expect(throws: AgentError.self) {
+            _ = try client.buildRequest(messages: [.user("Hi")], tools: [])
+        }
+    }
+
+    @Test
+    func adaptiveThinkingRejectsKnownUnsupportedModel() {
+        let client = makeClient(
+            model: "claude-opus-4-5-20251101",
+            reasoningConfig: .high,
+            anthropicReasoning: .adaptive
+        )
+
+        #expect(throws: AgentError.self) {
+            _ = try client.buildRequest(messages: [.user("Hi")], tools: [])
+        }
+    }
 }
 
 struct AnthropicURLRequestTests {
@@ -231,6 +293,21 @@ struct AnthropicURLRequestTests {
         let urlRequest = try client.buildURLRequest(request)
 
         #expect(urlRequest.value(forHTTPHeaderField: "anthropic-beta") == "interleaved-thinking-2025-05-14")
+    }
+
+    @Test
+    func adaptiveThinkingDoesNotSendBetaHeader() throws {
+        let client = AnthropicClient(
+            apiKey: "test-key",
+            model: "claude-sonnet-4-6",
+            reasoningConfig: .high,
+            anthropicReasoning: .adaptive,
+            interleavedThinking: true
+        )
+        let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
+        let urlRequest = try client.buildURLRequest(request)
+
+        #expect(urlRequest.value(forHTTPHeaderField: "anthropic-beta") == nil)
     }
 
     @Test
@@ -302,6 +379,38 @@ struct AnthropicURLRequestTests {
         #expect(urlRequest.value(forHTTPHeaderField: "X-Custom") == "value123")
         #expect(urlRequest.value(forHTTPHeaderField: "x-api-key") == "test-key")
     }
+
+    @Test
+    func existingAnthropicBetaHeaderIsMerged() throws {
+        let client = AnthropicClient(
+            apiKey: "test-key",
+            model: "claude-sonnet-4-6",
+            additionalHeaders: { ["anthropic-beta": "files-api-2025-04-14"] },
+            reasoningConfig: .high,
+            interleavedThinking: true
+        )
+        let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
+        let urlRequest = try client.buildURLRequest(request)
+
+        #expect(
+            urlRequest.value(forHTTPHeaderField: "anthropic-beta")
+                == "files-api-2025-04-14,interleaved-thinking-2025-05-14"
+        )
+    }
+
+    @Test
+    func manualInterleavedThinkingRejectsOpus46() {
+        let client = AnthropicClient(
+            apiKey: "test-key",
+            model: "claude-opus-4-6",
+            reasoningConfig: .high,
+            interleavedThinking: true
+        )
+
+        #expect(throws: AgentError.self) {
+            _ = try client.buildRequest(messages: [.user("Hi")], tools: [])
+        }
+    }
 }
 
 struct AnthropicBudgetMappingTests {
@@ -316,8 +425,8 @@ struct AnthropicBudgetMappingTests {
                 apiKey: "k", maxTokens: 65536,
                 reasoningConfig: ReasoningConfig(effort: effort)
             )
-            let config = try client.buildThinkingConfig()
-            guard case let .some(thinking) = config else {
+            let thinking = try client.buildManualThinkingConfig(ReasoningConfig(effort: effort))
+            guard case .enabled = thinking else {
                 Issue.record("Expected thinking config for \(effort)")
                 continue
             }
@@ -331,8 +440,8 @@ struct AnthropicBudgetMappingTests {
             apiKey: "k", maxTokens: 65536,
             reasoningConfig: .budget(500)
         )
-        let config = try client.buildThinkingConfig()
-        #expect(config?.budgetTokens == 1024)
+        let config = try client.buildManualThinkingConfig(.budget(500))
+        #expect(config.budgetTokens == 1024)
     }
 
     @Test
@@ -342,8 +451,8 @@ struct AnthropicBudgetMappingTests {
             reasoningConfig: .budget(4096),
             interleavedThinking: false
         )
-        let config = try client.buildThinkingConfig()
-        #expect(config?.budgetTokens == 2047)
+        let config = try client.buildManualThinkingConfig(.budget(4096))
+        #expect(config.budgetTokens == 2047)
     }
 
     @Test
@@ -352,8 +461,8 @@ struct AnthropicBudgetMappingTests {
             apiKey: "k", maxTokens: 2048,
             reasoningConfig: .budget(4096)
         )
-        let config = try client.buildThinkingConfig()
-        #expect(config?.budgetTokens == 4096)
+        let config = try client.buildManualThinkingConfig(.budget(4096))
+        #expect(config.budgetTokens == 4096)
     }
 
     @Test
@@ -364,7 +473,7 @@ struct AnthropicBudgetMappingTests {
             interleavedThinking: false
         )
         #expect(throws: AgentError.self) {
-            _ = try client.buildThinkingConfig()
+            _ = try client.buildManualThinkingConfig(.budget(2048))
         }
     }
 
@@ -374,8 +483,8 @@ struct AnthropicBudgetMappingTests {
             apiKey: "k", maxTokens: 65536,
             reasoningConfig: .budget(10000)
         )
-        let config = try client.buildThinkingConfig()
-        #expect(config?.budgetTokens == 10000)
+        let config = try client.buildManualThinkingConfig(.budget(10000))
+        #expect(config.budgetTokens == 10000)
     }
 
     @Test
@@ -384,8 +493,10 @@ struct AnthropicBudgetMappingTests {
             apiKey: "k", maxTokens: 65536,
             reasoningConfig: ReasoningConfig(effort: .none, budgetTokens: 4096)
         )
-        let config = try client.buildThinkingConfig()
-        #expect(config?.budgetTokens == 4096)
+        let config = try client.buildManualThinkingConfig(
+            ReasoningConfig(effort: .none, budgetTokens: 4096)
+        )
+        #expect(config.budgetTokens == 4096)
     }
 }
 

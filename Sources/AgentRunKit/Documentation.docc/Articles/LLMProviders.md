@@ -21,9 +21,9 @@ Any type conforming to ``LLMClient`` works with ``Agent``, ``Chat``, and ``SubAg
 | Provider | Auth | Structured Output | Reasoning | Prompt Caching | Transcription |
 |---|---|---|---|---|---|
 | ``OpenAIClient`` | Bearer token (optional) | Yes | Yes (GPT-5/o-series) | No | Yes |
-| ``AnthropicClient`` | x-api-key (required) | No | Yes (manual budget) | Yes | No |
+| ``AnthropicClient`` | x-api-key (required) | No | Yes (adaptive + manual) | Yes | No |
 | ``GeminiClient`` | URL query param (required) | Yes | Yes (levels) | No | No |
-| ``VertexAnthropicClient`` | OAuth closure (required) | No | Yes (manual budget) | Yes | No |
+| ``VertexAnthropicClient`` | OAuth closure (required) | No | Yes (adaptive + manual) | Yes | No |
 | ``VertexGoogleClient`` | OAuth closure (required) | Yes | Yes | No | No |
 | ``ResponsesAPIClient`` | Bearer token (optional) | Yes | Yes | No | No |
 
@@ -150,19 +150,35 @@ Six effort-level presets map to provider-specific reasoning controls:
 
 `.xhigh`, `.high`, `.medium`, `.low`, `.minimal`, `.none`
 
-AgentRunKit currently encodes Anthropic thinking with the manual `budget_tokens` mode. Anthropic's Claude 4.6
-models recommend adaptive thinking in current provider docs, but that mode is not yet exposed by the framework.
+``ReasoningConfig`` is the shared reasoning-intent type. Anthropic's adaptive versus manual lowering is provider-local and
+is selected with ``AnthropicReasoningOptions`` on ``AnthropicClient`` and ``VertexAnthropicClient``.
 
-For the currently supported Anthropic budget-based path, use the `.budget(_:)` factory:
+For Claude Opus 4.6 and Claude Sonnet 4.6, Anthropic's current recommended path is adaptive thinking:
 
 ```swift
 let client = AnthropicClient(
     apiKey: "sk-ant-...",
     model: "claude-sonnet-4-6",
     maxTokens: 16384,
+    reasoningConfig: .high,
+    anthropicReasoning: .adaptive
+)
+```
+
+The manual `budget_tokens` path is still supported and remains the right choice for older Anthropic models or for explicit
+thinking-token budgets:
+
+```swift
+let client = AnthropicClient(
+    apiKey: "sk-ant-...",
+    model: "claude-opus-4-5-20251101",
+    maxTokens: 16384,
     reasoningConfig: .budget(10000)
 )
 ```
+
+`interleavedThinking` is an Anthropic manual-mode control. Adaptive thinking enables interleaved thinking automatically when
+the target model supports it.
 
 OpenAI reasoning-capable models such as GPT-5.4 and o-series models, plus Gemini, use effort levels:
 

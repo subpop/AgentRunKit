@@ -88,6 +88,28 @@ struct AnthropicContentBlockEncodingTests {
         #expect(json?["type"] as? String == "disabled")
         #expect(json?.count == 1)
     }
+
+    @Test
+    func thinkingConfigAdaptiveWireFormat() throws {
+        let config = AnthropicThinkingConfig.adaptive
+        let data = try JSONEncoder().encode(config)
+        let object = try JSONSerialization.jsonObject(with: data)
+        let json = object as? [String: Any]
+
+        #expect(json?["type"] as? String == "adaptive")
+        #expect(json?.count == 1)
+    }
+
+    @Test
+    func outputConfigWireFormat() throws {
+        let config = AnthropicOutputConfig(effort: .max)
+        let data = try JSONEncoder().encode(config)
+        let object = try JSONSerialization.jsonObject(with: data)
+        let json = object as? [String: Any]
+
+        #expect(json?["effort"] as? String == "max")
+        #expect(json?.count == 1)
+    }
 }
 
 struct AnthropicCacheControlWireFormatTests {
