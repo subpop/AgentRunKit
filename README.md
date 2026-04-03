@@ -100,7 +100,7 @@ For on-device inference, additional targets are available:
 | `GeminiClient` | Google Gemini API |
 | `VertexAnthropicClient` | Anthropic models on Google Vertex AI |
 | `VertexGoogleClient` | Google models on Vertex AI |
-| `ResponsesAPIClient` | OpenAI Responses API |
+| `ResponsesAPIClient` | OpenAI Responses API with same-substrate continuity replay |
 | `FoundationModelsClient` | Apple on-device (macOS 26+ / iOS 26+) |
 | `MLXClient` | On-device via MLX on Apple Silicon |
 
