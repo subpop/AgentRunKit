@@ -45,6 +45,15 @@ public actor ResponsesAPIClient: LLMClient, HistoryRewriteAwareClient {
 }
 
 extension ResponsesAPIClient {
+    struct ResponsesTurnProjection {
+        let content: String
+        let toolCalls: [ToolCall]
+        let tokenUsage: TokenUsage?
+        let reasoning: ReasoningContent?
+        let reasoningDetails: [JSONValue]?
+        let continuity: AssistantContinuity?
+    }
+
     public func generate(
         messages: [ChatMessage],
         tools: [ToolDefinition],
@@ -85,7 +94,7 @@ extension ResponsesAPIClient {
         requestContext?.onResponse?(httpResponse)
         let response = try decodeResponse(data)
         try checkResponseError(response)
-        let message = parseResponse(response)
+        let message = projectResponse(response).assistantMessage
         lastResponseId = response.id
         lastMessageCount = messages.count + 1
         return message
@@ -219,6 +228,11 @@ extension ResponsesAPIClient {
                 items.append(.userMessage(role: "user", content: textParts.joined(separator: "\n")))
 
             case let .assistant(msg):
+                if let continuity = msg.continuity, continuity.substrate == .responses {
+                    let replayState = try ResponsesReplayState(continuity: continuity)
+                    items.append(contentsOf: replayState.replayInputItems)
+                    continue
+                }
                 if let details = msg.reasoningDetails {
                     for detail in details {
                         items.append(.reasoning(detail))
@@ -267,6 +281,10 @@ extension ResponsesAPIClient {
     }
 
     func parseResponse(_ response: ResponsesAPIResponse) -> AssistantMessage {
+        projectResponse(response).assistantMessage
+    }
+
+    func projectResponse(_ response: ResponsesAPIResponse) -> ResponsesTurnProjection {
         var content = ""
         var toolCalls: [ToolCall] = []
         var reasoningDetails: [JSONValue] = []
@@ -284,8 +302,9 @@ extension ResponsesAPIClient {
                 toolCalls.append(ToolCall(
                     id: call.callId, name: call.name, arguments: call.arguments
                 ))
-            case let .reasoning(value):
-                reasoningDetails.append(value)
+            case let .reasoning(reasoning):
+                reasoningDetails.append(reasoning.raw)
+                let value = reasoning.raw
                 if case let .object(dict) = value,
                    case let .array(summaryItems) = dict["summary"] {
                     for item in summaryItems {
@@ -298,6 +317,8 @@ extension ResponsesAPIClient {
                         }
                     }
                 }
+            case .opaque:
+                break
             }
         }
 
@@ -311,15 +332,32 @@ extension ResponsesAPIClient {
             )
         }
 
-        return AssistantMessage(
+        let replayState = ResponsesReplayState(response: response)
+        return ResponsesTurnProjection(
             content: content,
             toolCalls: toolCalls,
             tokenUsage: tokenUsage,
             reasoning: reasoningSummary.map { ReasoningContent(content: $0) },
-            reasoningDetails: reasoningDetails.isEmpty ? nil : reasoningDetails
+            reasoningDetails: reasoningDetails.isEmpty ? nil : reasoningDetails,
+            continuity: replayState.output.isEmpty ? nil : replayState.continuity
         )
     }
+}
 
+private extension ResponsesAPIClient.ResponsesTurnProjection {
+    var assistantMessage: AssistantMessage {
+        AssistantMessage(
+            content: content,
+            toolCalls: toolCalls,
+            tokenUsage: tokenUsage,
+            reasoning: reasoning,
+            reasoningDetails: reasoningDetails,
+            continuity: continuity
+        )
+    }
+}
+
+extension ResponsesAPIClient {
     func buildURLRequest(_ request: ResponsesRequest) throws -> URLRequest {
         let url = baseURL.appendingPathComponent(responsesPath)
         var urlRequest = URLRequest(url: url)

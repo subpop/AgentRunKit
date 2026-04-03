@@ -164,9 +164,14 @@ extension ResponsesAPIClient {
         messagesCount: Int,
         continuation: AsyncThrowingStream<RunStreamElement, Error>.Continuation
     ) throws -> Bool {
-        let event = try Self.sseDecoder.decode(
-            CompletedEvent.self, from: data
-        )
+        let event: CompletedEvent
+        do {
+            event = try Self.sseDecoder.decode(
+                CompletedEvent.self, from: data
+            )
+        } catch {
+            throw AgentError.llmError(.decodingFailed(error))
+        }
         let resp = event.response
         lastResponseId = resp.id
         lastMessageCount = messagesCount + 1

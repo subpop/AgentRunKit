@@ -72,6 +72,67 @@ struct ResponsesStreamingTests {
     }
 
     @Test
+    func completedEventMissingOutputThrowsAndDoesNotAdvanceCursor() async throws {
+        let client = makeClient()
+        let completedJSON =
+            #"{"type":"response.completed","response":{"id":"resp_bad","status":"completed","#
+                + #""usage":{"input_tokens":10,"output_tokens":5}}}"#
+        let lines = [
+            sseLine(completedJSON)
+        ]
+
+        await client.setLastResponseId("resp_prev")
+        await client.setLastMessageCount(7)
+
+        do {
+            _ = try await collectStreamDeltas(client: client, lines: lines)
+            Issue.record("Expected decoding error")
+        } catch let AgentError.llmError(transportError) {
+            guard case let .decodingFailed(description) = transportError else {
+                Issue.record("Expected decodingFailed transport error, got \(transportError)")
+                return
+            }
+            #expect(description.contains("output"))
+        } catch {
+            Issue.record("Expected AgentError.llmError, got \(error)")
+        }
+
+        #expect(await client.lastResponseId == "resp_prev")
+        #expect(await client.lastMessageCount == 7)
+    }
+
+    @Test
+    func completedEventMalformedOutputTextThrowsAndDoesNotAdvanceCursor() async throws {
+        let client = makeClient()
+        let completedJSON =
+            #"{"type":"response.completed","response":{"id":"resp_bad","status":"completed","#
+                + #""output":[{"type":"message","content":[{"type":"output_text","text":123}]}],"#
+                + #""usage":{"input_tokens":10,"output_tokens":5}}}"#
+        let lines = [
+            sseLine(completedJSON)
+        ]
+
+        await client.setLastResponseId("resp_prev")
+        await client.setLastMessageCount(7)
+
+        do {
+            _ = try await collectStreamDeltas(client: client, lines: lines)
+            Issue.record("Expected decoding error")
+        } catch let AgentError.llmError(transportError) {
+            guard case let .decodingFailed(description) = transportError else {
+                Issue.record("Expected decodingFailed transport error, got \(transportError)")
+                return
+            }
+            #expect(description.contains("text"))
+        } catch {
+            Issue.record("Expected AgentError.llmError, got \(error)")
+        }
+
+        #expect(await client.lastResponseId == "resp_prev")
+        #expect(await client.lastMessageCount == 7)
+    }
+
+    @Test
     func unknownEventsIgnored() async throws {
         let lines = [
             sseLine(#"{"type":"response.created","response":{}}"#),

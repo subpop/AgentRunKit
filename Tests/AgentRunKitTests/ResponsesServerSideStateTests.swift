@@ -241,6 +241,80 @@ struct ResponsesServerSideStateTests {
     }
 
     @Test
+    func rewrittenHistoryBuildRequestPreservesRawResponsesReplayItems() async throws {
+        let client = ResponsesAPIClient(
+            apiKey: "test-key",
+            model: "gpt-4.1",
+            baseURL: ResponsesAPIClient.openAIBaseURL,
+            store: true
+        )
+        let responseJSON = """
+        {
+            "id": "resp_002",
+            "status": "completed",
+            "output": [
+                {
+                    "type": "reasoning",
+                    "id": "rs_001",
+                    "status": "completed",
+                    "summary": [{"type": "summary_text", "text": "Thinking"}]
+                },
+                {
+                    "type": "message",
+                    "id": "msg_001",
+                    "status": "completed",
+                    "content": [{"type": "output_text", "text": "Hello again"}]
+                },
+                {
+                    "type": "function_call",
+                    "id": "fc_001",
+                    "status": "completed",
+                    "call_id": "call_123",
+                    "name": "search",
+                    "arguments": "{\\"q\\":\\"test\\"}"
+                }
+            ],
+            "usage": {"input_tokens": 10, "output_tokens": 5}
+        }
+        """
+        let parsedResponse = try await client.decodeResponse(Data(responseJSON.utf8))
+        let assistant = await client.parseResponse(parsedResponse)
+        let messages: [ChatMessage] = [
+            .system("Be helpful"),
+            .assistant(assistant),
+            .user("Follow up"),
+        ]
+
+        await client.setLastResponseId("resp_001")
+        await client.setLastMessageCount(2)
+
+        let request = try await client.buildRequest(
+            messages: messages,
+            tools: [],
+            requestMode: .forceFullRequest
+        )
+        let json = try encodeRequest(request)
+        let input = json["input"] as? [[String: Any]]
+
+        #expect(json["previous_response_id"] == nil)
+        #expect(input?.count == 4)
+        #expect(input?[0]["type"] as? String == "reasoning")
+        #expect(input?[0]["id"] as? String == "rs_001")
+        #expect(input?[0]["status"] as? String == "completed")
+        #expect(input?[1]["type"] as? String == "message")
+        #expect(input?[1]["id"] as? String == "msg_001")
+        #expect(input?[1]["status"] as? String == "completed")
+        #expect(input?[1]["role"] as? String == "assistant")
+        #expect(input?[2]["type"] as? String == "function_call")
+        #expect(input?[2]["id"] as? String == "fc_001")
+        #expect(input?[2]["status"] as? String == "completed")
+        #expect(input?[3]["type"] as? String == "message")
+        #expect(input?[3]["role"] as? String == "user")
+        #expect(await client.lastResponseId == "resp_001")
+        #expect(await client.lastMessageCount == 2)
+    }
+
+    @Test
     func rewrittenHistoryFailureCannotReuseStaleCursorWithoutCountShrink() async throws {
         let baseURL = try #require(URL(string: "https://responses-force-full-failure.test/v1"))
         let requestURL = baseURL.appendingPathComponent("responses")
@@ -298,6 +372,61 @@ struct ResponsesServerSideStateTests {
         #expect(json["previous_response_id"] == nil)
         #expect(await client.lastResponseId == nil)
         #expect(await client.lastMessageCount == 0)
+    }
+
+    @Test
+    func malformedGenerateResponseDoesNotAdvanceDeltaCursor() async throws {
+        let baseURL = try #require(URL(string: "https://responses-malformed-generate.test/v1"))
+        let requestURL = baseURL.appendingPathComponent("responses")
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ResponsesTestURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+
+        let malformedResponseJSON = """
+        {
+            "id": "resp_bad",
+            "status": "completed",
+            "usage": {"input_tokens": 10, "output_tokens": 5}
+        }
+        """
+
+        ResponsesTestURLProtocol.register(url: requestURL) { _ in
+            let response = try #require(HTTPURLResponse(
+                url: requestURL,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            ))
+            return (response, Data(malformedResponseJSON.utf8))
+        }
+        defer { ResponsesTestURLProtocol.unregister(url: requestURL) }
+
+        let client = ResponsesAPIClient(
+            apiKey: "test-key",
+            model: "gpt-4.1",
+            baseURL: baseURL,
+            session: session,
+            retryPolicy: .none,
+            store: true
+        )
+        let messages: [ChatMessage] = [.user("Hello")]
+
+        await client.setLastResponseId("resp_prev")
+        await client.setLastMessageCount(messages.count)
+
+        await #expect(throws: AgentError.self) {
+            _ = try await client.generate(
+                messages: messages,
+                tools: [],
+                responseFormat: nil,
+                requestContext: nil
+            )
+        }
+
+        let requestBody = try ResponsesTestURLProtocol.recordedBody(for: requestURL)
+        #expect(requestBody["previous_response_id"] as? String == "resp_prev")
+        #expect(await client.lastResponseId == "resp_prev")
+        #expect(await client.lastMessageCount == messages.count)
     }
 }
 

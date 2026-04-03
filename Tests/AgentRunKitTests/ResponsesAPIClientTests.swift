@@ -110,6 +110,195 @@ struct ResponsesRequestSerializationTests {
     }
 
     @Test
+    func assistantWithResponsesContinuityReplaysRawOutputItems() async throws {
+        let json = """
+        {
+            "id": "resp_010",
+            "status": "completed",
+            "output": [
+                {
+                    "type": "reasoning",
+                    "id": "rs_001",
+                    "status": "completed",
+                    "summary": [{"type": "summary_text", "text": "Thinking"}]
+                },
+                {
+                    "type": "message",
+                    "id": "msg_001",
+                    "status": "completed",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "Answer"}]
+                },
+                {
+                    "type": "function_call",
+                    "id": "fc_001",
+                    "status": "completed",
+                    "call_id": "call_123",
+                    "name": "search",
+                    "arguments": "{\\"q\\":\\"test\\"}"
+                }
+            ],
+            "usage": {"input_tokens": 10, "output_tokens": 5}
+        }
+        """
+        let client = makeClient()
+        let response = try await client.decodeResponse(Data(json.utf8))
+        let message = await client.parseResponse(response)
+        let request = try await client.buildRequest(messages: [.assistant(message)], tools: [])
+        let encoded = try encodeRequest(request)
+
+        let input = encoded["input"] as? [[String: Any]]
+        #expect(input?.count == 3)
+        #expect(input?[0]["type"] as? String == "reasoning")
+        #expect(input?[0]["id"] as? String == "rs_001")
+        #expect(input?[0]["status"] as? String == "completed")
+        let reasoningSummary = input?[0]["summary"] as? [[String: Any]]
+        #expect(reasoningSummary?.count == 1)
+        #expect(reasoningSummary?[0]["type"] as? String == "summary_text")
+        #expect(reasoningSummary?[0]["text"] as? String == "Thinking")
+        #expect(input?[1]["type"] as? String == "message")
+        #expect(input?[1]["id"] as? String == "msg_001")
+        #expect(input?[1]["status"] as? String == "completed")
+        let messageContent = input?[1]["content"] as? [[String: Any]]
+        #expect(messageContent?.count == 1)
+        #expect(messageContent?[0]["type"] as? String == "output_text")
+        #expect(messageContent?[0]["text"] as? String == "Answer")
+        #expect(input?[2]["type"] as? String == "function_call")
+        #expect(input?[2]["id"] as? String == "fc_001")
+        #expect(input?[2]["status"] as? String == "completed")
+        #expect(input?[2]["call_id"] as? String == "call_123")
+        #expect(input?[2]["name"] as? String == "search")
+        #expect(input?[2]["arguments"] as? String == "{\"q\":\"test\"}")
+    }
+
+    @Test
+    func foreignContinuityFallsBackToSemanticReplay() async throws {
+        let client = makeClient()
+        let toolCall = ToolCall(id: "call_123", name: "search", arguments: "{\"q\":\"test\"}")
+        let message = AssistantMessage(
+            content: "Answer",
+            toolCalls: [toolCall],
+            continuity: AssistantContinuity(
+                substrate: .openAIChatCompletions,
+                payload: .object(["id": .string("ignored")])
+            )
+        )
+        let request = try await client.buildRequest(messages: [.assistant(message)], tools: [])
+        let encoded = try encodeRequest(request)
+
+        let input = encoded["input"] as? [[String: Any]]
+        #expect(input?.count == 2)
+        #expect(input?[0]["type"] as? String == "message")
+        #expect(input?[1]["type"] as? String == "function_call")
+        #expect(input?[1]["call_id"] as? String == "call_123")
+    }
+
+    @Test
+    func malformedResponsesContinuityMissingOutputThrows() async throws {
+        let client = makeClient()
+        let message = AssistantMessage(
+            content: "",
+            continuity: AssistantContinuity(substrate: .responses, payload: .object([:]))
+        )
+
+        await #expect(throws: AgentError.self) {
+            _ = try await client.buildRequest(messages: [.assistant(message)], tools: [])
+        }
+    }
+
+    @Test
+    func malformedResponsesContinuityEmptyOutputThrows() async throws {
+        let client = makeClient()
+        let message = AssistantMessage(
+            content: "",
+            continuity: AssistantContinuity(
+                substrate: .responses,
+                payload: .object(["output": .array([])])
+            )
+        )
+
+        await #expect(throws: AgentError.self) {
+            _ = try await client.buildRequest(messages: [.assistant(message)], tools: [])
+        }
+    }
+
+    @Test
+    func malformedResponsesContinuityMalformedFunctionCallThrows() async throws {
+        let client = makeClient()
+        let message = AssistantMessage(
+            content: "",
+            continuity: AssistantContinuity(
+                substrate: .responses,
+                payload: .object([
+                    "output": .array([
+                        .object([
+                            "type": .string("function_call"),
+                            "call_id": .string("call_123"),
+                            "arguments": .string("{}"),
+                        ])
+                    ])
+                ])
+            )
+        )
+
+        await #expect(throws: AgentError.self) {
+            _ = try await client.buildRequest(messages: [.assistant(message)], tools: [])
+        }
+    }
+
+    @Test
+    func malformedResponsesContinuityNonAssistantMessageRoleThrows() async throws {
+        let client = makeClient()
+        let message = AssistantMessage(
+            content: "",
+            continuity: AssistantContinuity(
+                substrate: .responses,
+                payload: .object([
+                    "output": .array([
+                        .object([
+                            "type": .string("message"),
+                            "role": .string("user"),
+                            "content": .array([
+                                .object([
+                                    "type": .string("output_text"),
+                                    "text": .string("Hello"),
+                                ])
+                            ]),
+                        ])
+                    ])
+                ])
+            )
+        )
+
+        await #expect(throws: AgentError.self) {
+            _ = try await client.buildRequest(messages: [.assistant(message)], tools: [])
+        }
+    }
+
+    @Test
+    func malformedResponsesContinuityUnsupportedItemTypeThrows() async throws {
+        let client = makeClient()
+        let message = AssistantMessage(
+            content: "",
+            continuity: AssistantContinuity(
+                substrate: .responses,
+                payload: .object([
+                    "output": .array([
+                        .object([
+                            "type": .string("image"),
+                            "url": .string("https://example.com/image.png"),
+                        ])
+                    ])
+                ])
+            )
+        )
+
+        await #expect(throws: AgentError.self) {
+            _ = try await client.buildRequest(messages: [.assistant(message)], tools: [])
+        }
+    }
+
+    @Test
     func toolResultMapsFunctionCallOutput() async throws {
         let client = makeClient()
         let messages: [ChatMessage] = [
@@ -253,9 +442,196 @@ struct ResponsesResponseParsingTests {
         #expect(msg.content == "The answer is 42.")
         #expect(msg.reasoning?.content == "Thinking about it...")
         #expect(msg.reasoningDetails?.count == 1)
+        #expect(msg.continuity?.substrate == .responses)
         #expect(msg.tokenUsage?.input == 100)
         #expect(msg.tokenUsage?.output == 50)
         #expect(msg.tokenUsage?.reasoning == 150)
+    }
+
+    @Test
+    func responsePersistsResponsesContinuityPayload() async throws {
+        let json = """
+        {
+            "id": "resp_continuity",
+            "status": "completed",
+            "output": [
+                {
+                    "type": "message",
+                    "id": "msg_001",
+                    "status": "completed",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "Hello there!"}]
+                }
+            ],
+            "usage": {"input_tokens": 100, "output_tokens": 50}
+        }
+        """
+        let client = makeClient()
+        let response = try await client.decodeResponse(Data(json.utf8))
+        let message = await client.parseResponse(response)
+
+        #expect(message.continuity?.substrate == .responses)
+        guard case let .object(payload) = message.continuity?.payload else {
+            Issue.record("Expected Responses continuity payload")
+            return
+        }
+        #expect(payload["response_id"] == nil)
+        #expect(payload["response_status"] == nil)
+        guard case let .array(output) = payload["output"] else {
+            Issue.record("Expected output array in continuity payload")
+            return
+        }
+        #expect(output.count == 1)
+        guard case let .object(first) = output[0] else {
+            Issue.record("Expected first replay item to be an object")
+            return
+        }
+        #expect(first["type"] == .string("message"))
+        #expect(first["id"] == .string("msg_001"))
+        #expect(first["status"] == .string("completed"))
+    }
+
+    @Test
+    func missingOutputFieldThrowsDecodingError() async throws {
+        let json = """
+        {
+            "id": "resp_missing_output",
+            "status": "completed",
+            "usage": {"input_tokens": 100, "output_tokens": 50}
+        }
+        """
+        let client = makeClient()
+
+        await #expect(throws: AgentError.self) {
+            _ = try await client.decodeResponse(Data(json.utf8))
+        }
+    }
+
+    @Test
+    func nullOutputFieldThrowsDecodingError() async throws {
+        let json = """
+        {
+            "id": "resp_null_output",
+            "status": "completed",
+            "output": null,
+            "usage": {"input_tokens": 100, "output_tokens": 50}
+        }
+        """
+        let client = makeClient()
+
+        await #expect(throws: AgentError.self) {
+            _ = try await client.decodeResponse(Data(json.utf8))
+        }
+    }
+
+    @Test
+    func unsupportedOutputItemTypeDoesNotEnterContinuity() async throws {
+        let json = """
+        {
+            "id": "resp_unknown_output",
+            "status": "completed",
+            "output": [
+                {
+                    "type": "image",
+                    "url": "https://example.com/image.png"
+                },
+                {
+                    "type": "message",
+                    "content": [{"type": "output_text", "text": "Hello"}]
+                }
+            ],
+            "usage": {"input_tokens": 100, "output_tokens": 50}
+        }
+        """
+        let client = makeClient()
+        let response = try await client.decodeResponse(Data(json.utf8))
+        let message = await client.parseResponse(response)
+        let request = try await client.buildRequest(messages: [.assistant(message)], tools: [])
+        let encoded = try encodeRequest(request)
+
+        #expect(message.content == "Hello")
+        #expect(message.reasoningDetails == nil)
+        guard case let .object(payload) = message.continuity?.payload else {
+            Issue.record("Expected Responses continuity payload")
+            return
+        }
+        guard case let .array(output) = payload["output"] else {
+            Issue.record("Expected output array in continuity payload")
+            return
+        }
+        #expect(output.count == 1)
+        guard case let .object(first) = output[0] else {
+            Issue.record("Expected replay item to be an object")
+            return
+        }
+        #expect(first["type"] == .string("message"))
+        let input = encoded["input"] as? [[String: Any]]
+        #expect(input?.count == 1)
+        #expect(input?[0]["type"] as? String == "message")
+    }
+
+    @Test
+    func opaqueOnlyOutputDoesNotPersistResponsesContinuity() async throws {
+        let json = """
+        {
+            "id": "resp_opaque_only",
+            "status": "completed",
+            "output": [{
+                "type": "image",
+                "url": "https://example.com/image.png"
+            }],
+            "usage": {"input_tokens": 100, "output_tokens": 50}
+        }
+        """
+        let client = makeClient()
+        let response = try await client.decodeResponse(Data(json.utf8))
+        let message = await client.parseResponse(response)
+
+        #expect(message.content.isEmpty)
+        #expect(message.toolCalls.isEmpty)
+        #expect(message.reasoningDetails == nil)
+        #expect(message.continuity == nil)
+    }
+
+    @Test
+    func nonStringMessageRoleThrowsDecodingError() async throws {
+        let json = """
+        {
+            "id": "resp_bad_role",
+            "status": "completed",
+            "output": [{
+                "type": "message",
+                "role": 123,
+                "content": [{"type": "output_text", "text": "Hello"}]
+            }],
+            "usage": {"input_tokens": 100, "output_tokens": 50}
+        }
+        """
+        let client = makeClient()
+
+        await #expect(throws: AgentError.self) {
+            _ = try await client.decodeResponse(Data(json.utf8))
+        }
+    }
+
+    @Test
+    func nonStringOutputTextThrowsDecodingError() async throws {
+        let json = """
+        {
+            "id": "resp_bad_text",
+            "status": "completed",
+            "output": [{
+                "type": "message",
+                "content": [{"type": "output_text", "text": 123}]
+            }],
+            "usage": {"input_tokens": 100, "output_tokens": 50}
+        }
+        """
+        let client = makeClient()
+
+        await #expect(throws: AgentError.self) {
+            _ = try await client.decodeResponse(Data(json.utf8))
+        }
     }
 
     @Test

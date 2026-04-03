@@ -65,6 +65,7 @@ enum ResponsesInputItem: Encodable {
     case functionCall(ResponsesFunctionCallItem)
     case functionCallOutput(ResponsesFunctionCallOutputItem)
     case reasoning(JSONValue)
+    case raw(JSONValue)
 
     func encode(to encoder: any Encoder) throws {
         switch self {
@@ -80,6 +81,8 @@ enum ResponsesInputItem: Encodable {
         case let .functionCallOutput(item):
             try item.encode(to: encoder)
         case let .reasoning(value):
+            try value.encode(to: encoder)
+        case let .raw(value):
             try value.encode(to: encoder)
         }
     }
@@ -185,48 +188,190 @@ struct ResponsesAPIResponse: Decodable {
     let output: [ResponsesOutputItem]
     let usage: ResponsesUsage?
     let error: ResponsesErrorDetail?
-}
 
-enum ResponsesOutputItem: Decodable {
-    case message(ResponsesMessageOutput)
-    case functionCall(ResponsesFunctionCallOutput)
-    case reasoning(JSONValue)
-
-    private enum TypeKey: String, CodingKey {
-        case type
+    private enum CodingKeys: String, CodingKey {
+        case id, status, output, usage, error
     }
 
     init(from decoder: any Decoder) throws {
-        let container = try decoder.container(keyedBy: TypeKey.self)
-        let type = try container.decode(String.self, forKey: .type)
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        status = try container.decodeIfPresent(String.self, forKey: .status)
+        output = try container.decode([JSONValue].self, forKey: .output)
+            .map(ResponsesOutputItem.init)
+        usage = try container.decodeIfPresent(ResponsesUsage.self, forKey: .usage)
+        error = try container.decodeIfPresent(ResponsesErrorDetail.self, forKey: .error)
+    }
+}
+
+enum ResponsesOutputItem {
+    case message(ResponsesMessageOutput)
+    case functionCall(ResponsesFunctionCallOutput)
+    case reasoning(ResponsesReasoningOutput)
+    case opaque(JSONValue)
+
+    init(_ raw: JSONValue) throws {
+        let type = try raw.requiredType()
         switch type {
         case "message":
-            self = try .message(ResponsesMessageOutput(from: decoder))
+            self = try .message(ResponsesMessageOutput(raw: raw))
         case "function_call":
-            self = try .functionCall(ResponsesFunctionCallOutput(from: decoder))
+            self = try .functionCall(ResponsesFunctionCallOutput(raw: raw))
+        case "reasoning":
+            self = .reasoning(ResponsesReasoningOutput(raw: raw))
         default:
-            self = try .reasoning(JSONValue(from: decoder))
+            self = .opaque(raw)
         }
     }
 }
 
-struct ResponsesMessageOutput: Decodable {
+struct ResponsesMessageOutput {
+    let replayRaw: JSONValue
     let content: [ResponsesOutputContent]
+
+    init(raw: JSONValue) throws {
+        if let roleValue = raw.objectValue?["role"] {
+            guard case let .string(role) = roleValue else {
+                throw AgentError.llmError(
+                    .decodingFailed(description: "Responses message output field 'role' must be a string")
+                )
+            }
+            if role != "assistant" {
+                throw AgentError.llmError(
+                    .decodingFailed(description: "Responses message output has unsupported role '\(role)'")
+                )
+            }
+        }
+        replayRaw = raw.withStringValue("assistant", forKey: "role")
+        content = try raw.requiredArrayValue(forKey: "content").map(ResponsesOutputContent.init)
+    }
 }
 
-struct ResponsesOutputContent: Decodable {
+struct ResponsesOutputContent {
     let type: String
     let text: String?
+
+    init(_ raw: JSONValue) throws {
+        type = try raw.requiredStringValue(forKey: "type")
+        if let textValue = raw.objectValue?["text"] {
+            guard case let .string(text) = textValue else {
+                throw AgentError.llmError(
+                    .decodingFailed(description: "Responses output content field 'text' must be a string")
+                )
+            }
+            self.text = text
+            return
+        }
+        if type == "output_text" {
+            throw AgentError.llmError(
+                .decodingFailed(description: "Responses payload missing string field 'text'")
+            )
+        }
+        text = nil
+    }
 }
 
-struct ResponsesFunctionCallOutput: Decodable {
+struct ResponsesFunctionCallOutput {
+    let raw: JSONValue
     let callId: String
     let name: String
     let arguments: String
 
-    enum CodingKeys: String, CodingKey {
-        case callId = "call_id"
-        case name, arguments
+    init(raw: JSONValue) throws {
+        self.raw = raw
+        callId = try raw.requiredStringValue(forKey: "call_id")
+        name = try raw.requiredStringValue(forKey: "name")
+        arguments = try raw.requiredStringValue(forKey: "arguments")
+    }
+}
+
+struct ResponsesReasoningOutput {
+    let raw: JSONValue
+}
+
+struct ResponsesReplayState: Equatable {
+    let output: [ResponsesReplayItem]
+
+    init(response: ResponsesAPIResponse) {
+        output = response.output.compactMap(ResponsesReplayItem.init)
+    }
+
+    init(continuity: AssistantContinuity) throws {
+        guard continuity.substrate == .responses else {
+            throw AgentError.llmError(.other("Responses replay requested for non-Responses continuity"))
+        }
+        guard case let .object(payload) = continuity.payload else {
+            throw AgentError.llmError(.other("Malformed Responses continuity payload"))
+        }
+        guard case let .array(outputValues) = payload["output"] else {
+            throw AgentError.llmError(.other("Malformed Responses continuity payload"))
+        }
+
+        output = try outputValues.map(ResponsesReplayItem.init)
+        guard !output.isEmpty else {
+            throw AgentError.llmError(.other("Malformed Responses continuity payload"))
+        }
+    }
+
+    var continuity: AssistantContinuity {
+        AssistantContinuity(
+            substrate: .responses,
+            payload: .object([
+                "output": .array(output.map(\.raw)),
+            ])
+        )
+    }
+
+    var replayInputItems: [ResponsesInputItem] {
+        output.map(\.inputItem)
+    }
+}
+
+enum ResponsesReplayItem: Equatable {
+    case message(JSONValue)
+    case functionCall(JSONValue)
+    case reasoning(JSONValue)
+
+    init?(_ outputItem: ResponsesOutputItem) {
+        switch outputItem {
+        case let .message(message):
+            self = .message(message.replayRaw)
+        case let .functionCall(call):
+            self = .functionCall(call.raw)
+        case let .reasoning(reasoning):
+            self = .reasoning(reasoning.raw)
+        case .opaque:
+            return nil
+        }
+    }
+
+    init(_ raw: JSONValue) throws {
+        let type = try raw.requiredType()
+        switch type {
+        case "message":
+            let message = try ResponsesMessageOutput(raw: raw)
+            self = .message(message.replayRaw)
+        case "function_call":
+            _ = try ResponsesFunctionCallOutput(raw: raw)
+            self = .functionCall(raw)
+        case "reasoning":
+            self = .reasoning(raw)
+        default:
+            throw AgentError.llmError(
+                .decodingFailed(description: "Unsupported Responses replay item type '\(type)'")
+            )
+        }
+    }
+
+    var raw: JSONValue {
+        switch self {
+        case let .message(raw), let .functionCall(raw), let .reasoning(raw):
+            raw
+        }
+    }
+
+    var inputItem: ResponsesInputItem {
+        .raw(raw)
     }
 }
 
@@ -253,4 +398,43 @@ struct ResponsesOutputTokensDetails: Decodable {
 struct ResponsesErrorDetail: Decodable {
     let message: String
     let code: String
+}
+
+private extension JSONValue {
+    var objectValue: [String: JSONValue]? {
+        guard case let .object(value) = self else { return nil }
+        return value
+    }
+
+    var stringValue: String? {
+        guard case let .string(value) = self else { return nil }
+        return value
+    }
+
+    func requiredType() throws -> String {
+        try requiredStringValue(forKey: "type")
+    }
+
+    func requiredStringValue(forKey key: String) throws -> String {
+        guard let value = objectValue?[key]?.stringValue else {
+            throw AgentError.llmError(.decodingFailed(description: "Responses payload missing string field '\(key)'"))
+        }
+        return value
+    }
+
+    func requiredArrayValue(forKey key: String) throws -> [JSONValue] {
+        guard case let .array(value) = objectValue?[key] else {
+            throw AgentError.llmError(.decodingFailed(description: "Responses payload missing array field '\(key)'"))
+        }
+        return value
+    }
+
+    func withStringValue(_ value: String, forKey key: String) -> JSONValue {
+        guard case let .object(objectValue) = self else {
+            return self
+        }
+        var updated = objectValue
+        updated[key] = .string(value)
+        return .object(updated)
+    }
 }

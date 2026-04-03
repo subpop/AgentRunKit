@@ -141,7 +141,24 @@ struct ChatMessageTerminalHistoryTests {
                 continuity: AssistantContinuity(
                     substrate: .responses,
                     payload: .object([
-                        "response_id": .string("resp_123"),
+                        "output": .array([
+                            .object([
+                                "type": .string("message"),
+                                "role": .string("assistant"),
+                                "content": .array([
+                                    .object([
+                                        "type": .string("output_text"),
+                                        "text": .string("Final answer"),
+                                    ])
+                                ]),
+                            ]),
+                            .object([
+                                "type": .string("function_call"),
+                                "name": .string("finish"),
+                                "call_id": .string("finish_1"),
+                                "arguments": .string(#"{"content":"done"}"#),
+                            ]),
+                        ])
                     ])
                 )
             )),
@@ -159,7 +176,18 @@ struct ChatMessageTerminalHistoryTests {
         #expect(message.continuity == AssistantContinuity(
             substrate: .responses,
             payload: .object([
-                "response_id": .string("resp_123"),
+                "output": .array([
+                    .object([
+                        "type": .string("message"),
+                        "role": .string("assistant"),
+                        "content": .array([
+                            .object([
+                                "type": .string("output_text"),
+                                "text": .string("Final answer"),
+                            ])
+                        ]),
+                    ])
+                ])
             ])
         ))
     }
