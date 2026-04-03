@@ -22,6 +22,16 @@ struct VertexAnthropicSmokeTests {
             location: vertexLocation,
             model: anthropicModel,
             authService: GoogleAuthService(),
+            maxTokens: 1024
+        )
+    }
+
+    private func makeBudgetClient() throws -> VertexAnthropicClient {
+        try VertexAnthropicClient(
+            projectID: vertexProjectID,
+            location: vertexLocation,
+            model: anthropicModel,
+            authService: GoogleAuthService(),
             maxTokens: 1024,
             contextWindowSize: 100
         )
@@ -29,6 +39,11 @@ struct VertexAnthropicSmokeTests {
 
     @Test
     func budgetHistoryIntegrity() async throws {
-        try await assertSmokeBudgetHistoryIntegrity(client: makeClient())
+        try await assertSmokeBudgetHistoryIntegrity(client: makeBudgetClient())
+    }
+
+    @Test
+    func continuityReplay() async throws {
+        try await assertSmokeAnthropicContinuityReplay(client: makeClient())
     }
 }

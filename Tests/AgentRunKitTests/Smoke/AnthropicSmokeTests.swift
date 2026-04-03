@@ -142,6 +142,10 @@ struct AnthropicSmokeTests {
         try await assertSmokeReasoningGenerate(client: thinkingClient)
     }
 
+    @Test func continuityReplay() async throws {
+        try await assertSmokeAnthropicContinuityReplay(client: client)
+    }
+
     @Test func approvalGate() async throws {
         try await assertSmokeApprovalGate(client: client)
     }
