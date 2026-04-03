@@ -62,6 +62,7 @@ struct StreamIteration {
         AssistantMessage(
             content: effectiveContent,
             toolCalls: toolCalls,
+            tokenUsage: usage,
             reasoning: reasoning.isEmpty ? nil : ReasoningContent(content: reasoning),
             reasoningDetails: reasoningDetails.isEmpty ? nil : reasoningDetails,
             continuity: continuity

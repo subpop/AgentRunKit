@@ -28,6 +28,8 @@ public enum MalformedStreamReason: Sendable, Equatable, CustomStringConvertible 
     case missingToolCallName(index: Int)
     case orphanedToolCallArguments(indices: [Int])
     case conflictingAssistantContinuity
+    case finalizedSemanticStateDiverged
+    case responsesStreamIncomplete
 
     public var description: String {
         switch self {
@@ -40,7 +42,11 @@ public enum MalformedStreamReason: Sendable, Equatable, CustomStringConvertible 
         case let .orphanedToolCallArguments(indices):
             "Tool call arguments at indices \(indices) never received start event"
         case .conflictingAssistantContinuity:
-            "Conflicting finalized assistant continuity received for one streamed turn"
+            "Conflicting assistant continuity payloads received for one streamed turn"
+        case .finalizedSemanticStateDiverged:
+            "Finalized semantic state contradicted previously emitted semantic deltas"
+        case .responsesStreamIncomplete:
+            "Responses stream ended before completed response"
         }
     }
 }

@@ -278,6 +278,9 @@ extension ResponsesAPIClient {
                 .other("\(error.code): \(error.message)")
             )
         }
+        if let status = response.status, status != "completed" {
+            throw AgentError.llmError(.other("Unexpected Responses status: \(status)"))
+        }
     }
 
     func parseResponse(_ response: ResponsesAPIResponse) -> AssistantMessage {

@@ -65,6 +65,14 @@ struct ResponsesAPISmokeTests {
         try await assertSmokeMultiTurn(client: makeClient())
     }
 
+    @Test func continuityReplay() async throws {
+        try await assertSmokeResponsesContinuityReplay(client: makeClient())
+    }
+
+    @Test func finishSanitizationReplay() async throws {
+        try await assertSmokeResponsesFinishSanitization(client: makeClient())
+    }
+
     @Test func streamingTokenUsage() async throws {
         try await assertSmokeStreamingTokenUsage(client: makeClient())
     }

@@ -694,6 +694,24 @@ struct ResponsesResponseParsingTests {
     }
 
     @Test
+    func responseWithUnexpectedStatusThrowsLLMError() async throws {
+        let json = """
+        {
+            "id": "resp_008",
+            "status": "in_progress",
+            "output": [],
+            "usage": {"input_tokens": 1, "output_tokens": 1}
+        }
+        """
+        let client = makeClient()
+        let response = try await client.decodeResponse(Data(json.utf8))
+
+        await #expect(throws: AgentError.self) {
+            try await client.checkResponseError(response)
+        }
+    }
+
+    @Test
     func usageMappingSubtractsReasoningTokens() async throws {
         let json = """
         {

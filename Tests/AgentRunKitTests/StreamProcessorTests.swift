@@ -151,7 +151,7 @@ struct StreamProcessorContinuityTests {
             continuation: eventContinuation
         )
 
-        #expect(iteration.toAssistantMessage().continuity == continuity)
+        #expect(iteration.toAssistantMessage() == AssistantMessage(content: "hello", continuity: continuity))
     }
 
     @Test
