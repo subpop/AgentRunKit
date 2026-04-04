@@ -868,6 +868,7 @@ struct SubAgentInheritHistoryStreamingTests {
             name: "research1",
             description: "Research 1",
             agent: child1Agent,
+            isConcurrencySafe: true,
             inheritParentMessages: true,
             messageBuilder: { $0.query }
         )
@@ -886,6 +887,7 @@ struct SubAgentInheritHistoryStreamingTests {
             name: "research2",
             description: "Research 2",
             agent: child2Agent,
+            isConcurrencySafe: true,
             inheritParentMessages: true,
             messageBuilder: { $0.query }
         )

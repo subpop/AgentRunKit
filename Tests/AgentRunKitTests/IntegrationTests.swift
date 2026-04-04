@@ -278,6 +278,7 @@ struct ParallelExecutionIntegrationTests {
         let slowTool = try Tool<SlowParams, SlowOutput, EmptyContext>(
             name: "slow_task",
             description: "Perform a slow task with given id. Call multiple times with different ids.",
+            isConcurrencySafe: true,
             executor: { params, _ in
                 let start = Date().timeIntervalSince1970
                 try? await Task.sleep(for: .milliseconds(100))

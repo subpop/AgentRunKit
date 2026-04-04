@@ -124,11 +124,13 @@ let searchTool = try Tool<SearchParams, String, EmptyContext>(
 
 | Property | Default | Description |
 |---|---|---|
-| `isConcurrencySafe` | `false` | Whether the tool can safely run concurrently with other tools. Advisory; not currently enforced. |
+| `isConcurrencySafe` | `false` | Whether the tool can safely run concurrently with other tools. ``Agent`` honors this: unsafe tools form exclusive barriers in the execution schedule. |
 | `isReadOnly` | `false` | Whether the tool only reads state without side effects. Advisory; not currently enforced. |
 | `maxResultCharacters` | `nil` | Per-tool override for ``AgentConfiguration/maxToolResultCharacters``. When set, this limit governs instead of the global default. |
 
 Defaults are fail-closed: tools are assumed non-concurrent and non-read-only unless explicitly declared otherwise. Direct ``AnyTool`` conformers can override these properties in the same way.
+
+When ``Agent`` executes sibling tool calls, it groups contiguous `isConcurrencySafe` calls into concurrent waves and treats each unsafe or unresolved call as an exclusive barrier. ``Chat`` executes tool calls sequentially regardless of this property.
 
 ## Topics
 

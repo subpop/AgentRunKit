@@ -374,6 +374,7 @@ struct AgentStreamingToolOrderingTests {
         let slowTool = try Tool<EchoParams, EchoOutput, EmptyContext>(
             name: "slow",
             description: "Slow tool",
+            isConcurrencySafe: true,
             executor: { params, _ in
                 try await Task.sleep(for: .milliseconds(100))
                 return EchoOutput(echoed: "slow: \(params.message)")
@@ -382,6 +383,7 @@ struct AgentStreamingToolOrderingTests {
         let fastTool = try Tool<EchoParams, EchoOutput, EmptyContext>(
             name: "fast",
             description: "Fast tool",
+            isConcurrencySafe: true,
             executor: { params, _ in EchoOutput(echoed: "fast: \(params.message)") }
         )
 
@@ -418,6 +420,7 @@ struct AgentStreamingToolOrderingTests {
         let slowTool = try Tool<EchoParams, EchoOutput, EmptyContext>(
             name: "slow",
             description: "Slow tool",
+            isConcurrencySafe: true,
             executor: { _, _ in
                 try await Task.sleep(for: .milliseconds(100))
                 return EchoOutput(echoed: "slow-result")
@@ -426,6 +429,7 @@ struct AgentStreamingToolOrderingTests {
         let fastTool = try Tool<EchoParams, EchoOutput, EmptyContext>(
             name: "fast",
             description: "Fast tool",
+            isConcurrencySafe: true,
             executor: { _, _ in EchoOutput(echoed: "fast-result") }
         )
 

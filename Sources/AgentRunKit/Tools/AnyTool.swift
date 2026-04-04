@@ -10,7 +10,7 @@ public protocol AnyTool<Context>: Sendable {
     var description: String { get }
     var parametersSchema: JSONSchema { get }
 
-    /// Whether this tool can safely execute concurrently with other tools (advisory; not currently enforced).
+    /// Whether this tool can safely execute concurrently with other tools.
     var isConcurrencySafe: Bool { get }
 
     /// Whether this tool only reads state without producing side effects (advisory; not currently enforced).

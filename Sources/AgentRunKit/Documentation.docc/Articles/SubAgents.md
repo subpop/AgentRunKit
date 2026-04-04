@@ -96,7 +96,7 @@ When a sub-agent executes, ``SubAgentTool`` calls `descending()` to increment th
 
 **Tool timeout.** `toolTimeout` overrides the parent agent's default tool timeout for this sub-agent invocation.
 
-**Tool metadata.** `SubAgentTool` also exposes `isConcurrencySafe`, `isReadOnly`, and `maxResultCharacters`, matching `Tool`. These values are advisory where documented and let sub-agents participate in the same result-truncation and classification metadata model as other tools.
+**Tool metadata.** `SubAgentTool` also exposes `isConcurrencySafe`, `isReadOnly`, and `maxResultCharacters`, matching `Tool`. ``Agent`` honors `isConcurrencySafe` for scheduling: sibling sub-agents default to sequential execution and must opt in to concurrent execution. `isReadOnly` remains advisory.
 
 ## Streaming Propagation
 
