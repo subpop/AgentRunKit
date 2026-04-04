@@ -39,6 +39,28 @@ Three clients preserve same-substrate continuity state, restoring provider-nativ
 
 Other clients (``OpenAIClient``, ``GeminiClient``) use semantic-only replay. History is reconstructed from the semantic fields, which is sufficient for the agent loop but does not preserve provider-specific turn metadata.
 
+### Assistant Reasoning Replay on Chat Completions
+
+``OpenAIClient`` parses reasoning fields (`reasoning`, `reasoning_content`, `reasoning_details`) from all provider responses. However, replaying those fields back onto later assistant turns is not universally safe across the diverse Chat Completions ecosystem.
+
+Outbound replay is controlled by ``OpenAIChatAssistantReplayProfile``, which defaults to `.conservative` (omit all assistant-local reasoning fields from requests). This is the correct default because first-party OpenAI routes reasoning continuity through the Responses API, and other providers have heterogeneous replay contracts.
+
+One opt-in profile is available:
+
+- `.openRouterReasoningDetails`: emits `reasoning_details` on assistant turns, matching OpenRouter's documented contract for preserving encrypted reasoning blocks across turns. Does not emit `reasoning_content`.
+
+```swift
+let client = OpenAIClient(
+    apiKey: "sk-or-...",
+    model: "anthropic/claude-sonnet-4",
+    baseURL: OpenAIClient.openRouterBaseURL,
+    reasoningConfig: .high,
+    assistantReplayProfile: .openRouterReasoningDetails
+)
+```
+
+Together's preserved-thinking replay depends on a provider-specific mode (`clear_thinking`) not yet modeled by the client, so it remains conservative in this release. For first-party OpenAI reasoning continuity, use ``ResponsesAPIClient``.
+
 ## ResponsesAPIClient vs OpenAIClient
 
 Both connect to OpenAI. ``OpenAIClient`` uses the Chat Completions API, a stateless request/response protocol shared by many compatible providers (OpenRouter, Groq, Together, Ollama). ``ResponsesAPIClient`` uses the Responses API, which maintains server-side conversation state and supports delta requests that send only new messages since the last response.

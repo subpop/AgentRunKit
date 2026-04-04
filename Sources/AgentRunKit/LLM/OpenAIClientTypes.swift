@@ -1,5 +1,20 @@
 import Foundation
 
+/// Controls which assistant-local reasoning fields are replayed onto outbound Chat Completions requests.
+public enum OpenAIChatAssistantReplayProfile: Sendable, Equatable {
+    case conservative
+    case openRouterReasoningDetails
+}
+
+extension OpenAIChatAssistantReplayProfile {
+    var emitsReasoningDetails: Bool {
+        switch self {
+        case .conservative: false
+        case .openRouterReasoningDetails: true
+        }
+    }
+}
+
 /// Per-request metadata and provider-specific parameters.
 public struct RequestContext: Sendable {
     public let extraFields: [String: JSONValue]
@@ -138,7 +153,7 @@ struct RequestMessage: Encodable {
         }
     }
 
-    init(_ message: ChatMessage) {
+    init(_ message: ChatMessage, replayProfile: OpenAIChatAssistantReplayProfile) {
         switch message {
         case let .system(text):
             role = "system"
@@ -170,8 +185,8 @@ struct RequestMessage: Encodable {
             toolCalls = msg.toolCalls.isEmpty ? nil : msg.toolCalls.map(RequestToolCall.init)
             toolCallId = nil
             name = nil
-            reasoningContent = msg.reasoning?.content
-            reasoningDetails = msg.reasoningDetails
+            reasoningContent = nil
+            reasoningDetails = replayProfile.emitsReasoningDetails ? msg.reasoningDetails : nil
         case let .tool(id, toolName, resultContent):
             role = "tool"
             content = .text(resultContent)

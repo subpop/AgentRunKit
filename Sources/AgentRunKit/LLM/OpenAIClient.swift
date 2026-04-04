@@ -12,6 +12,7 @@ public struct OpenAIClient: LLMClient, Sendable {
     let session: URLSession
     let retryPolicy: RetryPolicy
     let reasoningConfig: ReasoningConfig?
+    let assistantReplayProfile: OpenAIChatAssistantReplayProfile
 
     public init(
         apiKey: String? = nil,
@@ -23,7 +24,8 @@ public struct OpenAIClient: LLMClient, Sendable {
         additionalHeaders: @Sendable @escaping () -> [String: String] = { [:] },
         session: URLSession = .shared,
         retryPolicy: RetryPolicy = .default,
-        reasoningConfig: ReasoningConfig? = nil
+        reasoningConfig: ReasoningConfig? = nil,
+        assistantReplayProfile: OpenAIChatAssistantReplayProfile = .conservative
     ) {
         self.apiKey = apiKey
         modelIdentifier = model
@@ -35,6 +37,7 @@ public struct OpenAIClient: LLMClient, Sendable {
         self.session = session
         self.retryPolicy = retryPolicy
         self.reasoningConfig = reasoningConfig
+        self.assistantReplayProfile = assistantReplayProfile
     }
 
     public func generate(
@@ -140,7 +143,7 @@ extension OpenAIClient {
         let tokenField = baseURL == OpenAIClient.openAIBaseURL ? "max_completion_tokens" : "max_tokens"
         return ChatCompletionRequest(
             model: modelIdentifier,
-            messages: messages.map(RequestMessage.init),
+            messages: messages.map { RequestMessage($0, replayProfile: assistantReplayProfile) },
             tools: tools.isEmpty ? nil : tools.map(RequestTool.init),
             toolChoice: tools.isEmpty ? nil : "auto",
             maxTokens: maxTokens,
@@ -328,7 +331,8 @@ public extension OpenAIClient {
         additionalHeaders: @Sendable @escaping () -> [String: String] = { [:] },
         session: URLSession = .shared,
         retryPolicy: RetryPolicy = .default,
-        reasoningConfig: ReasoningConfig? = nil
+        reasoningConfig: ReasoningConfig? = nil,
+        assistantReplayProfile: OpenAIChatAssistantReplayProfile = .conservative
     ) -> OpenAIClient {
         OpenAIClient(
             apiKey: nil,
@@ -340,7 +344,8 @@ public extension OpenAIClient {
             additionalHeaders: additionalHeaders,
             session: session,
             retryPolicy: retryPolicy,
-            reasoningConfig: reasoningConfig
+            reasoningConfig: reasoningConfig,
+            assistantReplayProfile: assistantReplayProfile
         )
     }
 }

@@ -76,6 +76,7 @@ For a complete walkthrough, see <doc:GettingStarted>.
 - <doc:LLMProviders>
 - ``LLMClient``
 - ``OpenAIClient``
+- ``OpenAIChatAssistantReplayProfile``
 - ``AnthropicClient``
 - ``AnthropicReasoningOptions``
 - ``GeminiClient``

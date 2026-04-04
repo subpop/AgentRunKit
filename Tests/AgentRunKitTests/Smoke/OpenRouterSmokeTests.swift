@@ -86,3 +86,40 @@ struct OpenRouterSmokeTests {
         try await assertSmokeStreamingApproval(client: client)
     }
 }
+
+private let reasoningModel = ProcessInfo.processInfo.environment["SMOKE_OPENROUTER_REASONING_MODEL"] ?? ""
+private let hasReasoningModel = !reasoningModel.isEmpty
+
+@Suite(.enabled(if: hasAPIKey && hasReasoningModel,
+                "Requires OPENROUTER_API_KEY and SMOKE_OPENROUTER_REASONING_MODEL"))
+struct OpenRouterReplayPolicySmokeTests {
+    let client = OpenAIClient(
+        apiKey: apiKey,
+        model: reasoningModel,
+        maxTokens: 4096,
+        baseURL: OpenAIClient.openRouterBaseURL,
+        reasoningConfig: .high,
+        assistantReplayProfile: .openRouterReasoningDetails
+    )
+
+    @Test func multiTurnReasoningDetailsReplay() async throws {
+        let turn1Messages: [ChatMessage] = [
+            .system("You are a helpful assistant. Think step by step."),
+            .user("What is 7 * 13? Show your work."),
+        ]
+
+        let turn1 = try await client.generate(messages: turn1Messages, tools: [])
+        #expect(!turn1.content.isEmpty)
+        try #require(
+            turn1.reasoningDetails != nil,
+            "Model must return reasoning_details to exercise the replay contract"
+        )
+
+        var turn2Messages = turn1Messages
+        turn2Messages.append(.assistant(turn1))
+        turn2Messages.append(.user("Now double that result."))
+
+        let turn2 = try await client.generate(messages: turn2Messages, tools: [])
+        #expect(!turn2.content.isEmpty)
+    }
+}
