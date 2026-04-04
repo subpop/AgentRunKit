@@ -123,3 +123,26 @@ struct OpenRouterReplayPolicySmokeTests {
         #expect(!turn2.content.isEmpty)
     }
 }
+
+private let responsesModel =
+    ProcessInfo.processInfo.environment["SMOKE_OPENROUTER_RESPONSES_MODEL"] ?? ""
+private let hasResponsesModel = !responsesModel.isEmpty
+
+@Suite(.enabled(if: hasAPIKey && hasResponsesModel,
+                "Requires OPENROUTER_API_KEY and SMOKE_OPENROUTER_RESPONSES_MODEL"))
+struct OpenRouterResponsesSmokeTests {
+    func makeClient() -> ResponsesAPIClient {
+        ResponsesAPIClient(
+            apiKey: apiKey,
+            model: responsesModel,
+            maxOutputTokens: 4096,
+            baseURL: OpenAIClient.openRouterBaseURL,
+            reasoningConfig: .high,
+            store: false
+        )
+    }
+
+    @Test func continuityReplay() async throws {
+        try await assertSmokeResponsesContinuityReplay(client: makeClient())
+    }
+}
