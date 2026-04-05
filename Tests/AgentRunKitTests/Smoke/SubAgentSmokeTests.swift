@@ -15,15 +15,36 @@ struct SubAgentSmokeTests {
         baseURL: OpenAIClient.openRouterBaseURL
     )
 
+    private func run<Client: LLMClient>(
+        test testName: String = #function,
+        using client: Client,
+        _ body: (Client) async throws -> Void
+    ) async throws {
+        try await runSmoke(
+            target: "openrouter_subagent",
+            test: testName,
+            provider: "openrouter",
+            model: model,
+            using: client,
+            body
+        )
+    }
+
     @Test func subAgentRoundTrip() async throws {
-        try await assertSmokeSubAgentRoundTrip(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeSubAgentRoundTrip(client: client)
+        }
     }
 
     @Test func subAgentStreamingEvents() async throws {
-        try await assertSmokeSubAgentStreamingEvents(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeSubAgentStreamingEvents(client: client)
+        }
     }
 
     @Test func subAgentHistoryInheritance() async throws {
-        try await assertSmokeSubAgentHistoryInheritance(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeSubAgentHistoryInheritance(client: client)
+        }
     }
 }

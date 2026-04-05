@@ -19,28 +19,27 @@ func assertSmokeAnthropicContinuityReplay(client: some LLMClient) async throws {
         guard case let .finished(_, _, _, history) = event.kind else { continue }
         firstHistory = history
     }
-    let history = try #require(firstHistory)
+    let history = try smokeRequire(firstHistory)
 
     let replayableAssistant = history.compactMap { message -> AssistantMessage? in
         guard case let .assistant(assistant) = message else { return nil }
         guard assistant.continuity?.substrate == .anthropicMessages else { return nil }
         return assistant
     }.first
-    let continuity = try #require(replayableAssistant?.continuity)
+    let continuity = try smokeRequire(replayableAssistant?.continuity)
 
-    #expect(continuity.substrate == .anthropicMessages)
+    try smokeExpect(continuity.substrate == .anthropicMessages)
     guard case let .object(payload) = continuity.payload,
           case let .array(blocks) = payload["content"]
     else {
-        Issue.record("Expected Anthropic continuity payload with content array")
-        return
+        try smokeFail("Expected Anthropic continuity payload with content array")
     }
-    #expect(!blocks.isEmpty)
+    try smokeExpect(!blocks.isEmpty)
 
     let secondResult = try await agent.run(
         userMessage: "What was the previous sum? Reply with just the number.",
         history: history,
         context: EmptyContext()
     )
-    #expect(try requireContent(secondResult).contains("42"))
+    try smokeExpect(requireContent(secondResult).contains("42"))
 }

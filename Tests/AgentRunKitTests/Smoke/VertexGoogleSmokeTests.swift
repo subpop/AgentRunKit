@@ -27,8 +27,25 @@ struct VertexGoogleSmokeTests {
         )
     }
 
+    private func run<Client: LLMClient>(
+        test testName: String = #function,
+        using client: Client,
+        _ body: (Client) async throws -> Void
+    ) async throws {
+        try await runSmoke(
+            target: "vertex_google",
+            test: testName,
+            provider: "vertex",
+            model: googleModel,
+            using: client,
+            body
+        )
+    }
+
     @Test
     func budgetHistoryIntegrity() async throws {
-        try await assertSmokeBudgetHistoryIntegrity(client: makeClient())
+        try await run(using: makeClient()) { client in
+            try await assertSmokeBudgetHistoryIntegrity(client: client)
+        }
     }
 }

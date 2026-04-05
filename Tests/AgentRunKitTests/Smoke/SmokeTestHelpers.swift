@@ -100,9 +100,9 @@ func assertSmokeGenerate(client: any LLMClient) async throws {
         .user("What is 2 + 2? Reply with just the number."),
     ]
     let response = try await client.generate(messages: messages, tools: [])
-    #expect(!response.content.isEmpty)
-    #expect(response.content.contains("4"))
-    #expect(response.toolCalls.isEmpty)
+    try smokeExpect(!response.content.isEmpty)
+    try smokeExpect(response.content.contains("4"))
+    try smokeExpect(response.toolCalls.isEmpty)
 }
 
 func assertSmokeStream(client: any LLMClient) async throws {
@@ -126,10 +126,10 @@ func assertSmokeStream(client: any LLMClient) async throws {
     }
 
     let fullContent = contentChunks.joined()
-    #expect(!contentChunks.isEmpty)
-    #expect(fullContent.contains("1"))
-    #expect(fullContent.contains("5"))
-    #expect(finishedCount >= 1)
+    try smokeExpect(!contentChunks.isEmpty)
+    try smokeExpect(fullContent.contains("1"))
+    try smokeExpect(fullContent.contains("5"))
+    try smokeExpect(finishedCount >= 1)
 }
 
 func assertSmokeToolCall(client: any LLMClient) async throws {
@@ -140,10 +140,10 @@ func assertSmokeToolCall(client: any LLMClient) async throws {
 
     let response = try await client.generate(messages: messages, tools: [smokeWeatherTool])
 
-    #expect(response.toolCalls.count >= 1)
+    try smokeExpect(response.toolCalls.count >= 1)
     let toolCall = response.toolCalls.first { $0.name == "get_weather" }
-    #expect(toolCall != nil)
-    #expect(toolCall?.arguments.lowercased().contains("tokyo") == true)
+    try smokeExpect(toolCall != nil)
+    try smokeExpect(toolCall?.arguments.lowercased().contains("tokyo") == true)
 }
 
 func assertSmokeStreamingToolCall(client: any LLMClient) async throws {
@@ -169,9 +169,9 @@ func assertSmokeStreamingToolCall(client: any LLMClient) async throws {
         }
     }
 
-    #expect(toolCallStartName == "get_weather")
+    try smokeExpect(toolCallStartName == "get_weather")
     let allArgs = toolCallArgs.values.joined()
-    #expect(allArgs.lowercased().contains("paris"))
+    try smokeExpect(allArgs.lowercased().contains("paris"))
 }
 
 func assertSmokeTokenUsage(client: any LLMClient) async throws {
@@ -180,9 +180,9 @@ func assertSmokeTokenUsage(client: any LLMClient) async throws {
         .user("What is 2 + 2? Reply with just the number."),
     ]
     let response = try await client.generate(messages: messages, tools: [])
-    #expect(response.tokenUsage != nil)
-    #expect(response.tokenUsage?.input ?? 0 > 0)
-    #expect(response.tokenUsage?.output ?? 0 > 0)
+    try smokeExpect(response.tokenUsage != nil)
+    try smokeExpect(response.tokenUsage?.input ?? 0 > 0)
+    try smokeExpect(response.tokenUsage?.output ?? 0 > 0)
 }
 
 func assertSmokeStreamingTokenUsage(client: any LLMClient) async throws {
@@ -199,24 +199,23 @@ func assertSmokeStreamingTokenUsage(client: any LLMClient) async throws {
         }
     }
 
-    #expect(streamUsage != nil)
-    #expect(streamUsage?.input ?? 0 > 0)
-    #expect(streamUsage?.output ?? 0 > 0)
+    try smokeExpect(streamUsage != nil)
+    try smokeExpect(streamUsage?.input ?? 0 > 0)
+    try smokeExpect(streamUsage?.output ?? 0 > 0)
 }
 
 func assertSmokeStructuredOutput(client: any LLMClient) async throws {
-    let chat = Chat<EmptyContext>(client: client)
-    let (workout, history) = try await chat.send(
+    let workout = try await sendSmokeStructuredOutput(
         "Give me exactly 2 upper body exercises",
+        client: client,
         returning: SmokeWorkout.self
     )
 
-    #expect(workout.exercises.count >= 2)
+    try smokeExpect(workout.exercises.count >= 2)
     for exercise in workout.exercises {
-        #expect(!exercise.name.isEmpty)
-        #expect(exercise.sets > 0)
+        try smokeExpect(!exercise.name.isEmpty)
+        try smokeExpect(exercise.sets > 0)
     }
-    #expect(history.count >= 2)
 }
 
 func assertSmokeAgentLoop(client: any LLMClient) async throws {
@@ -232,8 +231,8 @@ func assertSmokeAgentLoop(client: any LLMClient) async throws {
     let agent = Agent<EmptyContext>(client: client, tools: [addTool], configuration: config)
     let result = try await agent.run(userMessage: "What is 17 + 25?", context: EmptyContext())
 
-    #expect(try requireContent(result).contains("42"))
-    #expect(result.iterations >= 1)
+    try smokeExpect(requireContent(result).contains("42"))
+    try smokeExpect(result.iterations >= 1)
 }
 
 func assertSmokeStreamingAgentLoop(client: any LLMClient) async throws {
@@ -260,7 +259,7 @@ func assertSmokeStreamingAgentLoop(client: any LLMClient) async throws {
         case let .toolCallCompleted(_, name, result):
             if name == "add" {
                 toolCompleted = true
-                #expect(result.content.contains("15"))
+                try smokeExpect(result.content.contains("15"))
             }
         case let .finished(_, content, _, _):
             hasFinished = true
@@ -270,10 +269,10 @@ func assertSmokeStreamingAgentLoop(client: any LLMClient) async throws {
         }
     }
 
-    #expect(toolStarted)
-    #expect(toolCompleted)
-    #expect(hasFinished)
-    #expect(finishContent?.contains("15") == true)
+    try smokeExpect(toolStarted)
+    try smokeExpect(toolCompleted)
+    try smokeExpect(hasFinished)
+    try smokeExpect(finishContent?.contains("15") == true)
 }
 
 func assertSmokeMultiTurn(client: any LLMClient) async throws {
@@ -287,7 +286,7 @@ func assertSmokeMultiTurn(client: any LLMClient) async throws {
     messages.append(.user("What number did I ask you to remember?"))
 
     let response2 = try await client.generate(messages: messages, tools: [])
-    #expect(response2.content.contains("42"))
+    try smokeExpect(response2.content.contains("42"))
 }
 
 func assertSmokeChatStreamWithTools(client: any LLMClient) async throws {
@@ -318,21 +317,20 @@ func assertSmokeChatStreamWithTools(client: any LLMClient) async throws {
         }
     }
 
-    #expect(toolStartedNames.contains("add"))
+    try smokeExpect(toolStartedNames.contains("add"))
 
     let addResult = toolCompletedResults.first { $0.name == "add" }
-    #expect(addResult != nil)
-    #expect(addResult?.result.content.contains("42") == true)
+    try smokeExpect(addResult != nil)
+    try smokeExpect(addResult?.result.content.contains("42") == true)
 
-    #expect(!deltas.joined().isEmpty)
+    try smokeExpect(!deltas.joined().isEmpty)
 
     guard case let .finished(_, content, reason, history) = finishedEvent?.kind else {
-        Issue.record("Expected .finished event")
-        return
+        try smokeFail("Expected .finished event")
     }
-    #expect(content == nil)
-    #expect(reason == nil)
-    #expect(history.count >= 4)
+    try smokeExpect(content == nil)
+    try smokeExpect(reason == nil)
+    try smokeExpect(history.count >= 4)
 }
 
 struct SmokeSubAgentParams: Codable, SchemaProviding {
@@ -391,8 +389,8 @@ func assertSmokeSubAgentRoundTrip(client: any LLMClient) async throws {
         context: SubAgentContext(inner: EmptyContext(), maxDepth: 3)
     )
 
-    #expect(try requireContent(result).contains("42"))
-    #expect(result.iterations >= 2)
+    try smokeExpect(requireContent(result).contains("42"))
+    try smokeExpect(result.iterations >= 2)
 }
 
 func assertSmokeSubAgentStreamingEvents(client: any LLMClient) async throws {
@@ -450,11 +448,10 @@ func assertSmokeSubAgentStreamingEvents(client: any LLMClient) async throws {
     }
 
     guard let start = startedIndex, let completed = completedIndex else {
-        Issue.record("Expected both subAgentStarted and subAgentCompleted events")
-        return
+        try smokeFail("Expected both subAgentStarted and subAgentCompleted events")
     }
-    #expect(start < completed)
-    #expect(hasFinished)
+    try smokeExpect(start < completed)
+    try smokeExpect(hasFinished)
 }
 
 func assertSmokeSubAgentHistoryInheritance(client: any LLMClient) async throws {
@@ -490,7 +487,7 @@ func assertSmokeSubAgentHistoryInheritance(client: any LLMClient) async throws {
         context: SubAgentContext(inner: EmptyContext(), maxDepth: 3)
     )
 
-    #expect(try requireContent(result).lowercased().contains("xylophone7"))
+    try smokeExpect(requireContent(result).lowercased().contains("xylophone7"))
 }
 
 struct SmokeAuthor: Codable, SchemaProviding {
@@ -530,8 +527,7 @@ struct SmokeBookReview: Codable, SchemaProviding {
 }
 
 func assertSmokeNestedStructuredOutput(client: any LLMClient) async throws {
-    let chat = Chat<EmptyContext>(client: client)
-    let (review, history) = try await chat.send(
+    let review = try await sendSmokeStructuredOutput(
         """
         Return a book review object with these exact fields:
         title: 1984
@@ -541,17 +537,17 @@ func assertSmokeNestedStructuredOutput(client: any LLMClient) async throws {
         tags: classic, dystopian
         sequel: null
         """,
+        client: client,
         returning: SmokeBookReview.self
     )
 
-    #expect(review.title == "1984")
-    #expect(review.author.name == "George Orwell")
-    #expect(review.author.birthYear == 1903)
-    #expect(review.rating == 5)
-    #expect(review.tags.contains("classic"))
-    #expect(review.tags.contains("dystopian"))
-    #expect(review.sequel == nil)
-    #expect(history.count >= 2)
+    try smokeExpect(review.title == "1984")
+    try smokeExpect(review.author.name == "George Orwell")
+    try smokeExpect(review.author.birthYear == 1903)
+    try smokeExpect(review.rating == 5)
+    try smokeExpect(review.tags.contains("classic"))
+    try smokeExpect(review.tags.contains("dystopian"))
+    try smokeExpect(review.sequel == nil)
 }
 
 func assertSmokeReasoningGenerate(client: any LLMClient) async throws {
@@ -561,9 +557,9 @@ func assertSmokeReasoningGenerate(client: any LLMClient) async throws {
     ]
 
     let response = try await client.generate(messages: messages, tools: [])
-    #expect(response.content.contains("12"))
-    #expect(response.tokenUsage != nil)
-    #expect(response.reasoning != nil)
+    try smokeExpect(response.content.contains("12"))
+    try smokeExpect(response.tokenUsage != nil)
+    try smokeExpect(response.reasoning != nil)
 }
 
 func assertSmokeReasoningStream(client: any LLMClient) async throws {
@@ -590,9 +586,9 @@ func assertSmokeReasoningStream(client: any LLMClient) async throws {
     }
 
     let fullContent = contentChunks.joined()
-    #expect(hasFinished)
-    #expect(fullContent.contains("391"))
-    #expect(!reasoningChunks.isEmpty)
+    try smokeExpect(hasFinished)
+    try smokeExpect(fullContent.contains("391"))
+    try smokeExpect(!reasoningChunks.isEmpty)
 }
 
 // MARK: - Context Management Assertions
@@ -616,8 +612,8 @@ func assertSmokeObservationPruning(client: any LLMClient) async throws {
     )
 
     let content = try requireContent(result)
-    #expect(!content.isEmpty)
-    #expect(result.iterations >= 3)
+    try smokeExpect(!content.isEmpty)
+    try smokeExpect(result.iterations >= 3)
 
     let hasPruned = result.history.contains { message in
         if case let .tool(_, _, content) = message {
@@ -625,7 +621,7 @@ func assertSmokeObservationPruning(client: any LLMClient) async throws {
         }
         return false
     }
-    #expect(hasPruned)
+    try smokeExpect(hasPruned)
 }
 
 func assertSmokeLLMSummarization(client: any LLMClient) async throws {
@@ -650,14 +646,14 @@ func assertSmokeLLMSummarization(client: any LLMClient) async throws {
     )
 
     let content = try requireContent(result)
-    #expect(!content.isEmpty)
+    try smokeExpect(!content.isEmpty)
     let hasContinuation = result.history.contains { message in
         if case let .user(content) = message {
             return content.contains("[Context Continuation]")
         }
         return false
     }
-    #expect(hasContinuation)
+    try smokeExpect(hasContinuation)
 }
 
 func assertSmokeToolResultTruncation(client: any LLMClient) async throws {
@@ -680,14 +676,14 @@ func assertSmokeToolResultTruncation(client: any LLMClient) async throws {
     let fullOutput = SmokeLookupOutput(
         value: "Result for alpha: data_alpha_\(String(repeating: "x", count: 600))"
     )
-    let fullContent = try #require(String(data: JSONEncoder().encode(fullOutput), encoding: .utf8))
+    let fullContent = try smokeRequire(String(data: JSONEncoder().encode(fullOutput), encoding: .utf8))
     let hasTruncated = result.history.contains { message in
         if case let .tool(_, _, content) = message {
             return content.count <= 100 && content != fullContent
         }
         return false
     }
-    #expect(hasTruncated)
+    try smokeExpect(hasTruncated)
 }
 
 func assertSmokeMaxMessages(client: any LLMClient) async throws {
@@ -732,10 +728,10 @@ func assertSmokeMaxMessages(client: any LLMClient) async throws {
         guard case let .tool(_, name, content) = message else { return false }
         return name == "add" && content.contains("4")
     }
-    #expect(hasSystem)
-    #expect(!retainedOldestPrompt)
-    #expect(!retainedDroppedPrompt)
-    #expect(addResultRetained)
+    try smokeExpect(hasSystem)
+    try smokeExpect(!retainedOldestPrompt)
+    try smokeExpect(!retainedDroppedPrompt)
+    try smokeExpect(addResultRetained)
     try result.history.validateForAgentHistory()
 }
 
@@ -777,8 +773,8 @@ func assertSmokeBudgetEvents(client: any LLMClient) async throws {
         }
     }
 
-    #expect(budgetUpdatedCount >= 1)
-    #expect(budgetAdvisoryCount >= 1)
+    try smokeExpect(budgetUpdatedCount >= 1)
+    try smokeExpect(budgetAdvisoryCount >= 1)
 }
 
 func assertSmokeBudgetHistoryIntegrity(client: any LLMClient) async throws {
@@ -808,7 +804,7 @@ func assertSmokeBudgetHistoryIntegrity(client: any LLMClient) async throws {
         case let .toolCallCompleted(_, name, result):
             if name == "add" {
                 toolCompleted = true
-                #expect(result.content.contains("15"))
+                try smokeExpect(result.content.contains("15"))
             }
         case let .finished(_, content, _, _):
             finishContent = content
@@ -817,10 +813,10 @@ func assertSmokeBudgetHistoryIntegrity(client: any LLMClient) async throws {
         }
     }
 
-    #expect(toolCompleted)
-    #expect(budgetUpdatedCount >= 1)
-    #expect(budgetAdvisoryCount >= 1)
-    #expect(finishContent?.contains("15") == true)
+    try smokeExpect(toolCompleted)
+    try smokeExpect(budgetUpdatedCount >= 1)
+    try smokeExpect(budgetAdvisoryCount >= 1)
+    try smokeExpect(finishContent?.contains("15") == true)
 }
 
 func assertSmokeIterationCompleted(client: any LLMClient) async throws {
@@ -843,9 +839,9 @@ func assertSmokeIterationCompleted(client: any LLMClient) async throws {
         }
     }
 
-    #expect(iterationEvents.count >= 2)
+    try smokeExpect(iterationEvents.count >= 2)
     for event in iterationEvents {
-        #expect(event.usage.input > 0)
+        try smokeExpect(event.usage.input > 0)
     }
 }
 
@@ -884,10 +880,10 @@ func assertSmokeApprovalGate(client: any LLMClient) async throws {
 
     let callCount = await tracker.callCount
     let toolName = await tracker.lastToolName
-    #expect(callCount >= 1)
-    #expect(toolName == "add")
-    #expect(try requireContent(result).contains("42"))
-    #expect(result.iterations >= 2)
+    try smokeExpect(callCount >= 1)
+    try smokeExpect(toolName == "add")
+    try smokeExpect(requireContent(result).contains("42"))
+    try smokeExpect(result.iterations >= 2)
 }
 
 func assertSmokeApprovalDenial(client: any LLMClient) async throws {
@@ -914,16 +910,20 @@ func assertSmokeApprovalDenial(client: any LLMClient) async throws {
     )
 
     let callCount = await tracker.callCount
-    #expect(callCount >= 1)
-    let content = try requireContent(result)
-    #expect(!content.isEmpty)
-    let denialInHistory = result.history.contains { message in
+    try smokeExpect(callCount >= 1)
+    let toolMessages = result.history.compactMap { message -> String? in
         if case let .tool(_, _, content) = message {
-            return content.contains("disabled")
+            return content
         }
-        return false
+        return nil
     }
-    #expect(denialInHistory)
+    try smokeExpect(!toolMessages.isEmpty)
+    let denialMessages = toolMessages.filter { $0.contains("disabled") }
+    try smokeExpect(denialMessages.count == callCount)
+    try smokeExpect(!toolMessages.contains { $0.contains(#""sum""#) })
+    if let content = result.content {
+        try smokeExpect(!content.isEmpty)
+    }
 }
 
 func assertSmokeStreamingApproval(client: any LLMClient) async throws {
@@ -939,6 +939,7 @@ func assertSmokeStreamingApproval(client: any LLMClient) async throws {
 
     let agent = Agent<EmptyContext>(client: client, tools: [addTool], configuration: config)
 
+    let tracker = SmokeApprovalTracker()
     var approvalRequested = false
     var approvalResolved = false
     var toolCompleted = false
@@ -948,7 +949,7 @@ func assertSmokeStreamingApproval(client: any LLMClient) async throws {
         userMessage: "What is 7 + 8?",
         context: EmptyContext(),
         approvalHandler: { request in
-            #expect(request.toolName == "add")
+            await tracker.record(request.toolName)
             return .approve
         }
     ) {
@@ -960,7 +961,7 @@ func assertSmokeStreamingApproval(client: any LLMClient) async throws {
         case let .toolCallCompleted(_, name, result):
             if name == "add" {
                 toolCompleted = true
-                #expect(result.content.contains("15"))
+                try smokeExpect(result.content.contains("15"))
             }
         case let .finished(_, content, _, _):
             finishContent = content
@@ -969,8 +970,10 @@ func assertSmokeStreamingApproval(client: any LLMClient) async throws {
         }
     }
 
-    #expect(approvalRequested)
-    #expect(approvalResolved)
-    #expect(toolCompleted)
-    #expect(finishContent?.contains("15") == true)
+    let approvalToolName = await tracker.lastToolName
+    try smokeExpect(approvalRequested)
+    try smokeExpect(approvalResolved)
+    try smokeExpect(approvalToolName == "add")
+    try smokeExpect(toolCompleted)
+    try smokeExpect(finishContent?.contains("15") == true)
 }

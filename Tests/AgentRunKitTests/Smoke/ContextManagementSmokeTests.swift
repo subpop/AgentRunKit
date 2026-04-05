@@ -23,27 +23,54 @@ struct ContextManagementSmokeTests {
         baseURL: OpenAIClient.openRouterBaseURL
     )
 
+    private func run<Client: LLMClient>(
+        test testName: String = #function,
+        using client: Client,
+        _ body: (Client) async throws -> Void
+    ) async throws {
+        try await runSmoke(
+            target: "openrouter_context_management",
+            test: testName,
+            provider: "openrouter",
+            model: model,
+            using: client,
+            body
+        )
+    }
+
     @Test func observationPruning() async throws {
-        try await assertSmokeObservationPruning(client: budgetClient)
+        try await run(using: budgetClient) { client in
+            try await assertSmokeObservationPruning(client: client)
+        }
     }
 
     @Test func llmSummarization() async throws {
-        try await assertSmokeLLMSummarization(client: budgetClient)
+        try await run(using: budgetClient) { client in
+            try await assertSmokeLLMSummarization(client: client)
+        }
     }
 
     @Test func toolResultTruncation() async throws {
-        try await assertSmokeToolResultTruncation(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeToolResultTruncation(client: client)
+        }
     }
 
     @Test func maxMessages() async throws {
-        try await assertSmokeMaxMessages(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeMaxMessages(client: client)
+        }
     }
 
     @Test func budgetEvents() async throws {
-        try await assertSmokeBudgetEvents(client: budgetClient)
+        try await run(using: budgetClient) { client in
+            try await assertSmokeBudgetEvents(client: client)
+        }
     }
 
     @Test func iterationCompleted() async throws {
-        try await assertSmokeIterationCompleted(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeIterationCompleted(client: client)
+        }
     }
 }

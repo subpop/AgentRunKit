@@ -15,48 +15,85 @@ struct OpenRouterSmokeTests {
         baseURL: OpenAIClient.openRouterBaseURL
     )
 
+    private func run<Client: LLMClient>(
+        test testName: String = #function,
+        using client: Client,
+        _ body: (Client) async throws -> Void
+    ) async throws {
+        try await runSmoke(
+            target: "openrouter_chat",
+            test: testName,
+            provider: "openrouter",
+            model: model,
+            using: client,
+            body
+        )
+    }
+
     @Test func basicGenerate() async throws {
-        try await assertSmokeGenerate(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeGenerate(client: client)
+        }
     }
 
     @Test func basicStream() async throws {
-        try await assertSmokeStream(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeStream(client: client)
+        }
     }
 
     @Test func toolCallRoundTrip() async throws {
-        try await assertSmokeToolCall(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeToolCall(client: client)
+        }
     }
 
     @Test func streamingToolCall() async throws {
-        try await assertSmokeStreamingToolCall(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeStreamingToolCall(client: client)
+        }
     }
 
     @Test func agentLoop() async throws {
-        try await assertSmokeAgentLoop(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeAgentLoop(client: client)
+        }
     }
 
     @Test func tokenUsagePresent() async throws {
-        try await assertSmokeTokenUsage(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeTokenUsage(client: client)
+        }
     }
 
     @Test func structuredOutput() async throws {
-        try await assertSmokeStructuredOutput(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeStructuredOutput(client: client)
+        }
     }
 
     @Test func streamingAgentLoop() async throws {
-        try await assertSmokeStreamingAgentLoop(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeStreamingAgentLoop(client: client)
+        }
     }
 
     @Test func multiTurnConversation() async throws {
-        try await assertSmokeMultiTurn(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeMultiTurn(client: client)
+        }
     }
 
     @Test func streamingTokenUsage() async throws {
-        try await assertSmokeStreamingTokenUsage(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeStreamingTokenUsage(client: client)
+        }
     }
 
     @Test func chatStreamWithTools() async throws {
-        try await assertSmokeChatStreamWithTools(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeChatStreamWithTools(client: client)
+        }
     }
 
     @Test func budgetHistoryIntegrity() async throws {
@@ -67,23 +104,33 @@ struct OpenRouterSmokeTests {
             contextWindowSize: 100,
             baseURL: OpenAIClient.openRouterBaseURL
         )
-        try await assertSmokeBudgetHistoryIntegrity(client: budgetClient)
+        try await run(using: budgetClient) { client in
+            try await assertSmokeBudgetHistoryIntegrity(client: client)
+        }
     }
 
     @Test func nestedStructuredOutput() async throws {
-        try await assertSmokeNestedStructuredOutput(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeNestedStructuredOutput(client: client)
+        }
     }
 
     @Test func approvalGate() async throws {
-        try await assertSmokeApprovalGate(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeApprovalGate(client: client)
+        }
     }
 
     @Test func approvalDenial() async throws {
-        try await assertSmokeApprovalDenial(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeApprovalDenial(client: client)
+        }
     }
 
     @Test func streamingApproval() async throws {
-        try await assertSmokeStreamingApproval(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeStreamingApproval(client: client)
+        }
     }
 }
 
@@ -102,25 +149,42 @@ struct OpenRouterReplayPolicySmokeTests {
         assistantReplayProfile: .openRouterReasoningDetails
     )
 
-    @Test func multiTurnReasoningDetailsReplay() async throws {
-        let turn1Messages: [ChatMessage] = [
-            .system("You are a helpful assistant. Think step by step."),
-            .user("What is 7 * 13? Show your work."),
-        ]
-
-        let turn1 = try await client.generate(messages: turn1Messages, tools: [])
-        #expect(!turn1.content.isEmpty)
-        try #require(
-            turn1.reasoningDetails != nil,
-            "Model must return reasoning_details to exercise the replay contract"
+    private func run<Client: LLMClient>(
+        test testName: String = #function,
+        using client: Client,
+        _ body: (Client) async throws -> Void
+    ) async throws {
+        try await runSmoke(
+            target: "openrouter_chat_replay",
+            test: testName,
+            provider: "openrouter",
+            model: reasoningModel,
+            using: client,
+            body
         )
+    }
 
-        var turn2Messages = turn1Messages
-        turn2Messages.append(.assistant(turn1))
-        turn2Messages.append(.user("Now double that result."))
+    @Test func multiTurnReasoningDetailsReplay() async throws {
+        try await run(using: client) { client in
+            let turn1Messages: [ChatMessage] = [
+                .system("You are a helpful assistant. Think step by step."),
+                .user("What is 7 * 13? Show your work."),
+            ]
 
-        let turn2 = try await client.generate(messages: turn2Messages, tools: [])
-        #expect(!turn2.content.isEmpty)
+            let turn1 = try await client.generate(messages: turn1Messages, tools: [])
+            try smokeExpect(!turn1.content.isEmpty)
+            try smokeExpect(
+                turn1.reasoningDetails != nil,
+                "Model must return reasoning_details to exercise the replay contract"
+            )
+
+            var turn2Messages = turn1Messages
+            turn2Messages.append(.assistant(turn1))
+            turn2Messages.append(.user("Now double that result."))
+
+            let turn2 = try await client.generate(messages: turn2Messages, tools: [])
+            try smokeExpect(!turn2.content.isEmpty)
+        }
     }
 }
 
@@ -142,7 +206,24 @@ struct OpenRouterResponsesSmokeTests {
         )
     }
 
+    private func run<Client: LLMClient>(
+        test testName: String = #function,
+        using client: Client,
+        _ body: (Client) async throws -> Void
+    ) async throws {
+        try await runSmoke(
+            target: "openrouter_responses",
+            test: testName,
+            provider: "openrouter",
+            model: responsesModel,
+            using: client,
+            body
+        )
+    }
+
     @Test func continuityReplay() async throws {
-        try await assertSmokeResponsesContinuityReplay(client: makeClient())
+        try await run(using: makeClient()) { client in
+            try await assertSmokeResponsesContinuityReplay(client: client)
+        }
     }
 }

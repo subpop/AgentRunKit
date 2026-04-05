@@ -19,28 +19,27 @@ func assertSmokeResponsesContinuityReplay(client: ResponsesAPIClient) async thro
         context: EmptyContext()
     )
 
-    let replayableAssistant = try #require(firstHistory.compactMap { message -> AssistantMessage? in
+    let replayableAssistant = try smokeRequire(firstHistory.compactMap { message -> AssistantMessage? in
         guard case let .assistant(assistant) = message else { return nil }
         guard assistant.toolCalls.contains(where: { $0.name == "add" }) else { return nil }
         return assistant
     }.last)
-    let continuity = try #require(replayableAssistant.continuity)
+    let continuity = try smokeRequire(replayableAssistant.continuity)
 
-    #expect(continuity.substrate == .responses)
+    try smokeExpect(continuity.substrate == .responses)
     guard case let .object(payload) = continuity.payload,
           case let .array(output) = payload["output"]
     else {
-        Issue.record("Expected Responses continuity payload")
-        return
+        try smokeFail("Expected Responses continuity payload")
     }
-    #expect(!output.isEmpty)
+    try smokeExpect(!output.isEmpty)
 
     let secondResult = try await agent.run(
         userMessage: "What was the previous sum? Reply with just the number.",
         history: firstHistory,
         context: EmptyContext()
     )
-    #expect(try requireContent(secondResult).contains("42"))
+    try smokeExpect(requireContent(secondResult).contains("42"))
 }
 
 func assertSmokeResponsesFinishSanitization(client: ResponsesAPIClient) async throws {
@@ -66,8 +65,8 @@ func assertSmokeResponsesFinishSanitization(client: ResponsesAPIClient) async th
         guard case let .assistant(assistant) = message else { return nil }
         return assistant
     }
-    #expect(!assistantMessages.isEmpty)
-    #expect(assistantMessages.allSatisfy { assistant in
+    try smokeExpect(!assistantMessages.isEmpty)
+    try smokeExpect(assistantMessages.allSatisfy { assistant in
         !assistant.toolCalls.contains(where: { $0.name == "finish" })
     })
 
@@ -77,7 +76,7 @@ func assertSmokeResponsesFinishSanitization(client: ResponsesAPIClient) async th
         context: EmptyContext()
     )
 
-    #expect(try requireContent(secondResult).contains("42"))
+    try smokeExpect(requireContent(secondResult).contains("42"))
 }
 
 private func streamSmokeAgentHistory<C: ToolContext>(
@@ -90,5 +89,5 @@ private func streamSmokeAgentHistory<C: ToolContext>(
         guard case let .finished(_, _, _, history) = event.kind else { continue }
         finishedHistory = history
     }
-    return try #require(finishedHistory)
+    return try smokeRequire(finishedHistory)
 }

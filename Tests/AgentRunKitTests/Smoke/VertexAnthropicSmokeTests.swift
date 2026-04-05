@@ -37,13 +37,32 @@ struct VertexAnthropicSmokeTests {
         )
     }
 
+    private func run<Client: LLMClient>(
+        test testName: String = #function,
+        using client: Client,
+        _ body: (Client) async throws -> Void
+    ) async throws {
+        try await runSmoke(
+            target: "vertex_anthropic",
+            test: testName,
+            provider: "vertex",
+            model: anthropicModel,
+            using: client,
+            body
+        )
+    }
+
     @Test
     func budgetHistoryIntegrity() async throws {
-        try await assertSmokeBudgetHistoryIntegrity(client: makeBudgetClient())
+        try await run(using: makeBudgetClient()) { client in
+            try await assertSmokeBudgetHistoryIntegrity(client: client)
+        }
     }
 
     @Test
     func continuityReplay() async throws {
-        try await assertSmokeAnthropicContinuityReplay(client: makeClient())
+        try await run(using: makeClient()) { client in
+            try await assertSmokeAnthropicContinuityReplay(client: client)
+        }
     }
 }

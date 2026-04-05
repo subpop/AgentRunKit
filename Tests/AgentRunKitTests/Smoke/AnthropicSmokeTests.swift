@@ -15,44 +15,79 @@ private let cachingSystemPrompt = String(
 struct AnthropicSmokeTests {
     let client = AnthropicClient(apiKey: apiKey, model: model, maxTokens: 1024)
 
+    private func run<Client: LLMClient>(
+        test testName: String = #function,
+        using client: Client,
+        _ body: (Client) async throws -> Void
+    ) async throws {
+        try await runSmoke(
+            target: "anthropic_messages",
+            test: testName,
+            provider: "anthropic",
+            model: model,
+            using: client,
+            body
+        )
+    }
+
     @Test func basicGenerate() async throws {
-        try await assertSmokeGenerate(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeGenerate(client: client)
+        }
     }
 
     @Test func basicStream() async throws {
-        try await assertSmokeStream(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeStream(client: client)
+        }
     }
 
     @Test func toolCallRoundTrip() async throws {
-        try await assertSmokeToolCall(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeToolCall(client: client)
+        }
     }
 
     @Test func streamingToolCall() async throws {
-        try await assertSmokeStreamingToolCall(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeStreamingToolCall(client: client)
+        }
     }
 
     @Test func agentLoop() async throws {
-        try await assertSmokeAgentLoop(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeAgentLoop(client: client)
+        }
     }
 
     @Test func tokenUsagePresent() async throws {
-        try await assertSmokeTokenUsage(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeTokenUsage(client: client)
+        }
     }
 
     @Test func streamingAgentLoop() async throws {
-        try await assertSmokeStreamingAgentLoop(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeStreamingAgentLoop(client: client)
+        }
     }
 
     @Test func multiTurnConversation() async throws {
-        try await assertSmokeMultiTurn(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeMultiTurn(client: client)
+        }
     }
 
     @Test func streamingTokenUsage() async throws {
-        try await assertSmokeStreamingTokenUsage(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeStreamingTokenUsage(client: client)
+        }
     }
 
     @Test func chatStreamWithTools() async throws {
-        try await assertSmokeChatStreamWithTools(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeChatStreamWithTools(client: client)
+        }
     }
 
     @Test func budgetHistoryIntegrity() async throws {
@@ -62,7 +97,9 @@ struct AnthropicSmokeTests {
             maxTokens: 1024,
             contextWindowSize: 100
         )
-        try await assertSmokeBudgetHistoryIntegrity(client: budgetClient)
+        try await run(using: budgetClient) { client in
+            try await assertSmokeBudgetHistoryIntegrity(client: client)
+        }
     }
 
     @Test func cachingEnabled() async throws {
@@ -73,20 +110,22 @@ struct AnthropicSmokeTests {
             cachingEnabled: true
         )
 
-        let messages: [ChatMessage] = [
-            .system(cachingSystemPrompt),
-            .user("What is Swift?"),
-        ]
+        try await run(using: cachingClient) { client in
+            let messages: [ChatMessage] = [
+                .system(cachingSystemPrompt),
+                .user("What is Swift?"),
+            ]
 
-        let response1 = try await cachingClient.generate(messages: messages, tools: [smokeWeatherTool])
-        let usage1 = response1.tokenUsage
-        #expect(usage1 != nil)
-        #expect((usage1?.cacheWrite ?? 0) > 0)
+            let response1 = try await client.generate(messages: messages, tools: [smokeWeatherTool])
+            let usage1 = response1.tokenUsage
+            try smokeExpect(usage1 != nil)
+            try smokeExpect((usage1?.cacheWrite ?? 0) > 0)
 
-        let response2 = try await cachingClient.generate(messages: messages, tools: [smokeWeatherTool])
-        let usage2 = response2.tokenUsage
-        #expect(usage2 != nil)
-        #expect((usage2?.cacheRead ?? 0) > 0)
+            let response2 = try await client.generate(messages: messages, tools: [smokeWeatherTool])
+            let usage2 = response2.tokenUsage
+            try smokeExpect(usage2 != nil)
+            try smokeExpect((usage2?.cacheRead ?? 0) > 0)
+        }
     }
 
     @Test func nonInterleavedReasoning() async throws {
@@ -97,7 +136,9 @@ struct AnthropicSmokeTests {
             reasoningConfig: .budget(4096),
             interleavedThinking: false
         )
-        try await assertSmokeReasoningGenerate(client: nonInterleavedClient)
+        try await run(using: nonInterleavedClient) { client in
+            try await assertSmokeReasoningGenerate(client: client)
+        }
     }
 
     @Test func reasoningStream() async throws {
@@ -107,7 +148,9 @@ struct AnthropicSmokeTests {
             maxTokens: 16384,
             reasoningConfig: .budget(4096)
         )
-        try await assertSmokeReasoningStream(client: thinkingClient)
+        try await run(using: thinkingClient) { client in
+            try await assertSmokeReasoningStream(client: client)
+        }
     }
 
     @Test func reasoningGenerate() async throws {
@@ -117,7 +160,9 @@ struct AnthropicSmokeTests {
             maxTokens: 16384,
             reasoningConfig: .budget(4096)
         )
-        try await assertSmokeReasoningGenerate(client: thinkingClient)
+        try await run(using: thinkingClient) { client in
+            try await assertSmokeReasoningGenerate(client: client)
+        }
     }
 
     @Test func adaptiveReasoningStream() async throws {
@@ -128,7 +173,9 @@ struct AnthropicSmokeTests {
             reasoningConfig: .high,
             anthropicReasoning: .adaptive
         )
-        try await assertSmokeReasoningStream(client: thinkingClient)
+        try await run(using: thinkingClient) { client in
+            try await assertSmokeReasoningStream(client: client)
+        }
     }
 
     @Test func adaptiveReasoningGenerate() async throws {
@@ -139,22 +186,32 @@ struct AnthropicSmokeTests {
             reasoningConfig: .high,
             anthropicReasoning: .adaptive
         )
-        try await assertSmokeReasoningGenerate(client: thinkingClient)
+        try await run(using: thinkingClient) { client in
+            try await assertSmokeReasoningGenerate(client: client)
+        }
     }
 
     @Test func continuityReplay() async throws {
-        try await assertSmokeAnthropicContinuityReplay(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeAnthropicContinuityReplay(client: client)
+        }
     }
 
     @Test func approvalGate() async throws {
-        try await assertSmokeApprovalGate(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeApprovalGate(client: client)
+        }
     }
 
     @Test func approvalDenial() async throws {
-        try await assertSmokeApprovalDenial(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeApprovalDenial(client: client)
+        }
     }
 
     @Test func streamingApproval() async throws {
-        try await assertSmokeStreamingApproval(client: client)
+        try await run(using: client) { client in
+            try await assertSmokeStreamingApproval(client: client)
+        }
     }
 }
