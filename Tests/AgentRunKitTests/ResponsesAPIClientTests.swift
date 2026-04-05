@@ -475,7 +475,7 @@ struct ResponsesResponseParsingTests {
             Issue.record("Expected Responses continuity payload")
             return
         }
-        #expect(payload["response_id"] == nil)
+        #expect(payload["response_id"] == .string("resp_continuity"))
         #expect(payload["response_status"] == nil)
         guard case let .array(output) = payload["output"] else {
             Issue.record("Expected output array in continuity payload")
@@ -566,8 +566,8 @@ struct ResponsesResponseParsingTests {
         }
         #expect(first["type"] == .string("message"))
         let input = encoded["input"] as? [[String: Any]]
-        #expect(input?.count == 1)
-        #expect(input?[0]["type"] as? String == "message")
+        #expect(encoded["previous_response_id"] as? String == "resp_unknown_output")
+        #expect(input?.isEmpty == true)
     }
 
     @Test

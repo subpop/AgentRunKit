@@ -33,7 +33,7 @@ All providers deliver the same semantic fields on every assistant turn: content,
 
 Three clients preserve same-substrate continuity state, restoring provider-native turn structure from a continuity payload rather than reconstructing from semantic fields:
 
-- ``ResponsesAPIClient``: preserves Responses API output items, including reasoning items and function call metadata.
+- ``ResponsesAPIClient``: preserves Responses API output items, including reasoning items and function call metadata, and when `store == true` persists safe `response_id` anchors for restart-time same-substrate continuation.
 - ``AnthropicClient``: preserves exact ordered assistant blocks (thinking, text, tool_use) in their original interleaved order.
 - ``VertexAnthropicClient``: same Anthropic Messages substrate fidelity as ``AnthropicClient``.
 
@@ -63,7 +63,7 @@ Together's preserved-thinking replay depends on a provider-specific mode (`clear
 
 ## ResponsesAPIClient vs OpenAIClient
 
-``OpenAIClient`` uses the Chat Completions API, a stateless request/response protocol shared by many compatible providers (OpenRouter, Groq, Together, Ollama). ``ResponsesAPIClient`` uses the Responses API, a different wire format that carries richer turn state including reasoning items and provider-native output items. Against first-party OpenAI, it also maintains server-side conversation state and supports delta requests that send only new messages since the last response.
+``OpenAIClient`` uses the Chat Completions API, a stateless request/response protocol shared by many compatible providers (OpenRouter, Groq, Together, Ollama). ``ResponsesAPIClient`` uses the Responses API, a different wire format that carries richer turn state including reasoning items and provider-native output items. Against first-party OpenAI with `store == true`, it supports delta requests that send only new messages since a safe prior Responses turn, recovering `previous_response_id` either from the current client instance or from persisted `.responses` continuity in history. When local history rewrites break that continuation truth, the client drops only the continuation anchor and falls back to a full request or an earlier safe anchor.
 
 ### Targeting OpenRouter with ResponsesAPIClient
 
@@ -85,7 +85,7 @@ Prefer ``ResponsesAPIClient`` over ``OpenAIClient`` on OpenRouter when:
 - The target model is Responses-API-native rather than Chat-Completions-native.
 - Provider-native reasoning continuity depends on preserving full Responses output items across turns.
 
-xAI Grok models are the canonical case. Grok returns encrypted reasoning artifacts as Responses output items, and ``ResponsesAPIClient`` preserves those items in ``AssistantContinuity`` for lossless replay on the next turn. ``OpenAIClient`` with `.openRouterReasoningDetails` flattens reasoning back to Chat Completions `reasoning_details`, which is the right contract for Chat-Completions-native OpenRouter models but not for Responses-native Grok. Set `store: false` on ``ResponsesAPIClient`` when targeting OpenRouter: this makes the client request `reasoning.encrypted_content` and send full history on every call, which matches OpenRouter's stateless Responses routing.
+xAI Grok models are the canonical case. Grok returns encrypted reasoning artifacts as Responses output items, and ``ResponsesAPIClient`` preserves those items in ``AssistantContinuity`` for lossless replay on the next turn. ``OpenAIClient`` with `.openRouterReasoningDetails` flattens reasoning back to Chat Completions `reasoning_details`, which is the right contract for Chat-Completions-native OpenRouter models but not for Responses-native Grok. Set `store: false` on ``ResponsesAPIClient`` when targeting OpenRouter: this makes the client request `reasoning.encrypted_content` and send full history on every call, and it disables `previous_response_id` continuation, which matches OpenRouter's stateless Responses routing.
 
 ``OpenAIClient`` remains the correct Chat Completions transport for OpenRouter models that are not Responses-native. The two clients are independent paths, not substitutes: pick the one the target model speaks.
 

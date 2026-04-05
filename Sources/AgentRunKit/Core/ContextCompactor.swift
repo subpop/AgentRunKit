@@ -126,6 +126,7 @@ struct ContextCompactor {
 
         var originalChars = 0
         var prunedChars = 0
+        var firstRewriteIndex: Int?
         var result: [ChatMessage] = []
 
         for (index, message) in messages.enumerated() {
@@ -144,6 +145,9 @@ struct ContextCompactor {
                 let placeholder = "[Result from \(name): \(firstLine)... (pruned)]"
                 prunedChars += placeholder.count
                 result.append(.tool(id: id, name: name, content: placeholder))
+                if placeholder != content, firstRewriteIndex == nil {
+                    firstRewriteIndex = index
+                }
             } else {
                 if case let .tool(_, _, content) = message {
                     originalChars += content.count
@@ -151,6 +155,10 @@ struct ContextCompactor {
                 }
                 result.append(message)
             }
+        }
+
+        if let firstRewriteIndex {
+            result.stripResponsesContinuationAnchorsOnAssistants(after: firstRewriteIndex)
         }
 
         let ratio: Double = originalChars > 0
@@ -184,7 +192,7 @@ struct ContextCompactor {
 
     func compactedMessages(from messages: [ChatMessage], summary: String) -> [ChatMessage] {
         let taskContext = extractTaskContext(messages)
-        let recentContext = extractRecentContext(messages)
+        let recentContext = extractRecentContext(messages).map { $0.strippingResponsesContinuationAnchorIfAssistant() }
         let bridge = Self.bridgeMessage(summary: Self.extractSummary(from: summary))
         let acknowledgment = AssistantMessage(content: "Understood. Resuming from the checkpoint.")
 

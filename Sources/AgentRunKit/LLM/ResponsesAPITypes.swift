@@ -291,9 +291,16 @@ struct ResponsesReasoningOutput {
 
 struct ResponsesReplayState: Equatable {
     let output: [ResponsesReplayItem]
+    let responseId: String?
+
+    init(output: [ResponsesReplayItem], responseId: String?) {
+        self.output = output
+        self.responseId = responseId
+    }
 
     init(response: ResponsesAPIResponse) {
         output = response.output.compactMap(ResponsesReplayItem.init)
+        responseId = response.id
     }
 
     init(continuity: AssistantContinuity) throws {
@@ -311,19 +318,44 @@ struct ResponsesReplayState: Equatable {
         guard !output.isEmpty else {
             throw AgentError.llmError(.other("Malformed Responses continuity payload"))
         }
+        if case let .string(id) = payload["response_id"] {
+            responseId = id
+        } else {
+            responseId = nil
+        }
     }
 
     var continuity: AssistantContinuity {
-        AssistantContinuity(
-            substrate: .responses,
-            payload: .object([
-                "output": .array(output.map(\.raw)),
-            ])
-        )
+        var payload: [String: JSONValue] = [
+            "output": .array(output.map(\.raw)),
+        ]
+        if let responseId {
+            payload["response_id"] = .string(responseId)
+        }
+        return AssistantContinuity(substrate: .responses, payload: .object(payload))
     }
 
     var replayInputItems: [ResponsesInputItem] {
         output.map(\.inputItem)
+    }
+}
+
+extension AssistantContinuity {
+    func strippingResponsesContinuationAnchor() -> AssistantContinuity {
+        guard substrate == .responses else { return self }
+        if let replayState = try? ResponsesReplayState(continuity: self) {
+            return ResponsesReplayState(
+                output: replayState.output,
+                responseId: nil
+            ).continuity
+        }
+        guard case var .object(payload) = payload,
+              payload["response_id"] != nil
+        else {
+            return self
+        }
+        payload.removeValue(forKey: "response_id")
+        return AssistantContinuity(substrate: substrate, payload: .object(payload))
     }
 }
 

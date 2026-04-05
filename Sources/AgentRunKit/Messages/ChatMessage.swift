@@ -107,12 +107,15 @@ extension [ChatMessage] {
         let nonSystemMessages = filter { !$0.isSystem }
 
         let cutIndex = findSafeCutIndex(in: nonSystemMessages, keeping: maxMessages)
-        let kept = nonSystemMessages[cutIndex...]
+        let kept = Array(nonSystemMessages[cutIndex...])
+        let rewrittenKept = cutIndex > 0
+            ? kept.strippingResponsesContinuationAnchorsOnAssistants()
+            : kept
 
         if let systemPrompt {
-            return [systemPrompt] + kept
+            return [systemPrompt] + rewrittenKept
         }
-        return Array(kept)
+        return rewrittenKept
     }
 
     private func findSafeCutIndex(in messages: [ChatMessage], keeping maxMessages: Int) -> Int {
@@ -139,5 +142,38 @@ extension [ChatMessage] {
             return boundary
         }
         return 0
+    }
+}
+
+extension AssistantMessage {
+    func strippingResponsesContinuationAnchor() -> AssistantMessage {
+        AssistantMessage(
+            content: content,
+            toolCalls: toolCalls,
+            tokenUsage: tokenUsage,
+            reasoning: reasoning,
+            reasoningDetails: reasoningDetails,
+            continuity: continuity?.strippingResponsesContinuationAnchor()
+        )
+    }
+}
+
+extension ChatMessage {
+    func strippingResponsesContinuationAnchorIfAssistant() -> ChatMessage {
+        guard case let .assistant(message) = self else { return self }
+        return .assistant(message.strippingResponsesContinuationAnchor())
+    }
+}
+
+extension [ChatMessage] {
+    func strippingResponsesContinuationAnchorsOnAssistants() -> [ChatMessage] {
+        map { $0.strippingResponsesContinuationAnchorIfAssistant() }
+    }
+
+    mutating func stripResponsesContinuationAnchorsOnAssistants(after index: Int) {
+        guard !isEmpty else { return }
+        for messageIndex in indices where messageIndex > index {
+            self[messageIndex] = self[messageIndex].strippingResponsesContinuationAnchorIfAssistant()
+        }
     }
 }

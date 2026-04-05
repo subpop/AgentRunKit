@@ -210,5 +210,6 @@ private extension AssistantContinuity {
         var updatedPayload = payload
         updatedPayload["output"] = .array(filteredOutput)
         return AssistantContinuity(substrate: substrate, payload: .object(updatedPayload))
+            .strippingResponsesContinuationAnchor()
     }
 }

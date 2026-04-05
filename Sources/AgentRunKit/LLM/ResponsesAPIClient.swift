@@ -179,7 +179,17 @@ extension ResponsesAPIClient {
             )
         }
 
-        if store, let previousId = lastResponseId, messages.count >= lastMessageCount,
+        guard store else {
+            return try buildFullRequest(
+                messages: messages,
+                tools: tools,
+                stream: stream,
+                responseFormat: responseFormat,
+                extraFields: extraFields
+            )
+        }
+
+        if let previousId = lastResponseId, messages.count >= lastMessageCount,
            lastMessageCount > 0,
            prefixSignature(messages.prefix(lastMessageCount)) == lastPrefixSignature {
             return try buildDeltaRequest(
@@ -188,6 +198,19 @@ extension ResponsesAPIClient {
                 stream: stream,
                 responseFormat: responseFormat,
                 previousResponseId: previousId,
+                suffixStart: lastMessageCount,
+                extraFields: extraFields
+            )
+        }
+
+        if let anchor = try responsesContinuationAnchor(in: messages) {
+            return try buildDeltaRequest(
+                messages: messages,
+                tools: tools,
+                stream: stream,
+                responseFormat: responseFormat,
+                previousResponseId: anchor.responseId,
+                suffixStart: anchor.suffixStart,
                 extraFields: extraFields
             )
         }
@@ -201,16 +224,28 @@ extension ResponsesAPIClient {
         )
     }
 
-    func shouldResetConversationBeforeRequest(
-        messages: [ChatMessage],
-        requestMode: RunRequestMode
-    ) -> Bool {
+    nonisolated func responsesContinuationAnchor(in messages: [ChatMessage]) throws
+        -> (responseId: String, suffixStart: Int)? {
+        guard !messages.isEmpty else { return nil }
+        for index in stride(from: messages.count - 1, through: 0, by: -1) {
+            guard case let .assistant(message) = messages[index],
+                  let continuity = message.continuity,
+                  continuity.substrate == .responses
+            else {
+                continue
+            }
+            let replayState = try ResponsesReplayState(continuity: continuity)
+            guard let responseId = replayState.responseId else { continue }
+            return (responseId, index + 1)
+        }
+        return nil
+    }
+
+    func shouldResetConversationBeforeRequest(messages: [ChatMessage], requestMode: RunRequestMode) -> Bool {
         requestMode == .forceFullRequest || (store && messages.count < lastMessageCount)
     }
 
-    func mapMessages(
-        _ messages: [ChatMessage]
-    ) throws -> (instructions: String?, input: [ResponsesInputItem]) {
+    func mapMessages(_ messages: [ChatMessage]) throws -> (instructions: String?, input: [ResponsesInputItem]) {
         var systemParts: [String] = []
         var items: [ResponsesInputItem] = []
 
@@ -266,8 +301,7 @@ extension ResponsesAPIClient {
             }
         }
 
-        let instructions = systemParts.isEmpty
-            ? nil : systemParts.joined(separator: "\n")
+        let instructions = systemParts.isEmpty ? nil : systemParts.joined(separator: "\n")
         return (instructions, items)
     }
 
@@ -332,8 +366,7 @@ extension ResponsesAPIClient {
             }
         }
 
-        let reasoningTokens =
-            response.usage?.outputTokensDetails?.reasoningTokens ?? 0
+        let reasoningTokens = response.usage?.outputTokensDetails?.reasoningTokens ?? 0
         let tokenUsage = response.usage.map { usage in
             TokenUsage(
                 input: usage.inputTokens,
@@ -343,13 +376,16 @@ extension ResponsesAPIClient {
         }
 
         let replayState = ResponsesReplayState(response: response)
+        let continuityReplayState = store
+            ? replayState
+            : ResponsesReplayState(output: replayState.output, responseId: nil)
         return ResponsesTurnProjection(
             content: content,
             toolCalls: toolCalls,
             tokenUsage: tokenUsage,
             reasoning: reasoningSummary.map { ReasoningContent(content: $0) },
             reasoningDetails: reasoningDetails.isEmpty ? nil : reasoningDetails,
-            continuity: replayState.output.isEmpty ? nil : replayState.continuity
+            continuity: continuityReplayState.output.isEmpty ? nil : continuityReplayState.continuity
         )
     }
 }
@@ -425,17 +461,10 @@ extension ResponsesAPIClient {
         stream: Bool,
         responseFormat: ResponseFormat?,
         previousResponseId: String,
+        suffixStart: Int,
         extraFields: [String: JSONValue]
     ) throws -> ResponsesRequest {
-        let newMessages = Array(messages[lastMessageCount...])
-        let filtered: [ChatMessage] =
-            if let first = newMessages.first, case .assistant = first {
-                Array(newMessages.dropFirst())
-            } else {
-                newMessages
-            }
-
-        let (_, inputItems) = try mapMessages(filtered)
+        let (_, inputItems) = try mapMessages(Array(messages[suffixStart...]))
         let include: [String]? = store ? nil : ["reasoning.encrypted_content"]
         return ResponsesRequest(
             model: modelIdentifier,

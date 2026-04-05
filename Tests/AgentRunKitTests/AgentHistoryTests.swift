@@ -240,7 +240,7 @@ struct AgentTruncationTests {
             return
         }
         #expect(message.content == "Old response 2")
-        #expect(message.continuity == continuity)
+        #expect(message.continuity == continuity.strippingResponsesContinuationAnchor())
     }
 
     @Test

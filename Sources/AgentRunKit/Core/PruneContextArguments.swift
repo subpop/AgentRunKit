@@ -19,6 +19,7 @@ func executePruneContext(arguments: Data, messages: inout [ChatMessage]) throws 
     let decoded = try JSONDecoder().decode(PruneContextArguments.self, from: arguments)
     let targetIds = Set(decoded.toolCallIds)
     var prunedCount = 0
+    var firstRewriteIndex: Int?
 
     for index in messages.indices {
         if case let .tool(id, name, content) = messages[index],
@@ -26,7 +27,14 @@ func executePruneContext(arguments: Data, messages: inout [ChatMessage]) throws 
            content != prunedToolResultContent {
             messages[index] = .tool(id: id, name: name, content: prunedToolResultContent)
             prunedCount += 1
+            if firstRewriteIndex == nil {
+                firstRewriteIndex = index
+            }
         }
+    }
+
+    if let firstRewriteIndex {
+        messages.stripResponsesContinuationAnchorsOnAssistants(after: firstRewriteIndex)
     }
 
     return PruneContextExecutionResult(
