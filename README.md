@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  A lightweight Swift 6 framework for building LLM-powered agents with type-safe tool calling.
+  A Swift 6 SDK for building LLM-powered agents with type-safe tool calling.
 </p>
 
 <p align="center">
