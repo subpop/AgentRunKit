@@ -194,11 +194,10 @@ struct AnthropicToolDefinition: Encodable {
     let name: String
     let description: String
     let inputSchema: JSONSchema
-    let strict: Bool?
     var cacheControl: CacheControl?
 
     enum CodingKeys: String, CodingKey {
-        case name, description, strict
+        case name, description
         case inputSchema = "input_schema"
         case cacheControl = "cache_control"
     }
@@ -207,7 +206,6 @@ struct AnthropicToolDefinition: Encodable {
         name = definition.name
         description = definition.description
         inputSchema = definition.parametersSchema
-        strict = definition.strict
     }
 }
 

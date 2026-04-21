@@ -105,6 +105,33 @@ struct AnthropicRequestSerializationTests {
     }
 
     @Test
+    func strictNeverAppearsInWireBody() throws {
+        let client = try makeClient()
+        let tools = [
+            ToolDefinition(
+                name: "strict_true",
+                description: "",
+                parametersSchema: .object(properties: [:], required: []),
+                strict: true
+            ),
+            ToolDefinition(
+                name: "strict_false",
+                description: "",
+                parametersSchema: .object(properties: [:], required: []),
+                strict: false
+            ),
+            ToolDefinition(
+                name: "strict_nil",
+                description: "",
+                parametersSchema: .object(properties: [:], required: [])
+            )
+        ]
+        let request = try client.buildRequest(messages: [.user("hi")], tools: tools)
+        let raw = try #require(String(data: JSONEncoder().encode(request), encoding: .utf8))
+        #expect(!raw.contains("\"strict\""), "strict must not appear in Anthropic wire body: \(raw)")
+    }
+
+    @Test
     func emptyToolsOmitsField() throws {
         let client = try makeClient()
         let request = try client.buildRequest(messages: [.user("Hi")], tools: [])

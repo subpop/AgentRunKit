@@ -82,7 +82,7 @@ struct AnthropicStructuredOutputTests {
         #expect(choice["disable_parallel_tool_use"] as? Bool == true)
 
         let jsonTools = try #require(json["tools"] as? [[String: Any]])
-        #expect(jsonTools[0]["strict"] as? Bool == true)
+        #expect(jsonTools[0]["strict"] == nil)
     }
 
     @Test
