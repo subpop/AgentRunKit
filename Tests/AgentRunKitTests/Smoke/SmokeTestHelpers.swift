@@ -157,7 +157,7 @@ func assertSmokeStreamingToolCall(client: any LLMClient) async throws {
 
     for try await delta in client.stream(messages: messages, tools: [smokeWeatherTool]) {
         switch delta {
-        case let .toolCallStart(index, _, name):
+        case let .toolCallStart(index, _, name, _):
             if name == "get_weather" {
                 toolCallStartName = name
                 toolCallArgs[index] = ""

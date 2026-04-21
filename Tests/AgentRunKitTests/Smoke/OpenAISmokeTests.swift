@@ -8,11 +8,10 @@ private let model = ProcessInfo.processInfo.environment["SMOKE_OPENAI_CHAT_MODEL
 
 @Suite(.enabled(if: hasAPIKey, "Requires OPENAI_API_KEY environment variable"))
 struct OpenAISmokeTests {
-    let client = OpenAIClient(
+    let client = OpenAIClient.openAI(
         apiKey: apiKey,
         model: model,
-        maxTokens: 1024,
-        baseURL: OpenAIClient.openAIBaseURL
+        maxTokens: 1024
     )
 
     private func run<Client: LLMClient>(
@@ -97,12 +96,11 @@ struct OpenAISmokeTests {
     }
 
     @Test func budgetHistoryIntegrity() async throws {
-        let budgetClient = OpenAIClient(
+        let budgetClient = OpenAIClient.openAI(
             apiKey: apiKey,
             model: model,
             maxTokens: 1024,
-            contextWindowSize: 100,
-            baseURL: OpenAIClient.openAIBaseURL
+            contextWindowSize: 100
         )
         try await run(using: budgetClient) { client in
             try await assertSmokeBudgetHistoryIntegrity(client: client)

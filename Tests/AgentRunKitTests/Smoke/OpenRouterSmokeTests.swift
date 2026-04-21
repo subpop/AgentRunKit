@@ -8,11 +8,10 @@ private let model = ProcessInfo.processInfo.environment["SMOKE_OPENROUTER_MODEL"
 
 @Suite(.enabled(if: hasAPIKey, "Requires OPENROUTER_API_KEY environment variable"))
 struct OpenRouterSmokeTests {
-    let client = OpenAIClient(
+    let client = OpenAIClient.openRouter(
         apiKey: apiKey,
         model: model,
-        maxTokens: 1024,
-        baseURL: OpenAIClient.openRouterBaseURL
+        maxTokens: 1024
     )
 
     private func run<Client: LLMClient>(
@@ -97,12 +96,11 @@ struct OpenRouterSmokeTests {
     }
 
     @Test func budgetHistoryIntegrity() async throws {
-        let budgetClient = OpenAIClient(
+        let budgetClient = OpenAIClient.openRouter(
             apiKey: apiKey,
             model: model,
             maxTokens: 1024,
-            contextWindowSize: 100,
-            baseURL: OpenAIClient.openRouterBaseURL
+            contextWindowSize: 100
         )
         try await run(using: budgetClient) { client in
             try await assertSmokeBudgetHistoryIntegrity(client: client)
@@ -134,19 +132,16 @@ struct OpenRouterSmokeTests {
     }
 }
 
-private let reasoningModel = ProcessInfo.processInfo.environment["SMOKE_OPENROUTER_REASONING_MODEL"] ?? ""
-private let hasReasoningModel = !reasoningModel.isEmpty
+private let reasoningModel = ProcessInfo.processInfo.environment["SMOKE_OPENROUTER_REASONING_MODEL"]
+    ?? "z-ai/glm-5"
 
-@Suite(.enabled(if: hasAPIKey && hasReasoningModel,
-                "Requires OPENROUTER_API_KEY and SMOKE_OPENROUTER_REASONING_MODEL"))
+@Suite(.enabled(if: hasAPIKey, "Requires OPENROUTER_API_KEY"))
 struct OpenRouterReplayPolicySmokeTests {
-    let client = OpenAIClient(
+    let client = OpenAIClient.openRouter(
         apiKey: apiKey,
         model: reasoningModel,
         maxTokens: 4096,
-        baseURL: OpenAIClient.openRouterBaseURL,
-        reasoningConfig: .high,
-        assistantReplayProfile: .openRouterReasoningDetails
+        reasoningConfig: .high
     )
 
     private func run<Client: LLMClient>(
@@ -173,14 +168,35 @@ struct OpenRouterReplayPolicySmokeTests {
 
             let turn1 = try await client.generate(messages: turn1Messages, tools: [])
             try smokeExpect(!turn1.content.isEmpty)
-            try smokeExpect(
-                turn1.reasoningDetails != nil,
+            let turn1Details = try smokeRequire(
+                turn1.reasoningDetails,
                 "Model must return reasoning_details to exercise the replay contract"
             )
+            try smokeExpect(!turn1Details.isEmpty)
 
             var turn2Messages = turn1Messages
             turn2Messages.append(.assistant(turn1))
             turn2Messages.append(.user("Now double that result."))
+
+            let turn2Request = try client.buildRequest(messages: turn2Messages, tools: [])
+            let encoded = try JSONEncoder().encode(turn2Request)
+            let body = try smokeRequire(
+                JSONSerialization.jsonObject(with: encoded) as? [String: Any],
+                "Turn 2 request body is not a JSON object"
+            )
+            let messages = try smokeRequire(
+                body["messages"] as? [[String: Any]],
+                "Turn 2 request missing messages"
+            )
+            let assistantTurn = try smokeRequire(
+                messages.first(where: { ($0["role"] as? String) == "assistant" }),
+                "Turn 2 request missing assistant turn"
+            )
+            let replayedDetails = try smokeRequire(
+                assistantTurn["reasoning_details"] as? [Any],
+                "Turn 2 did not replay reasoning_details on the assistant turn"
+            )
+            try smokeExpect(replayedDetails.count == turn1Details.count)
 
             let turn2 = try await client.generate(messages: turn2Messages, tools: [])
             try smokeExpect(!turn2.content.isEmpty)

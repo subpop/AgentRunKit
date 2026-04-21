@@ -232,6 +232,10 @@ private func classifySmokeTransportError(_ transportError: TransportError) -> Sm
         smokeFailureClassification(kind: .noChoices)
     case .streamStalled:
         smokeFailureClassification(kind: .streamStalled)
+    case let .capabilityMismatch(model, requirement):
+        smokeFailureClassification(kind: .other, bodyExcerpt: "capabilityMismatch(\(model)): \(requirement)")
+    case let .featureUnsupported(provider, feature):
+        smokeFailureClassification(kind: .other, bodyExcerpt: "featureUnsupported(\(provider)): \(feature)")
     case let .other(message):
         smokeFailureClassification(kind: .other, bodyExcerpt: message)
     }

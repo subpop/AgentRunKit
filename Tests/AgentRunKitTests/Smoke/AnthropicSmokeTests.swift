@@ -13,7 +13,9 @@ private let cachingSystemPrompt = String(
 
 @Suite(.enabled(if: hasAPIKey, "Requires ANTHROPIC_API_KEY environment variable"))
 struct AnthropicSmokeTests {
-    let client = AnthropicClient(apiKey: apiKey, model: model, maxTokens: 1024)
+    private func makeClient() throws -> AnthropicClient {
+        try AnthropicClient(apiKey: apiKey, model: model, maxTokens: 1024)
+    }
 
     private func run<Client: LLMClient>(
         test testName: String = #function,
@@ -31,67 +33,67 @@ struct AnthropicSmokeTests {
     }
 
     @Test func basicGenerate() async throws {
-        try await run(using: client) { client in
+        try await run(using: makeClient()) { client in
             try await assertSmokeGenerate(client: client)
         }
     }
 
     @Test func basicStream() async throws {
-        try await run(using: client) { client in
+        try await run(using: makeClient()) { client in
             try await assertSmokeStream(client: client)
         }
     }
 
     @Test func toolCallRoundTrip() async throws {
-        try await run(using: client) { client in
+        try await run(using: makeClient()) { client in
             try await assertSmokeToolCall(client: client)
         }
     }
 
     @Test func streamingToolCall() async throws {
-        try await run(using: client) { client in
+        try await run(using: makeClient()) { client in
             try await assertSmokeStreamingToolCall(client: client)
         }
     }
 
     @Test func agentLoop() async throws {
-        try await run(using: client) { client in
+        try await run(using: makeClient()) { client in
             try await assertSmokeAgentLoop(client: client)
         }
     }
 
     @Test func tokenUsagePresent() async throws {
-        try await run(using: client) { client in
+        try await run(using: makeClient()) { client in
             try await assertSmokeTokenUsage(client: client)
         }
     }
 
     @Test func streamingAgentLoop() async throws {
-        try await run(using: client) { client in
+        try await run(using: makeClient()) { client in
             try await assertSmokeStreamingAgentLoop(client: client)
         }
     }
 
     @Test func multiTurnConversation() async throws {
-        try await run(using: client) { client in
+        try await run(using: makeClient()) { client in
             try await assertSmokeMultiTurn(client: client)
         }
     }
 
     @Test func streamingTokenUsage() async throws {
-        try await run(using: client) { client in
+        try await run(using: makeClient()) { client in
             try await assertSmokeStreamingTokenUsage(client: client)
         }
     }
 
     @Test func chatStreamWithTools() async throws {
-        try await run(using: client) { client in
+        try await run(using: makeClient()) { client in
             try await assertSmokeChatStreamWithTools(client: client)
         }
     }
 
     @Test func budgetHistoryIntegrity() async throws {
-        let budgetClient = AnthropicClient(
+        let budgetClient = try AnthropicClient(
             apiKey: apiKey,
             model: model,
             maxTokens: 1024,
@@ -103,7 +105,7 @@ struct AnthropicSmokeTests {
     }
 
     @Test func cachingEnabled() async throws {
-        let cachingClient = AnthropicClient(
+        let cachingClient = try AnthropicClient(
             apiKey: apiKey,
             model: model,
             maxTokens: 1024,
@@ -129,7 +131,7 @@ struct AnthropicSmokeTests {
     }
 
     @Test func nonInterleavedReasoning() async throws {
-        let nonInterleavedClient = AnthropicClient(
+        let nonInterleavedClient = try AnthropicClient(
             apiKey: apiKey,
             model: model,
             maxTokens: 16384,
@@ -142,7 +144,7 @@ struct AnthropicSmokeTests {
     }
 
     @Test func reasoningStream() async throws {
-        let thinkingClient = AnthropicClient(
+        let thinkingClient = try AnthropicClient(
             apiKey: apiKey,
             model: model,
             maxTokens: 16384,
@@ -154,7 +156,7 @@ struct AnthropicSmokeTests {
     }
 
     @Test func reasoningGenerate() async throws {
-        let thinkingClient = AnthropicClient(
+        let thinkingClient = try AnthropicClient(
             apiKey: apiKey,
             model: model,
             maxTokens: 16384,
@@ -166,7 +168,7 @@ struct AnthropicSmokeTests {
     }
 
     @Test func adaptiveReasoningStream() async throws {
-        let thinkingClient = AnthropicClient(
+        let thinkingClient = try AnthropicClient(
             apiKey: apiKey,
             model: model,
             maxTokens: 16384,
@@ -179,7 +181,7 @@ struct AnthropicSmokeTests {
     }
 
     @Test func adaptiveReasoningGenerate() async throws {
-        let thinkingClient = AnthropicClient(
+        let thinkingClient = try AnthropicClient(
             apiKey: apiKey,
             model: model,
             maxTokens: 16384,
@@ -192,26 +194,32 @@ struct AnthropicSmokeTests {
     }
 
     @Test func continuityReplay() async throws {
-        try await run(using: client) { client in
+        try await run(using: makeClient()) { client in
             try await assertSmokeAnthropicContinuityReplay(client: client)
         }
     }
 
     @Test func approvalGate() async throws {
-        try await run(using: client) { client in
+        try await run(using: makeClient()) { client in
             try await assertSmokeApprovalGate(client: client)
         }
     }
 
     @Test func approvalDenial() async throws {
-        try await run(using: client) { client in
+        try await run(using: makeClient()) { client in
             try await assertSmokeApprovalDenial(client: client)
         }
     }
 
     @Test func streamingApproval() async throws {
-        try await run(using: client) { client in
+        try await run(using: makeClient()) { client in
             try await assertSmokeStreamingApproval(client: client)
+        }
+    }
+
+    @Test func structuredOutput() async throws {
+        try await run(using: makeClient()) { client in
+            try await assertSmokeStructuredOutput(client: client)
         }
     }
 }
