@@ -54,7 +54,7 @@ public struct TestLLMClient: LLMClient, Sendable {
                 continuation.yield(.content(response.content))
             }
             for (index, call) in response.toolCalls.enumerated() {
-                continuation.yield(.toolCallStart(index: index, id: call.id, name: call.name))
+                continuation.yield(.toolCallStart(index: index, id: call.id, name: call.name, kind: call.kind))
                 continuation.yield(.toolCallDelta(index: index, arguments: call.arguments))
             }
             continuation.yield(.finished(usage: tokenUsage))

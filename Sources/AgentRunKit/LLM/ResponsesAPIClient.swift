@@ -87,7 +87,8 @@ extension ResponsesAPIClient {
             tools: tools,
             responseFormat: responseFormat,
             extraFields: requestContext?.extraFields ?? [:],
-            requestMode: requestMode
+            requestMode: requestMode,
+            options: requestContext?.responses
         )
         let urlRequest = try buildURLRequest(request)
         let (data, httpResponse) = try await HTTPRetry.performData(
@@ -144,6 +145,7 @@ extension ResponsesAPIClient {
                         extraFields: requestContext?.extraFields ?? [:],
                         onResponse: requestContext?.onResponse,
                         requestMode: requestMode,
+                        options: requestContext?.responses,
                         continuation: continuation
                     )
                 } catch {
@@ -167,26 +169,23 @@ extension ResponsesAPIClient {
         stream: Bool = false,
         responseFormat: ResponseFormat? = nil,
         extraFields: [String: JSONValue] = [:],
-        requestMode: RunRequestMode = .auto
+        requestMode: RunRequestMode = .auto,
+        options: ResponsesRequestOptions? = nil
     ) throws -> ResponsesRequest {
+        let buildOptions = ResponsesRequestBuildOptions(
+            tools: tools,
+            stream: stream,
+            responseFormat: responseFormat,
+            extraFields: extraFields,
+            requestOptions: options
+        )
+
         if requestMode == .forceFullRequest {
-            return try buildFullRequest(
-                messages: messages,
-                tools: tools,
-                stream: stream,
-                responseFormat: responseFormat,
-                extraFields: extraFields
-            )
+            return try buildFullRequest(messages: messages, options: buildOptions)
         }
 
         guard store else {
-            return try buildFullRequest(
-                messages: messages,
-                tools: tools,
-                stream: stream,
-                responseFormat: responseFormat,
-                extraFields: extraFields
-            )
+            return try buildFullRequest(messages: messages, options: buildOptions)
         }
 
         if let previousId = lastResponseId, messages.count >= lastMessageCount,
@@ -194,34 +193,22 @@ extension ResponsesAPIClient {
            prefixSignature(messages.prefix(lastMessageCount)) == lastPrefixSignature {
             return try buildDeltaRequest(
                 messages: messages,
-                tools: tools,
-                stream: stream,
-                responseFormat: responseFormat,
                 previousResponseId: previousId,
                 suffixStart: lastMessageCount,
-                extraFields: extraFields
+                options: buildOptions
             )
         }
 
         if let anchor = try responsesContinuationAnchor(in: messages) {
             return try buildDeltaRequest(
                 messages: messages,
-                tools: tools,
-                stream: stream,
-                responseFormat: responseFormat,
                 previousResponseId: anchor.responseId,
                 suffixStart: anchor.suffixStart,
-                extraFields: extraFields
+                options: buildOptions
             )
         }
 
-        return try buildFullRequest(
-            messages: messages,
-            tools: tools,
-            stream: stream,
-            responseFormat: responseFormat,
-            extraFields: extraFields
-        )
+        return try buildFullRequest(messages: messages, options: buildOptions)
     }
 
     nonisolated func responsesContinuationAnchor(in messages: [ChatMessage]) throws
@@ -243,66 +230,6 @@ extension ResponsesAPIClient {
 
     func shouldResetConversationBeforeRequest(messages: [ChatMessage], requestMode: RunRequestMode) -> Bool {
         requestMode == .forceFullRequest || (store && messages.count < lastMessageCount)
-    }
-
-    func mapMessages(_ messages: [ChatMessage]) throws -> (instructions: String?, input: [ResponsesInputItem]) {
-        var systemParts: [String] = []
-        var items: [ResponsesInputItem] = []
-
-        for message in messages {
-            switch message {
-            case let .system(text):
-                systemParts.append(text)
-
-            case let .user(text):
-                items.append(.userMessage(role: "user", content: text))
-
-            case let .userMultimodal(parts):
-                var textParts: [String] = []
-                for part in parts {
-                    guard case let .text(text) = part else {
-                        throw AgentError.llmError(.other(
-                            "Responses API does not support non-text content parts"
-                        ))
-                    }
-                    textParts.append(text)
-                }
-                items.append(.userMessage(role: "user", content: textParts.joined(separator: "\n")))
-
-            case let .assistant(msg):
-                if let continuity = msg.continuity, continuity.substrate == .responses {
-                    let replayState = try ResponsesReplayState(continuity: continuity)
-                    items.append(contentsOf: replayState.replayInputItems)
-                    continue
-                }
-                if let details = msg.reasoningDetails {
-                    for detail in details {
-                        items.append(.reasoning(detail))
-                    }
-                }
-                if !msg.content.isEmpty {
-                    items.append(.assistantMessage(ResponsesAssistantItem(
-                        content: [ResponsesOutputTextItem(text: msg.content)]
-                    )))
-                }
-                for call in msg.toolCalls {
-                    items.append(.functionCall(ResponsesFunctionCallItem(
-                        callId: call.id,
-                        name: call.name,
-                        arguments: call.arguments
-                    )))
-                }
-
-            case let .tool(id, _, content):
-                items.append(.functionCallOutput(ResponsesFunctionCallOutputItem(
-                    callId: id,
-                    output: content
-                )))
-            }
-        }
-
-        let instructions = systemParts.isEmpty ? nil : systemParts.joined(separator: "\n")
-        return (instructions, items)
     }
 
     func decodeResponse(_ data: Data) throws -> ResponsesAPIResponse {
@@ -422,68 +349,6 @@ extension ResponsesAPIClient {
             throw AgentError.llmError(.encodingFailed(error))
         }
         return urlRequest
-    }
-}
-
-extension ResponsesAPIClient {
-    private func buildFullRequest(
-        messages: [ChatMessage],
-        tools: [ToolDefinition],
-        stream: Bool,
-        responseFormat: ResponseFormat?,
-        extraFields: [String: JSONValue]
-    ) throws -> ResponsesRequest {
-        let (instructions, inputItems) = try mapMessages(messages)
-        let include: [String]? = store ? nil : ["reasoning.encrypted_content"]
-        return ResponsesRequest(
-            model: modelIdentifier,
-            instructions: instructions,
-            input: inputItems,
-            tools: tools.isEmpty ? nil : tools.map(ResponsesToolDefinition.init),
-            stream: stream ? true : nil,
-            maxOutputTokens: maxOutputTokens,
-            text: responseFormat.map {
-                ResponsesTextConfig(format: ResponsesFormatConfig(
-                    name: $0.schemaName, schema: $0.schema
-                ))
-            },
-            store: store,
-            reasoning: reasoningConfig.map(ResponsesReasoningConfig.init),
-            include: include,
-            previousResponseId: nil,
-            extraFields: extraFields
-        )
-    }
-
-    private func buildDeltaRequest(
-        messages: [ChatMessage],
-        tools: [ToolDefinition],
-        stream: Bool,
-        responseFormat: ResponseFormat?,
-        previousResponseId: String,
-        suffixStart: Int,
-        extraFields: [String: JSONValue]
-    ) throws -> ResponsesRequest {
-        let (_, inputItems) = try mapMessages(Array(messages[suffixStart...]))
-        let include: [String]? = store ? nil : ["reasoning.encrypted_content"]
-        return ResponsesRequest(
-            model: modelIdentifier,
-            instructions: nil,
-            input: inputItems,
-            tools: tools.isEmpty ? nil : tools.map(ResponsesToolDefinition.init),
-            stream: stream ? true : nil,
-            maxOutputTokens: maxOutputTokens,
-            text: responseFormat.map {
-                ResponsesTextConfig(format: ResponsesFormatConfig(
-                    name: $0.schemaName, schema: $0.schema
-                ))
-            },
-            store: store,
-            reasoning: reasoningConfig.map(ResponsesReasoningConfig.init),
-            include: include,
-            previousResponseId: previousResponseId,
-            extraFields: extraFields
-        )
     }
 }
 

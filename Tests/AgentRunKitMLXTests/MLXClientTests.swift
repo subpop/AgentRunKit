@@ -7,7 +7,7 @@ import MLXNN
 import Testing
 import Tokenizers
 
-struct MLXMessageMapperTests {
+@Suite(.serialized) struct MLXMessageMapperTests {
     @Test func systemMessage() {
         let dicts = MLXMessageMapper.mapMessages([.system("You are helpful.")])
         #expect(dicts.count == 1)
@@ -138,7 +138,7 @@ struct MLXMessageMapperTests {
     }
 }
 
-struct MLXToolSpecTests {
+@Suite(.serialized) struct MLXToolSpecTests {
     @Test func stringSchema() throws {
         let dict = try testSchemaDict(.string(description: "A city name"))
         #expect(dict["type"] as? String == "string")
@@ -239,7 +239,7 @@ struct MLXToolSpecTests {
     }
 }
 
-struct MLXToolCallMappingTests {
+@Suite(.serialized) struct MLXToolCallMappingTests {
     @Test func basicToolCallMapping() throws {
         let mlxCall = MLXLMCommon.ToolCall(
             function: .init(name: "get_weather", arguments: ["city": "London" as any Sendable])
@@ -274,7 +274,7 @@ struct MLXToolCallMappingTests {
     }
 }
 
-struct MLXParameterMergingTests {
+@Suite(.serialized) struct MLXParameterMergingTests {
     @Test func noExtraFieldsReturnsBase() {
         let base = GenerateParameters(maxTokens: 512, temperature: 0.7)
         let merged = MLXMessageMapper.mergeParameters(base, extraFields: [:])
@@ -315,7 +315,7 @@ struct MLXParameterMergingTests {
     }
 }
 
-struct MLXClientHistoryValidationTests {
+@Suite(.serialized) struct MLXClientHistoryValidationTests {
     private let malformedHistory: [ChatMessage] = [
         .user("Hi"),
         .assistant(AssistantMessage(

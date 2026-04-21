@@ -1,10 +1,11 @@
 import Foundation
 
 struct AnthropicRequest: Encodable {
-    let model: String?
+    var model: String?
     let messages: [AnthropicMessage]
     let system: [AnthropicSystemBlock]?
     let tools: [AnthropicToolDefinition]?
+    let toolChoice: AnthropicToolChoice?
     let maxTokens: Int
     let stream: Bool?
     let thinking: AnthropicThinkingConfig?
@@ -12,11 +13,12 @@ struct AnthropicRequest: Encodable {
     let extraFields: [String: JSONValue]
 
     private static let validExtraFields: Set<String> = [
-        "temperature", "top_p", "top_k", "stop_sequences", "metadata"
+        "temperature", "top_p", "top_k", "stop_sequences", "metadata", "container", "service_tier"
     ]
 
     enum CodingKeys: String, CodingKey {
         case model, messages, system, tools, stream, thinking
+        case toolChoice = "tool_choice"
         case outputConfig = "output_config"
         case maxTokens = "max_tokens"
     }
@@ -27,6 +29,7 @@ struct AnthropicRequest: Encodable {
         try container.encode(messages, forKey: .messages)
         try container.encodeIfPresent(system, forKey: .system)
         try container.encodeIfPresent(tools, forKey: .tools)
+        try container.encodeIfPresent(toolChoice, forKey: .toolChoice)
         try container.encode(maxTokens, forKey: .maxTokens)
         try container.encodeIfPresent(stream, forKey: .stream)
         try container.encodeIfPresent(thinking, forKey: .thinking)
@@ -64,7 +67,6 @@ struct AnthropicMessage: Encodable {
 enum AnthropicMessageContent: Encodable {
     case text(String)
     case blocks([AnthropicContentBlock])
-    case textWithCacheControl(String)
 
     func encode(to encoder: any Encoder) throws {
         var container = encoder.singleValueContainer()
@@ -73,57 +75,104 @@ enum AnthropicMessageContent: Encodable {
             try container.encode(string)
         case let .blocks(blocks):
             try container.encode(blocks)
-        case let .textWithCacheControl(string):
-            try container.encode([AnthropicSystemBlock(text: string, cacheControl: CacheControl())])
         }
     }
 }
 
 enum AnthropicContentBlock: Encodable {
-    case text(String)
+    case text(String, cacheControl: CacheControl? = nil)
     case thinking(thinking: String, signature: String)
-    case toolUse(id: String, name: String, input: JSONValue)
-    case toolResult(toolUseId: String, content: String, isError: Bool)
+    case toolUse(id: String, name: String, input: JSONValue, cacheControl: CacheControl? = nil)
+    case toolResult(toolUseId: String, content: String, isError: Bool, cacheControl: CacheControl? = nil)
+    case image(mediaType: String, data: String, cacheControl: CacheControl? = nil)
+    case document(mediaType: String, data: String, cacheControl: CacheControl? = nil)
+    case opaque(JSONValue)
 
     private enum BlockType: String, Encodable {
         case text, thinking, toolUse = "tool_use", toolResult = "tool_result"
+        case image, document
     }
 
     enum CodingKeys: String, CodingKey {
-        case type, text, thinking, signature, id, name, input
+        case type, text, thinking, signature, id, name, input, source
         case toolUseId = "tool_use_id"
         case content
         case isError = "is_error"
+        case cacheControl = "cache_control"
+    }
+
+    private enum SourceKeys: String, CodingKey {
+        case type, mediaType = "media_type", data
     }
 
     func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
-        case let .text(text):
+        case let .text(text, cacheControl):
             try container.encode(BlockType.text, forKey: .type)
             try container.encode(text, forKey: .text)
+            try container.encodeIfPresent(cacheControl, forKey: .cacheControl)
         case let .thinking(thinking, signature):
             try container.encode(BlockType.thinking, forKey: .type)
             try container.encode(thinking, forKey: .thinking)
             try container.encode(signature, forKey: .signature)
-        case let .toolUse(id, name, input):
+        case let .toolUse(id, name, input, cacheControl):
             try container.encode(BlockType.toolUse, forKey: .type)
             try container.encode(id, forKey: .id)
             try container.encode(name, forKey: .name)
             try container.encode(input, forKey: .input)
-        case let .toolResult(toolUseId, content, isError):
+            try container.encodeIfPresent(cacheControl, forKey: .cacheControl)
+        case let .toolResult(toolUseId, content, isError, cacheControl):
             try container.encode(BlockType.toolResult, forKey: .type)
             try container.encode(toolUseId, forKey: .toolUseId)
             try container.encode(content, forKey: .content)
             if isError {
                 try container.encode(true, forKey: .isError)
             }
+            try container.encodeIfPresent(cacheControl, forKey: .cacheControl)
+        case let .image(mediaType, data, cacheControl):
+            try container.encode(BlockType.image, forKey: .type)
+            var sourceContainer = container.nestedContainer(keyedBy: SourceKeys.self, forKey: .source)
+            try sourceContainer.encode("base64", forKey: .type)
+            try sourceContainer.encode(mediaType, forKey: .mediaType)
+            try sourceContainer.encode(data, forKey: .data)
+            try container.encodeIfPresent(cacheControl, forKey: .cacheControl)
+        case let .document(mediaType, data, cacheControl):
+            try container.encode(BlockType.document, forKey: .type)
+            var sourceContainer = container.nestedContainer(keyedBy: SourceKeys.self, forKey: .source)
+            try sourceContainer.encode("base64", forKey: .type)
+            try sourceContainer.encode(mediaType, forKey: .mediaType)
+            try sourceContainer.encode(data, forKey: .data)
+            try container.encodeIfPresent(cacheControl, forKey: .cacheControl)
+        case let .opaque(raw):
+            try raw.encode(to: encoder)
         }
     }
 }
 
+/// The time-to-live for an Anthropic prompt-caching breakpoint.
+public enum CacheControlTTL: String, Sendable, Equatable, Codable {
+    case fiveMinutes = "5m"
+    case oneHour = "1h"
+}
+
 struct CacheControl: Encodable {
     let type = "ephemeral"
+    let ttl: CacheControlTTL?
+
+    init(ttl: CacheControlTTL? = nil) {
+        self.ttl = ttl
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case type, ttl
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(type, forKey: .type)
+        try container.encodeIfPresent(ttl, forKey: .ttl)
+    }
 }
 
 struct AnthropicSystemBlock: Encodable {
@@ -141,10 +190,11 @@ struct AnthropicToolDefinition: Encodable {
     let name: String
     let description: String
     let inputSchema: JSONSchema
+    let strict: Bool?
     var cacheControl: CacheControl?
 
     enum CodingKeys: String, CodingKey {
-        case name, description
+        case name, description, strict
         case inputSchema = "input_schema"
         case cacheControl = "cache_control"
     }
@@ -153,46 +203,41 @@ struct AnthropicToolDefinition: Encodable {
         name = definition.name
         description = definition.description
         inputSchema = definition.parametersSchema
+        strict = definition.strict
     }
 }
 
-enum AnthropicThinkingConfig: Encodable {
-    case enabled(budgetTokens: Int)
-    case adaptive
-    case disabled
+/// How Anthropic should select a tool on the next turn.
+public enum AnthropicToolChoice: Sendable, Equatable {
+    case auto(disableParallel: Bool = false)
+    case any(disableParallel: Bool = false)
+    case tool(name: String, disableParallel: Bool = false)
+    case none
+}
 
-    var budgetTokens: Int? {
-        switch self {
-        case let .enabled(tokens): tokens
-        case .adaptive, .disabled: nil
-        }
-    }
-
+extension AnthropicToolChoice: Encodable {
     private enum CodingKeys: String, CodingKey {
-        case type
-        case budgetTokens = "budget_tokens"
+        case type, name
+        case disableParallelToolUse = "disable_parallel_tool_use"
     }
 
-    func encode(to encoder: any Encoder) throws {
+    public func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
-        case let .enabled(budgetTokens):
-            try container.encode("enabled", forKey: .type)
-            try container.encode(budgetTokens, forKey: .budgetTokens)
-        case .adaptive:
-            try container.encode("adaptive", forKey: .type)
-        case .disabled:
-            try container.encode("disabled", forKey: .type)
+        case let .auto(disable):
+            try container.encode("auto", forKey: .type)
+            if disable { try container.encode(true, forKey: .disableParallelToolUse) }
+        case let .any(disable):
+            try container.encode("any", forKey: .type)
+            if disable { try container.encode(true, forKey: .disableParallelToolUse) }
+        case let .tool(name, disable):
+            try container.encode("tool", forKey: .type)
+            try container.encode(name, forKey: .name)
+            if disable { try container.encode(true, forKey: .disableParallelToolUse) }
+        case .none:
+            try container.encode("none", forKey: .type)
         }
     }
-}
-
-struct AnthropicOutputConfig: Encodable {
-    let effort: AnthropicOutputEffort
-}
-
-enum AnthropicOutputEffort: String, Encodable {
-    case low, medium, high, max
 }
 
 struct AnthropicResponse: Decodable {
@@ -204,6 +249,7 @@ enum AnthropicResponseBlock: Decodable {
     case text(String)
     case thinking(thinking: String, signature: String)
     case toolUse(id: String, name: String, input: JSONValue)
+    case opaque(OpaqueResponseItem)
 
     private enum ResponseBlockType: String {
         case text, thinking
@@ -219,11 +265,9 @@ enum AnthropicResponseBlock: Decodable {
         let typeContainer = try decoder.container(keyedBy: TypeKey.self)
         let typeString = try typeContainer.decode(String.self, forKey: .type)
         guard let blockType = ResponseBlockType(rawValue: typeString) else {
-            throw DecodingError.dataCorruptedError(
-                forKey: TypeKey.type,
-                in: typeContainer,
-                debugDescription: "Unknown Anthropic content block type: \(typeString)"
-            )
+            let raw = try JSONValue(from: decoder)
+            self = .opaque(OpaqueResponseItem(provider: "anthropic", type: typeString, raw: raw))
+            return
         }
         switch blockType {
         case .text:
@@ -288,10 +332,10 @@ enum AnthropicMessageMapper {
                     role: .user, content: .text(text)
                 ))
 
-            case .userMultimodal:
-                throw AgentError.llmError(.other(
-                    "AnthropicClient does not support multimodal content"
-                ))
+            case let .userMultimodal(parts):
+                flushToolResults(&pendingToolResults, into: &anthropicMessages)
+                let blocks = try parts.map(Self.anthropicBlock(for:))
+                anthropicMessages.append(AnthropicMessage(role: .user, content: .blocks(blocks)))
 
             case let .assistant(msg):
                 flushToolResults(&pendingToolResults, into: &anthropicMessages)
@@ -357,6 +401,29 @@ enum AnthropicMessageMapper {
         }
 
         return AnthropicMessage(role: .assistant, content: .blocks(blocks))
+    }
+
+    static func anthropicBlock(for part: ContentPart) throws -> AnthropicContentBlock {
+        switch part {
+        case let .text(text):
+            return .text(text)
+        case .imageURL:
+            throw AgentError.llmError(.featureUnsupported(
+                provider: "anthropic", feature: "image URL (use base64 data instead)"
+            ))
+        case let .imageBase64(data, mimeType):
+            return .image(mediaType: mimeType, data: data.base64EncodedString())
+        case let .videoBase64(_, mimeType):
+            throw AgentError.llmError(.featureUnsupported(
+                provider: "anthropic", feature: "video (\(mimeType))"
+            ))
+        case let .pdfBase64(data):
+            return .document(mediaType: "application/pdf", data: data.base64EncodedString())
+        case let .audioBase64(_, format):
+            throw AgentError.llmError(.featureUnsupported(
+                provider: "anthropic", feature: "audio (\(format.rawValue))"
+            ))
+        }
     }
 
     private static func parseToolCallInput(_ arguments: String) throws -> JSONValue {

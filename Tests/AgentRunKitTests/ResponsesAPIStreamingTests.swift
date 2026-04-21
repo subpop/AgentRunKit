@@ -206,7 +206,7 @@ struct ResponsesStreamingTests {
         let deltas = try await collectResponsesStreamDeltas(client: makeResponsesStreamingClient(), lines: lines)
 
         #expect(deltas.count == 4)
-        #expect(deltas[0] == .toolCallStart(index: 0, id: "call_1", name: "search"))
+        #expect(deltas[0] == .toolCallStart(index: 0, id: "call_1", name: "search", kind: .function))
         #expect(deltas[1] == .toolCallDelta(index: 0, arguments: "{\"q\":"))
         #expect(deltas[2] == .toolCallDelta(index: 0, arguments: "\"test\"}"))
     }
@@ -391,7 +391,7 @@ struct ResponsesStreamingTests {
             Issue.record("Expected reasoningDetails delta")
         }
         #expect(deltas[4] == .content("wer"))
-        #expect(deltas[5] == .toolCallStart(index: 2, id: "call_1", name: "search"))
+        #expect(deltas[5] == .toolCallStart(index: 2, id: "call_1", name: "search", kind: .function))
         #expect(deltas[6] == .toolCallDelta(index: 2, arguments: #"{"q":"test"}"#))
         if case let .finished(usage) = deltas[7] {
             #expect(usage == TokenUsage(input: 50, output: 20, reasoning: 10))
@@ -454,7 +454,7 @@ struct ResponsesStreamingTests {
         )
 
         #expect(deltas[0] == .toolCallDelta(index: 0, arguments: #"{"q":"#))
-        #expect(deltas[1] == .toolCallStart(index: 0, id: "call_1", name: "search"))
+        #expect(deltas[1] == .toolCallStart(index: 0, id: "call_1", name: "search", kind: .function))
         #expect(deltas[2] == .toolCallDelta(index: 0, arguments: #""test"}"#))
         if case .finished = deltas[3] {} else {
             Issue.record("Expected finished delta")

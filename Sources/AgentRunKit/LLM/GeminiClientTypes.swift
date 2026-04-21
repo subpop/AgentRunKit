@@ -12,6 +12,9 @@ struct GeminiRequest: Encodable {
         "temperature", "topP", "topK", "stopSequences",
         "safetySettings", "cachedContent"
     ]
+    private static let generationConfigExtraFields: Set<String> = [
+        "temperature", "topP", "topK", "stopSequences"
+    ]
 
     enum CodingKeys: String, CodingKey {
         case contents, systemInstruction, tools, toolConfig, generationConfig
@@ -23,7 +26,6 @@ struct GeminiRequest: Encodable {
         try container.encodeIfPresent(systemInstruction, forKey: .systemInstruction)
         try container.encodeIfPresent(tools, forKey: .tools)
         try container.encodeIfPresent(toolConfig, forKey: .toolConfig)
-        try container.encodeIfPresent(generationConfig, forKey: .generationConfig)
 
         if !extraFields.isEmpty {
             let invalidKeys = extraFields.keys.filter { !Self.validExtraFields.contains($0) }
@@ -37,11 +39,35 @@ struct GeminiRequest: Encodable {
                     )
                 )
             }
+
+            let generationExtraFields = extraFields.filter { key, _ in
+                Self.generationConfigExtraFields.contains(key)
+            }
+            let rootExtraFields = extraFields.filter { key, _ in
+                !Self.generationConfigExtraFields.contains(key)
+            }
+
+            let mergedGenerationConfig: GeminiGenerationConfig? = {
+                guard generationConfig != nil || !generationExtraFields.isEmpty else { return nil }
+                return GeminiGenerationConfig(
+                    maxOutputTokens: generationConfig?.maxOutputTokens,
+                    thinkingConfig: generationConfig?.thinkingConfig,
+                    responseMimeType: generationConfig?.responseMimeType,
+                    responseSchema: generationConfig?.responseSchema,
+                    responseJsonSchema: generationConfig?.responseJsonSchema,
+                    extraFields: generationExtraFields
+                )
+            }()
+            try container.encodeIfPresent(mergedGenerationConfig, forKey: .generationConfig)
+
             var dynamicContainer = encoder.container(keyedBy: DynamicCodingKey.self)
-            for (key, value) in extraFields {
+            for (key, value) in rootExtraFields {
                 try dynamicContainer.encode(value, forKey: DynamicCodingKey(key))
             }
+            return
         }
+
+        try container.encodeIfPresent(generationConfig, forKey: .generationConfig)
     }
 }
 
@@ -67,20 +93,28 @@ struct GeminiPart: Codable {
     let functionResponse: GeminiFunctionResponse?
     let thought: Bool?
     let thoughtSignature: String?
+    let inlineData: GeminiInlineData?
 
     init(
         text: String? = nil,
         functionCall: GeminiFunctionCall? = nil,
         functionResponse: GeminiFunctionResponse? = nil,
         thought: Bool? = nil,
-        thoughtSignature: String? = nil
+        thoughtSignature: String? = nil,
+        inlineData: GeminiInlineData? = nil
     ) {
         self.text = text
         self.functionCall = functionCall
         self.functionResponse = functionResponse
         self.thought = thought
         self.thoughtSignature = thoughtSignature
+        self.inlineData = inlineData
     }
+}
+
+struct GeminiInlineData: Codable {
+    let mimeType: String
+    let data: String
 }
 
 struct GeminiFunctionCall: Codable {
@@ -120,11 +154,21 @@ struct GeminiToolConfig: Encodable {
     let functionCallingConfig: GeminiFunctionCallingConfig?
 }
 
+/// Routing behavior for Gemini function calling.
+public enum GeminiFunctionCallingMode: String, Sendable, Equatable {
+    case auto = "AUTO"
+    case any = "ANY"
+    case none = "NONE"
+    case validated = "VALIDATED"
+}
+
 struct GeminiFunctionCallingConfig: Encodable {
     let mode: String
+    let allowedFunctionNames: [String]?
 
-    init(mode: String = "AUTO") {
-        self.mode = mode
+    init(mode: GeminiFunctionCallingMode = .auto, allowedFunctionNames: [String]? = nil) {
+        self.mode = mode.rawValue
+        self.allowedFunctionNames = allowedFunctionNames
     }
 }
 
@@ -133,17 +177,44 @@ struct GeminiGenerationConfig: Encodable {
     let thinkingConfig: GeminiThinkingConfig?
     let responseMimeType: String?
     let responseSchema: GeminiSchema?
+    let responseJsonSchema: GeminiSchema?
+    let extraFields: [String: JSONValue]
+
+    private enum CodingKeys: String, CodingKey {
+        case maxOutputTokens
+        case thinkingConfig, responseMimeType, responseSchema, responseJsonSchema
+    }
 
     init(
         maxOutputTokens: Int? = nil,
         thinkingConfig: GeminiThinkingConfig? = nil,
         responseMimeType: String? = nil,
-        responseSchema: GeminiSchema? = nil
+        responseSchema: GeminiSchema? = nil,
+        responseJsonSchema: GeminiSchema? = nil,
+        extraFields: [String: JSONValue] = [:]
     ) {
         self.maxOutputTokens = maxOutputTokens
         self.thinkingConfig = thinkingConfig
         self.responseMimeType = responseMimeType
         self.responseSchema = responseSchema
+        self.responseJsonSchema = responseJsonSchema
+        self.extraFields = extraFields
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(maxOutputTokens, forKey: .maxOutputTokens)
+        try container.encodeIfPresent(thinkingConfig, forKey: .thinkingConfig)
+        try container.encodeIfPresent(responseMimeType, forKey: .responseMimeType)
+        try container.encodeIfPresent(responseSchema, forKey: .responseSchema)
+        try container.encodeIfPresent(responseJsonSchema, forKey: .responseJsonSchema)
+
+        if !extraFields.isEmpty {
+            var dynamicContainer = encoder.container(keyedBy: DynamicCodingKey.self)
+            for (key, value) in extraFields {
+                try dynamicContainer.encode(value, forKey: DynamicCodingKey(key))
+            }
+        }
     }
 }
 
@@ -238,10 +309,10 @@ enum GeminiMessageMapper {
                 flushFunctionResponses(&pendingFunctionResponses, into: &contents)
                 contents.append(GeminiContent(role: "user", parts: [GeminiPart(text: text)]))
 
-            case .userMultimodal:
-                throw AgentError.llmError(.other(
-                    "GeminiClient does not support multimodal content"
-                ))
+            case let .userMultimodal(parts):
+                flushFunctionResponses(&pendingFunctionResponses, into: &contents)
+                let geminiParts = try parts.map(Self.geminiPart(for:))
+                contents.append(GeminiContent(role: "user", parts: geminiParts))
 
             case let .assistant(msg):
                 flushFunctionResponses(&pendingFunctionResponses, into: &contents)
@@ -327,6 +398,33 @@ enum GeminiMessageMapper {
         return GeminiContent(role: "model", parts: parts)
     }
 
+    static func geminiPart(for part: ContentPart) throws -> GeminiPart {
+        switch part {
+        case let .text(text):
+            return GeminiPart(text: text)
+        case .imageURL:
+            throw AgentError.llmError(.featureUnsupported(
+                provider: "gemini", feature: "image URL (use inline base64 data instead)"
+            ))
+        case let .imageBase64(data, mimeType):
+            return GeminiPart(inlineData: GeminiInlineData(
+                mimeType: mimeType, data: data.base64EncodedString()
+            ))
+        case let .videoBase64(data, mimeType):
+            return GeminiPart(inlineData: GeminiInlineData(
+                mimeType: mimeType, data: data.base64EncodedString()
+            ))
+        case let .pdfBase64(data):
+            return GeminiPart(inlineData: GeminiInlineData(
+                mimeType: "application/pdf", data: data.base64EncodedString()
+            ))
+        case let .audioBase64(data, format):
+            return GeminiPart(inlineData: GeminiInlineData(
+                mimeType: format.mimeType, data: data.base64EncodedString()
+            ))
+        }
+    }
+
     private static func parseToolCallArgs(_ arguments: String) throws -> JSONValue {
         let data = Data(arguments.utf8)
         do {
@@ -387,7 +485,7 @@ struct GeminiSchema: Encodable {
                 try container.encode(required, forKey: .required)
             }
             try container.encodeIfPresent(description, forKey: .description)
-            // Intentionally omits additionalProperties — unsupported by Gemini API
+            // Intentionally omits additionalProperties: unsupported by Gemini API
 
         case .null:
             try container.encode("null", forKey: .type)

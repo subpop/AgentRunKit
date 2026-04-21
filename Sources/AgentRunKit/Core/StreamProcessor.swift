@@ -124,8 +124,8 @@ private struct StreamAccumulation {
             continuation.yield(.make(.reasoningDelta(text)))
         case let .reasoningDetails(details):
             reasoningDetails.append(details)
-        case let .toolCallStart(index, id, name):
-            startToolCall(index: index, id: id, name: name, policy: policy, continuation: continuation)
+        case let .toolCallStart(index, id, name, kind):
+            startToolCall(index: index, id: id, name: name, kind: kind, policy: policy, continuation: continuation)
         case let .toolCallDelta(index, arguments):
             appendToolCallDelta(index: index, arguments: arguments)
         case let .audioStarted(id, expiresAt):
@@ -180,10 +180,11 @@ private struct StreamAccumulation {
         index: Int,
         id: String,
         name: String,
+        kind: ToolCallKind,
         policy: StreamPolicy,
         continuation: AsyncThrowingStream<StreamEvent, Error>.Continuation
     ) {
-        var accumulator = ToolCallAccumulator(id: id, name: name)
+        var accumulator = ToolCallAccumulator(id: id, name: name, kind: kind)
         if let buffered = pendingArguments.removeValue(forKey: index) {
             accumulator.arguments = buffered
         }

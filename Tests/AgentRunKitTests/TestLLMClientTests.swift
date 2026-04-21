@@ -433,7 +433,7 @@ struct TestLLMClientTests {
             Issue.record("Expected at least 3 deltas, got \(deltas.count)")
             return
         }
-        guard case let .toolCallStart(index: idx, id: _, name: name) = deltas[0] else {
+        guard case let .toolCallStart(index: idx, id: _, name: name, kind: .function) = deltas[0] else {
             Issue.record("Expected toolCallStart, got \(deltas[0])")
             return
         }
@@ -472,7 +472,7 @@ struct TestLLMClientTests {
             Issue.record("Expected 3 deltas, got \(deltas.count)")
             return
         }
-        guard case let .toolCallStart(index: _, id: _, name: name) = deltas[0] else {
+        guard case let .toolCallStart(index: _, id: _, name: name, kind: .function) = deltas[0] else {
             Issue.record("Expected toolCallStart")
             return
         }
@@ -513,7 +513,7 @@ struct TestLLMClientTests {
             deltas.append(delta)
         }
         #expect(deltas.count == 3)
-        guard case let .toolCallStart(index: _, id: _, name: name) = deltas[0] else {
+        guard case let .toolCallStart(index: _, id: _, name: name, kind: .function) = deltas[0] else {
             Issue.record("Expected toolCallStart")
             return
         }

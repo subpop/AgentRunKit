@@ -48,6 +48,8 @@ public struct GeminiClient: LLMClient, Sendable {
             messages: messages,
             tools: tools,
             responseFormat: responseFormat,
+            functionCallingMode: requestContext?.gemini?.functionCallingMode ?? .auto,
+            allowedFunctionNames: requestContext?.gemini?.allowedFunctionNames,
             extraFields: requestContext?.extraFields ?? [:]
         )
         let urlRequest = try buildURLRequest(request, stream: false)
@@ -69,6 +71,8 @@ public struct GeminiClient: LLMClient, Sendable {
                     try await performStreamRequest(
                         messages: messages,
                         tools: tools,
+                        functionCallingMode: requestContext?.gemini?.functionCallingMode ?? .auto,
+                        allowedFunctionNames: requestContext?.gemini?.allowedFunctionNames,
                         extraFields: requestContext?.extraFields ?? [:],
                         onResponse: requestContext?.onResponse,
                         continuation: continuation
@@ -84,6 +88,7 @@ public struct GeminiClient: LLMClient, Sendable {
 
 public extension GeminiClient {
     static let geminiBaseURL = URL(string: "https://generativelanguage.googleapis.com")!
+    static let defaultModelIdentifier = "gemini-2.5-flash"
 }
 
 extension GeminiClient {
@@ -91,31 +96,60 @@ extension GeminiClient {
         messages: [ChatMessage],
         tools: [ToolDefinition],
         responseFormat: ResponseFormat? = nil,
+        functionCallingMode: GeminiFunctionCallingMode = .auto,
+        allowedFunctionNames: [String]? = nil,
         extraFields: [String: JSONValue] = [:]
     ) throws -> GeminiRequest {
+        if tools.isEmpty, functionCallingMode != .auto {
+            throw AgentError.llmError(.other(
+                "Gemini functionCallingMode requires at least one tool in the request"
+            ))
+        }
+        if allowedFunctionNames != nil, functionCallingMode != .any, functionCallingMode != .validated {
+            throw AgentError.llmError(.other(
+                "Gemini allowedFunctionNames requires functionCallingMode .any or .validated"
+            ))
+        }
+        if tools.isEmpty, allowedFunctionNames != nil {
+            throw AgentError.llmError(.other(
+                "Gemini allowedFunctionNames requires at least one tool in the request"
+            ))
+        }
         let (systemInstruction, contents) = try GeminiMessageMapper.mapMessages(messages)
 
         let toolDefs: [GeminiTool]? = tools.isEmpty ? nil : [
             GeminiTool(functionDeclarations: tools.map(GeminiFunctionDeclaration.init))
         ]
         let toolConfig: GeminiToolConfig? = tools.isEmpty ? nil : GeminiToolConfig(
-            functionCallingConfig: GeminiFunctionCallingConfig()
+            functionCallingConfig: GeminiFunctionCallingConfig(
+                mode: functionCallingMode,
+                allowedFunctionNames: allowedFunctionNames
+            )
         )
 
         var responseMimeType: String?
         var responseSchema: GeminiSchema?
+        var responseJsonSchema: GeminiSchema?
         if let responseFormat {
             responseMimeType = "application/json"
-            responseSchema = GeminiSchema(responseFormat.schema)
+            let schema = GeminiSchema(responseFormat.schema)
+            let capabilities = GeminiCapabilities.resolve(model: resolvedModelIdentifier)
+            switch capabilities.preferredSchemaField {
+            case .responseJsonSchema:
+                responseJsonSchema = schema
+            case .responseSchema:
+                responseSchema = schema
+            }
         }
 
-        let thinkingConfig = buildThinkingConfig()
+        let thinkingConfig = try buildThinkingConfig()
 
         let generationConfig = GeminiGenerationConfig(
             maxOutputTokens: maxOutputTokens,
             thinkingConfig: thinkingConfig,
             responseMimeType: responseMimeType,
-            responseSchema: responseSchema
+            responseSchema: responseSchema,
+            responseJsonSchema: responseJsonSchema
         )
 
         return GeminiRequest(
@@ -128,19 +162,39 @@ extension GeminiClient {
         )
     }
 
-    func buildThinkingConfig() -> GeminiThinkingConfig? {
+    func buildThinkingConfig() throws -> GeminiThinkingConfig? {
         guard let config = reasoningConfig else { return nil }
         if config.effort == .none, config.budgetTokens == nil { return nil }
 
-        let level = effortToLevel(config.effort)
-        let budget = config.budgetTokens
+        if let budget = config.budgetTokens {
+            return GeminiThinkingConfig(
+                includeThoughts: true,
+                thinkingBudget: budget,
+                thinkingLevel: nil
+            )
+        }
 
-        // Gemini rejects requests containing both thinkingBudget and thinkingLevel.
-        return GeminiThinkingConfig(
-            includeThoughts: true,
-            thinkingBudget: budget,
-            thinkingLevel: budget == nil ? level : nil
-        )
+        let capabilities = GeminiCapabilities.resolve(model: resolvedModelIdentifier)
+        switch capabilities.thinkingShape {
+        case .budget:
+            return GeminiThinkingConfig(
+                includeThoughts: true,
+                thinkingBudget: config.effort.defaultBudgetTokens,
+                thinkingLevel: nil
+            )
+        case .level:
+            return GeminiThinkingConfig(
+                includeThoughts: true,
+                thinkingBudget: nil,
+                thinkingLevel: effortToLevel(config.effort)
+            )
+        case .unknown:
+            throw AgentError.llmError(.capabilityMismatch(
+                model: resolvedModelIdentifier,
+                requirement: "unknown Gemini model family; enumerate in GeminiModelFamily "
+                    + "or supply reasoningConfig.budgetTokens explicitly"
+            ))
+        }
     }
 
     private func effortToLevel(_ effort: ReasoningConfig.Effort) -> String? {
@@ -156,7 +210,7 @@ extension GeminiClient {
 
     func buildURLRequest(_ request: GeminiRequest, stream: Bool) throws -> URLRequest {
         let action = stream ? "streamGenerateContent" : "generateContent"
-        let modelPath = modelIdentifier.map { "models/\($0)" } ?? "models/gemini-2.5-flash"
+        let modelPath = "models/\(resolvedModelIdentifier)"
         let path = "\(apiVersion)/\(modelPath):\(action)"
         let url = baseURL.appendingPathComponent(path)
 
@@ -178,6 +232,10 @@ extension GeminiClient {
 }
 
 extension GeminiClient {
+    private var resolvedModelIdentifier: String {
+        modelIdentifier ?? Self.defaultModelIdentifier
+    }
+
     func encodeFunctionCallArgs(_ args: JSONValue?) throws -> String {
         guard let args else { return "{}" }
         let encoded: Data

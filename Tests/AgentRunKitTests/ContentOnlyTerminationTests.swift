@@ -62,7 +62,7 @@ struct AgentContentOnlyStreamTests {
     func finishToolStillFiresWhenContentOnlyClientAlsoEmitsContent() async throws {
         let deltas: [StreamDelta] = [
             .content("model text"),
-            .toolCallStart(index: 0, id: "call_1", name: "finish"),
+            .toolCallStart(index: 0, id: "call_1", name: "finish", kind: .function),
             .toolCallDelta(
                 index: 0,
                 arguments: #"{"content": "finish-tool content", "reason": "completed"}"#

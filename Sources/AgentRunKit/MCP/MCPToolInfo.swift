@@ -19,8 +19,8 @@ public struct MCPToolInfo: Sendable, Equatable, Decodable {
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         name = try container.decode(String.self, forKey: .name)
-        description = (try? container.decode(String.self, forKey: .description)) ?? ""
-        inputSchema = (try? container.decode(JSONSchema.self, forKey: .inputSchema))
+        description = try container.decodeIfPresent(String.self, forKey: .description) ?? ""
+        inputSchema = try container.decodeIfPresent(JSONSchema.self, forKey: .inputSchema)
             ?? .object(properties: [:], required: [])
     }
 }

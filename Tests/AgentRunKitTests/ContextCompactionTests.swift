@@ -964,12 +964,12 @@ struct StreamCompactionTests {
     @Test
     func streamEmitsCompactedEvent() async throws {
         let firstDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "noop"),
+            .toolCallStart(index: 0, id: "call_1", name: "noop", kind: .function),
             .toolCallDelta(index: 0, arguments: "{}"),
             .finished(usage: TokenUsage(input: 500, output: 250)),
         ]
         let secondDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_2", name: "finish"),
+            .toolCallStart(index: 0, id: "call_2", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "done"}"#),
             .finished(usage: TokenUsage(input: 100, output: 50)),
         ]

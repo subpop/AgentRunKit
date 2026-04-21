@@ -5,6 +5,7 @@ public struct OpenAIClient: LLMClient, Sendable {
     public let modelIdentifier: String?
     public let maxTokens: Int
     public let contextWindowSize: Int?
+    public let profile: OpenAIChatProfile
     let apiKey: String?
     let baseURL: URL
     let chatCompletionPath: String
@@ -25,6 +26,7 @@ public struct OpenAIClient: LLMClient, Sendable {
         session: URLSession = .shared,
         retryPolicy: RetryPolicy = .default,
         reasoningConfig: ReasoningConfig? = nil,
+        profile: OpenAIChatProfile = .compatible,
         assistantReplayProfile: OpenAIChatAssistantReplayProfile = .conservative
     ) {
         self.apiKey = apiKey
@@ -37,6 +39,7 @@ public struct OpenAIClient: LLMClient, Sendable {
         self.session = session
         self.retryPolicy = retryPolicy
         self.reasoningConfig = reasoningConfig
+        self.profile = profile
         self.assistantReplayProfile = assistantReplayProfile
     }
 
@@ -47,11 +50,12 @@ public struct OpenAIClient: LLMClient, Sendable {
         requestContext: RequestContext?
     ) async throws -> AssistantMessage {
         try messages.validateForLLMRequest()
-        let request = buildRequest(
+        let request = try buildRequest(
             messages: messages,
             tools: tools,
             responseFormat: responseFormat,
-            extraFields: requestContext?.extraFields ?? [:]
+            extraFields: requestContext?.extraFields ?? [:],
+            options: requestContext?.openAIChat
         )
         let urlRequest = try buildURLRequest(request)
         let (data, httpResponse) = try await HTTPRetry.performData(
@@ -72,6 +76,7 @@ public struct OpenAIClient: LLMClient, Sendable {
                     try await performStreamRequest(
                         messages: messages,
                         tools: tools,
+                        options: requestContext?.openAIChat,
                         extraFields: requestContext?.extraFields ?? [:],
                         onResponse: requestContext?.onResponse,
                         continuation: continuation
@@ -138,22 +143,72 @@ extension OpenAIClient {
         tools: [ToolDefinition],
         stream: Bool = false,
         responseFormat: ResponseFormat? = nil,
-        extraFields: [String: JSONValue] = [:]
-    ) -> ChatCompletionRequest {
-        let tokenField = baseURL == OpenAIClient.openAIBaseURL ? "max_completion_tokens" : "max_tokens"
-        return ChatCompletionRequest(
+        extraFields: [String: JSONValue] = [:],
+        options: OpenAIChatRequestOptions? = nil
+    ) throws -> ChatCompletionRequest {
+        let capabilities = OpenAIChatCapabilities.resolve(profile: profile)
+        let requestTools = try buildTools(functionTools: tools, options: options, capabilities: capabilities)
+        let toolChoice = try resolveToolChoice(
+            requestTools: requestTools,
+            functionTools: tools,
+            options: options,
+            capabilities: capabilities
+        )
+        return try ChatCompletionRequest(
             model: modelIdentifier,
-            messages: messages.map { RequestMessage($0, replayProfile: assistantReplayProfile) },
-            tools: tools.isEmpty ? nil : tools.map(RequestTool.init),
-            toolChoice: tools.isEmpty ? nil : "auto",
+            messages: messages.map { try RequestMessage($0, replayProfile: assistantReplayProfile) },
+            tools: requestTools.isEmpty ? nil : requestTools,
+            toolChoice: toolChoice,
+            parallelToolCalls: options?.parallelToolCalls,
             maxTokens: maxTokens,
-            tokenFieldName: tokenField,
+            tokenFieldName: capabilities.tokenLimitField.rawValue,
             stream: stream ? true : nil,
             streamOptions: stream ? StreamOptions(includeUsage: true) : nil,
             responseFormat: responseFormat,
             reasoning: reasoningConfig.map(RequestReasoning.init),
             extraFields: extraFields
         )
+    }
+
+    private func buildTools(
+        functionTools: [ToolDefinition],
+        options: OpenAIChatRequestOptions?,
+        capabilities: OpenAIChatCapabilities
+    ) throws -> [RequestTool] {
+        let functionRequestTools = try functionTools.map { try RequestTool($0, profile: capabilities.profile) }
+        let customRequestTools = try (options?.customTools ?? []).map {
+            try RequestTool(custom: $0, profile: capabilities.profile)
+        }
+        return functionRequestTools + customRequestTools
+    }
+
+    private func resolveToolChoice(
+        requestTools: [RequestTool],
+        functionTools: [ToolDefinition],
+        options: OpenAIChatRequestOptions?,
+        capabilities: OpenAIChatCapabilities
+    ) throws -> OpenAIChatToolChoice? {
+        let functions = Set(functionTools.map(\.name))
+        let customs = Set((options?.customTools ?? []).map(\.name))
+
+        guard let toolChoice = options?.toolChoice else {
+            return requestTools.isEmpty ? nil : .auto
+        }
+
+        switch toolChoice {
+        case .required:
+            try validateRequiredToolChoice(requestTools)
+        case let .function(name):
+            try validateRequestedFunctionChoice(name, functions: functions)
+        case let .custom(name):
+            try validateRequestedCustomChoice(name, customs: customs, capabilities: capabilities)
+        case let .allowedTools(_, tools):
+            try validateAllowedTools(tools, functions: functions, customs: customs, capabilities: capabilities)
+        case .none, .auto:
+            break
+        }
+
+        return toolChoice
     }
 
     func buildURLRequest(_ request: ChatCompletionRequest) throws -> URLRequest {
@@ -285,7 +340,7 @@ extension OpenAIClient {
         }
 
         let toolCalls = (choice.message.toolCalls ?? []).map { call in
-            ToolCall(id: call.id, name: call.function.name, arguments: call.function.arguments)
+            ToolCall(id: call.id, name: call.name, arguments: call.arguments, kind: call.kind)
         }
 
         let tokenUsage = response.usage.map(\.tokenUsage)
@@ -345,6 +400,45 @@ public extension OpenAIClient {
             session: session,
             retryPolicy: retryPolicy,
             reasoningConfig: reasoningConfig,
+            profile: .compatible,
+            assistantReplayProfile: assistantReplayProfile
+        )
+    }
+
+    static func openAI(
+        apiKey: String,
+        model: String? = nil,
+        maxTokens: Int = 16384,
+        contextWindowSize: Int? = nil,
+        reasoningConfig: ReasoningConfig? = nil
+    ) -> OpenAIClient {
+        OpenAIClient(
+            apiKey: apiKey,
+            model: model,
+            maxTokens: maxTokens,
+            contextWindowSize: contextWindowSize,
+            baseURL: openAIBaseURL,
+            reasoningConfig: reasoningConfig,
+            profile: .firstParty
+        )
+    }
+
+    static func openRouter(
+        apiKey: String,
+        model: String? = nil,
+        maxTokens: Int = 16384,
+        contextWindowSize: Int? = nil,
+        reasoningConfig: ReasoningConfig? = nil,
+        assistantReplayProfile: OpenAIChatAssistantReplayProfile = .openRouterReasoningDetails
+    ) -> OpenAIClient {
+        OpenAIClient(
+            apiKey: apiKey,
+            model: model,
+            maxTokens: maxTokens,
+            contextWindowSize: contextWindowSize,
+            baseURL: openRouterBaseURL,
+            reasoningConfig: reasoningConfig,
+            profile: .openRouter,
             assistantReplayProfile: assistantReplayProfile
         )
     }

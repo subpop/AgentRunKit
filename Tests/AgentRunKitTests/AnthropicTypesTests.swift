@@ -3,8 +3,8 @@ import Foundation
 import Testing
 
 struct AnthropicResponseParsingTests {
-    private func makeClient() -> AnthropicClient {
-        AnthropicClient(apiKey: "test-key", model: "claude-sonnet-4-6")
+    private func makeClient() throws -> AnthropicClient {
+        try AnthropicClient(apiKey: "test-key", model: "claude-sonnet-4-6")
     }
 
     @Test
@@ -180,7 +180,7 @@ struct AnthropicResponseParsingTests {
             return
         }
         #expect(blocks.count == 1)
-        if case let .text(text) = blocks[0] {
+        if case let .text(text, _) = blocks[0] {
             #expect(text == "")
         } else {
             Issue.record("Expected empty text block")
@@ -242,7 +242,7 @@ struct AnthropicResponseParsingTests {
             return
         }
         let toolBlock = blocks.first { if case .toolUse = $0 { return true }; return false }
-        guard case let .toolUse(id, name, input) = toolBlock else {
+        guard case let .some(.toolUse(id, name, input, _)) = toolBlock else {
             Issue.record("Expected toolUse block")
             return
         }
@@ -252,14 +252,14 @@ struct AnthropicResponseParsingTests {
             Issue.record("Expected input to be a JSON object, not a string")
             return
         }
-        #expect(inputDict["city"] == .string("NYC"))
-        #expect(inputDict["units"] == .string("celsius"))
+        #expect(inputDict["city"] == JSONValue.string("NYC"))
+        #expect(inputDict["units"] == JSONValue.string("celsius"))
     }
 }
 
 struct AnthropicContinuityTests {
-    private func makeClient() -> AnthropicClient {
-        AnthropicClient(apiKey: "test-key", model: "claude-sonnet-4-6")
+    private func makeClient() throws -> AnthropicClient {
+        try AnthropicClient(apiKey: "test-key", model: "claude-sonnet-4-6")
     }
 
     @Test
@@ -356,7 +356,7 @@ struct AnthropicContinuityTests {
         }
 
         #expect(blocks.count == 2)
-        if case let .text(text) = blocks[0] {
+        if case let .text(text, _) = blocks[0] {
             #expect(text == "Original text")
         } else {
             Issue.record("Expected text block at index 0")
@@ -402,7 +402,7 @@ struct AnthropicContinuityTests {
             return
         }
         #expect(blocks.count == 1)
-        if case let .text(text) = blocks[0] {
+        if case let .text(text, _) = blocks[0] {
             #expect(text == "Answer")
         } else {
             Issue.record("Expected text block")
@@ -455,12 +455,12 @@ struct AnthropicContinuityTests {
         } else {
             Issue.record("Expected thinking at 0")
         }
-        if case let .text(text) = blocks[1] {
+        if case let .text(text, _) = blocks[1] {
             #expect(text == "Step 1")
         } else {
             Issue.record("Expected text at 1")
         }
-        if case let .toolUse(id, name, _) = blocks[2] {
+        if case let .toolUse(id, name, _, _) = blocks[2] {
             #expect(id == "toolu_01")
             #expect(name == "search")
         } else {
@@ -472,7 +472,7 @@ struct AnthropicContinuityTests {
         } else {
             Issue.record("Expected thinking at 3")
         }
-        if case let .text(text) = blocks[4] {
+        if case let .text(text, _) = blocks[4] {
             #expect(text == "Step 2")
         } else {
             Issue.record("Expected text at 4")
@@ -507,7 +507,7 @@ struct AnthropicContinuityTests {
             "usage": {"input_tokens": 50, "output_tokens": 30}
         }
         """
-        let client = makeClient()
+        let client = try makeClient()
         let parsed = try client.parseResponse(Data(json.utf8))
         #expect(parsed.continuity?.substrate == .anthropicMessages)
         #expect(parsed.content == "")
@@ -519,13 +519,13 @@ struct AnthropicContinuityTests {
             return
         }
         #expect(blocks.count == 2)
-        if case let .toolUse(id, name, _) = blocks[0] {
+        if case let .toolUse(id, name, _, _) = blocks[0] {
             #expect(id == "toolu_a")
             #expect(name == "search")
         } else {
             Issue.record("Expected tool_use at 0")
         }
-        if case let .toolUse(id, name, _) = blocks[1] {
+        if case let .toolUse(id, name, _, _) = blocks[1] {
             #expect(id == "toolu_b")
             #expect(name == "lookup")
         } else {
@@ -548,7 +548,7 @@ struct AnthropicContinuityTests {
             "usage": {"input_tokens": 30, "output_tokens": 10}
         }
         """
-        let client = makeClient()
+        let client = try makeClient()
         let parsed = try client.parseResponse(Data(json.utf8))
 
         let (_, mapped) = try AnthropicMessageMapper.mapMessages([.assistant(parsed)])
@@ -557,7 +557,7 @@ struct AnthropicContinuityTests {
             return
         }
         #expect(blocks.count == 1)
-        if case let .toolUse(id, name, input) = blocks[0] {
+        if case let .toolUse(id, name, input, _) = blocks[0] {
             #expect(id == "toolu_e")
             #expect(name == "get_time")
             #expect(input == .object([:]))
@@ -568,8 +568,8 @@ struct AnthropicContinuityTests {
 }
 
 struct AnthropicCacheUsageParsingTests {
-    private func makeClient() -> AnthropicClient {
-        AnthropicClient(apiKey: "test-key", model: "claude-sonnet-4-6")
+    private func makeClient() throws -> AnthropicClient {
+        try AnthropicClient(apiKey: "test-key", model: "claude-sonnet-4-6")
     }
 
     @Test
@@ -646,14 +646,14 @@ struct AnthropicMessageTranslationTests {
             return
         }
         #expect(blocks.count == 2)
-        if case let .toolResult(id1, content1, isError1) = blocks[0] {
+        if case let .toolResult(id1, content1, isError1, _) = blocks[0] {
             #expect(id1 == "call_1")
             #expect(content1 == "result1")
             #expect(!isError1)
         } else {
             Issue.record("Expected toolResult block at index 0")
         }
-        if case let .toolResult(id2, content2, isError2) = blocks[1] {
+        if case let .toolResult(id2, content2, isError2, _) = blocks[1] {
             #expect(id2 == "call_2")
             #expect(content2 == "result2")
             #expect(!isError2)
@@ -687,7 +687,7 @@ struct AnthropicMessageTranslationTests {
         } else {
             Issue.record("Expected thinking block at index 0")
         }
-        if case let .text(text) = blocks[1] {
+        if case let .text(text, _) = blocks[1] {
             #expect(text == "Answer")
         } else {
             Issue.record("Expected text block at index 1")
@@ -712,7 +712,7 @@ struct AnthropicMessageTranslationTests {
         } else {
             Issue.record("Expected thinking block at index 0")
         }
-        if case let .text(text) = blocks[1] {
+        if case let .text(text, _) = blocks[1] {
             #expect(text == "Answer")
         } else {
             Issue.record("Expected text block at index 1")
@@ -730,7 +730,7 @@ struct AnthropicMessageTranslationTests {
             return
         }
         #expect(blocks.count == 1)
-        if case let .text(text) = blocks[0] {
+        if case let .text(text, _) = blocks[0] {
             #expect(text == "Answer")
         } else {
             Issue.record("Expected text block, got \(blocks[0])")
@@ -738,22 +738,11 @@ struct AnthropicMessageTranslationTests {
     }
 
     @Test
-    func multimodalThrows() {
-        do {
+    func imageURLMultimodalThrowsFeatureUnsupported() {
+        #expect(throws: AgentError.self) {
             _ = try AnthropicMessageMapper.mapMessages([
                 .userMultimodal([.text("Hi"), .imageURL("https://example.com/img.png")])
             ])
-            Issue.record("Expected error")
-        } catch let error as AgentError {
-            guard case let .llmError(transport) = error,
-                  case let .other(msg) = transport
-            else {
-                Issue.record("Expected .other, got \(error)")
-                return
-            }
-            #expect(msg.contains("multimodal"))
-        } catch {
-            Issue.record("Expected AgentError, got \(error)")
         }
     }
 
@@ -782,7 +771,7 @@ struct AnthropicMessageTranslationTests {
 
         if case let .blocks(blocks) = mapped[0].content {
             #expect(blocks.count == 1)
-            if case let .text(text) = blocks[0] {
+            if case let .text(text, _) = blocks[0] {
                 #expect(text == "")
             } else {
                 Issue.record("Expected text block")

@@ -44,6 +44,11 @@ public struct VertexGoogleClient: LLMClient, Sendable {
         )
     }
 
+    @available(
+        iOS,
+        unavailable,
+        message: "Use the tokenProvider initializer to supply access tokens."
+    )
     public init(
         projectID: String,
         location: String,
@@ -81,6 +86,8 @@ public struct VertexGoogleClient: LLMClient, Sendable {
             messages: messages,
             tools: tools,
             responseFormat: responseFormat,
+            functionCallingMode: requestContext?.gemini?.functionCallingMode ?? .auto,
+            allowedFunctionNames: requestContext?.gemini?.allowedFunctionNames,
             extraFields: requestContext?.extraFields ?? [:]
         )
         let token = try await tokenProvider()
@@ -103,6 +110,8 @@ public struct VertexGoogleClient: LLMClient, Sendable {
                     try await performStreamRequest(
                         messages: messages,
                         tools: tools,
+                        functionCallingMode: requestContext?.gemini?.functionCallingMode ?? .auto,
+                        allowedFunctionNames: requestContext?.gemini?.allowedFunctionNames,
                         extraFields: requestContext?.extraFields ?? [:],
                         onResponse: requestContext?.onResponse,
                         continuation: continuation
@@ -118,13 +127,19 @@ public struct VertexGoogleClient: LLMClient, Sendable {
     private func performStreamRequest(
         messages: [ChatMessage],
         tools: [ToolDefinition],
+        functionCallingMode: GeminiFunctionCallingMode,
+        allowedFunctionNames: [String]?,
         extraFields: [String: JSONValue],
         onResponse: (@Sendable (HTTPURLResponse) -> Void)?,
         continuation: AsyncThrowingStream<StreamDelta, Error>.Continuation
     ) async throws {
         try messages.validateForLLMRequest()
         let request = try gemini.buildRequest(
-            messages: messages, tools: tools, extraFields: extraFields
+            messages: messages,
+            tools: tools,
+            functionCallingMode: functionCallingMode,
+            allowedFunctionNames: allowedFunctionNames,
+            extraFields: extraFields
         )
         let token = try await tokenProvider()
         let urlRequest = try buildVertexURLRequest(request, stream: true, token: token)
@@ -151,9 +166,12 @@ public struct VertexGoogleClient: LLMClient, Sendable {
         stream: Bool,
         token: String
     ) throws -> URLRequest {
+        guard let modelIdentifier else {
+            throw AgentError.llmError(.other("Vertex model identifier is required"))
+        }
         let action = stream ? "streamGenerateContent" : "generateContent"
         let basePath = "\(apiVersion)/projects/\(projectID)/locations/\(location)"
-            + "/publishers/google/models/\(modelIdentifier ?? ""):\(action)"
+            + "/publishers/google/models/\(modelIdentifier):\(action)"
         guard let baseURL = URL(string: "https://\(location)-aiplatform.googleapis.com") else {
             throw AgentError.llmError(.other("Invalid Vertex AI location: \(location)"))
         }

@@ -103,10 +103,10 @@ public struct MCPCallResult: Sendable, Equatable, Decodable {
         var items: [MCPContent] = []
         if var contentContainer = try? container.nestedUnkeyedContainer(forKey: .content) {
             while !contentContainer.isAtEnd {
-                do {
-                    try items.append(contentContainer.decode(MCPContent.self))
-                } catch {
-                    _ = try? contentContainer.decode(JSONValue.self)
+                let raw = try contentContainer.decode(JSONValue.self)
+                let rawData = try JSONEncoder().encode(raw)
+                if let item = try? JSONDecoder().decode(MCPContent.self, from: rawData) {
+                    items.append(item)
                 }
             }
         }

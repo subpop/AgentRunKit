@@ -38,7 +38,7 @@ struct ChatToolResultTruncationTests {
         let tool = ChatLimitedTool(maxResultCharacters: 50, output: longOutput)
 
         let firstDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "limited"),
+            .toolCallStart(index: 0, id: "call_1", name: "limited", kind: .function),
             .toolCallDelta(index: 0, arguments: "{}"),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]
@@ -78,7 +78,7 @@ struct ChatToolResultTruncationTests {
         let tool = ChatLimitedTool(maxResultCharacters: nil, output: longOutput)
 
         let firstDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "limited"),
+            .toolCallStart(index: 0, id: "call_1", name: "limited", kind: .function),
             .toolCallDelta(index: 0, arguments: "{}"),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]
@@ -118,7 +118,7 @@ struct ChatToolResultTruncationTests {
         let tool = ChatLimitedTool(maxResultCharacters: nil, output: longOutput)
 
         let firstDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "limited"),
+            .toolCallStart(index: 0, id: "call_1", name: "limited", kind: .function),
             .toolCallDelta(index: 0, arguments: "{}"),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]
@@ -156,7 +156,7 @@ struct ChatToolResultTruncationTests {
         let tool = ChatLimitedTool(maxResultCharacters: 100_000, output: longOutput)
 
         let firstDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "limited"),
+            .toolCallStart(index: 0, id: "call_1", name: "limited", kind: .function),
             .toolCallDelta(index: 0, arguments: "{}"),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]

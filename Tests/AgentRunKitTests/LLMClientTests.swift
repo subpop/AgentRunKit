@@ -137,8 +137,8 @@ struct ProviderHistoryValidationTests {
     }
 
     @Test
-    func anthropicBoundariesRejectMalformedHistory() async {
-        let client = AnthropicClient(apiKey: "test-key", model: "test-model")
+    func anthropicBoundariesRejectMalformedHistory() async throws {
+        let client = try AnthropicClient(apiKey: "test-key", model: "test-model")
         await assertGenerateRejectsMalformedHistory(client: client)
         await assertStreamRejectsMalformedHistory(client: client)
     }
@@ -184,7 +184,7 @@ struct OpenAIClientRequestTests {
             )
         ]
 
-        let request = client.buildRequest(messages: messages, tools: tools)
+        let request = try client.buildRequest(messages: messages, tools: tools)
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
         let data = try encoder.encode(request)
@@ -215,10 +215,11 @@ struct OpenAIClientRequestTests {
             apiKey: "test-key",
             model: "gpt-5.4-mini",
             maxTokens: 2048,
-            baseURL: OpenAIClient.openAIBaseURL
+            baseURL: OpenAIClient.openAIBaseURL,
+            profile: .firstParty
         )
         let messages: [ChatMessage] = [.user("Hello")]
-        let request = client.buildRequest(messages: messages, tools: [])
+        let request = try client.buildRequest(messages: messages, tools: [])
 
         let data = try JSONEncoder().encode(request)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -236,7 +237,7 @@ struct OpenAIClientRequestTests {
             baseURL: OpenAIClient.openRouterBaseURL
         )
         let messages: [ChatMessage] = [.user("Hello")]
-        let request = client.buildRequest(messages: messages, tools: [])
+        let request = try client.buildRequest(messages: messages, tools: [])
 
         let data = try JSONEncoder().encode(request)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -249,7 +250,7 @@ struct OpenAIClientRequestTests {
     func requestWithoutToolsOmitsToolFields() throws {
         let client = OpenAIClient(apiKey: "test-key", model: "test/model", baseURL: OpenAIClient.openRouterBaseURL)
         let messages: [ChatMessage] = [.user("Hello")]
-        let request = client.buildRequest(messages: messages, tools: [])
+        let request = try client.buildRequest(messages: messages, tools: [])
 
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
@@ -271,7 +272,7 @@ struct OpenAIClientRequestTests {
         let messages: [ChatMessage] = [
             .user([.text("Transcribe"), .audio(data: audioData, format: .wav)])
         ]
-        let request = client.buildRequest(messages: messages, tools: [])
+        let request = try client.buildRequest(messages: messages, tools: [])
 
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
@@ -295,7 +296,7 @@ struct OpenAIClientRequestTests {
         let assistantMsg = AssistantMessage(content: "Let me check", toolCalls: [toolCall])
         let client = OpenAIClient(apiKey: "test-key", model: "test/model", baseURL: OpenAIClient.openRouterBaseURL)
         let messages: [ChatMessage] = [.assistant(assistantMsg)]
-        let request = client.buildRequest(messages: messages, tools: [])
+        let request = try client.buildRequest(messages: messages, tools: [])
 
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
@@ -322,7 +323,7 @@ struct OpenAIClientRequestTests {
         let assistantMsg = AssistantMessage(content: "")
         let client = OpenAIClient(apiKey: "test-key", model: "test/model", baseURL: OpenAIClient.openRouterBaseURL)
         let messages: [ChatMessage] = [.assistant(assistantMsg)]
-        let request = client.buildRequest(messages: messages, tools: [])
+        let request = try client.buildRequest(messages: messages, tools: [])
 
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
@@ -341,7 +342,7 @@ struct OpenAIClientRequestTests {
         let assistantMsg = AssistantMessage(content: "", toolCalls: [toolCall])
         let client = OpenAIClient(apiKey: "test-key", model: "test/model", baseURL: OpenAIClient.openRouterBaseURL)
         let messages: [ChatMessage] = [.assistant(assistantMsg)]
-        let request = client.buildRequest(messages: messages, tools: [])
+        let request = try client.buildRequest(messages: messages, tools: [])
 
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
@@ -362,7 +363,7 @@ struct OpenAIClientRequestTests {
         let assistantMsg = AssistantMessage(content: "", toolCalls: [toolCall])
         let client = OpenAIClient(apiKey: "test-key", model: "test/model", baseURL: OpenAIClient.openRouterBaseURL)
         let messages: [ChatMessage] = [.assistant(assistantMsg)]
-        let request = client.buildRequest(messages: messages, tools: [])
+        let request = try client.buildRequest(messages: messages, tools: [])
 
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
@@ -383,7 +384,7 @@ struct OpenAIClientRequestTests {
             .assistant(AssistantMessage(content: "", toolCalls: [toolCall])),
             .tool(id: "call_abc123", name: "list_gyms", content: "[{\"id\":\"gym1\",\"name\":\"My Gym\"}]")
         ]
-        let request = client.buildRequest(messages: messages, tools: [])
+        let request = try client.buildRequest(messages: messages, tools: [])
 
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
@@ -415,7 +416,7 @@ struct OpenAIClientRequestTests {
             .tool(id: "call_1", name: "get_weather", content: "{\"temp\":72}"),
             .tool(id: "call_2", name: "get_time", content: "{\"time\":\"3:00 PM\"}")
         ]
-        let request = client.buildRequest(messages: messages, tools: [])
+        let request = try client.buildRequest(messages: messages, tools: [])
 
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
@@ -437,7 +438,7 @@ struct OpenAIClientRequestTests {
         let messages: [ChatMessage] = [
             .tool(id: "call_123", name: "get_weather", content: "{\"temp\": 72}")
         ]
-        let request = client.buildRequest(messages: messages, tools: [])
+        let request = try client.buildRequest(messages: messages, tools: [])
 
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
@@ -476,7 +477,7 @@ struct OpenAIClientURLRequestTests {
             baseURL: OpenAIClient.openRouterBaseURL
         )
         let messages: [ChatMessage] = [.user("Hello")]
-        let request = client.buildRequest(messages: messages, tools: [])
+        let request = try client.buildRequest(messages: messages, tools: [])
         let urlRequest = try client.buildURLRequest(request)
 
         #expect(urlRequest.url?.absoluteString == "https://openrouter.ai/api/v1/chat/completions")
@@ -493,7 +494,7 @@ struct OpenAIClientURLRequestTests {
         }
         let client = OpenAIClient(apiKey: "test-key", model: "test/model", baseURL: customURL)
         let messages: [ChatMessage] = [.user("Hello")]
-        let request = client.buildRequest(messages: messages, tools: [])
+        let request = try client.buildRequest(messages: messages, tools: [])
         let urlRequest = try client.buildURLRequest(request)
 
         #expect(urlRequest.url?.absoluteString == "https://custom.api.example.com/v2/chat/completions")
@@ -674,7 +675,7 @@ struct ProxyModeTests {
     func proxyRequestOmitsAuthorizationHeader() throws {
         let client = try OpenAIClient.proxy(baseURL: #require(URL(string: "http://localhost:8080")))
         let messages: [ChatMessage] = [.user("Hello")]
-        let request = client.buildRequest(messages: messages, tools: [])
+        let request = try client.buildRequest(messages: messages, tools: [])
         let urlRequest = try client.buildURLRequest(request)
 
         #expect(urlRequest.value(forHTTPHeaderField: "Authorization") == nil)
@@ -685,7 +686,7 @@ struct ProxyModeTests {
     func proxyRequestOmitsModelFromBody() throws {
         let client = try OpenAIClient.proxy(baseURL: #require(URL(string: "http://localhost:8080")))
         let messages: [ChatMessage] = [.user("Hello")]
-        let request = client.buildRequest(messages: messages, tools: [])
+        let request = try client.buildRequest(messages: messages, tools: [])
 
         let encoder = JSONEncoder()
         let data = try encoder.encode(request)
@@ -702,7 +703,7 @@ struct ProxyModeTests {
             additionalHeaders: { ["X-Custom-Header": "custom-value"] }
         )
         let messages: [ChatMessage] = [.user("Hello")]
-        let request = client.buildRequest(messages: messages, tools: [])
+        let request = try client.buildRequest(messages: messages, tools: [])
         let urlRequest = try client.buildURLRequest(request)
 
         #expect(urlRequest.value(forHTTPHeaderField: "X-Custom-Header") == "custom-value")
@@ -713,7 +714,7 @@ struct ProxyModeTests {
     func clientWithApiKeyIncludesAuthorizationHeader() throws {
         let client = try OpenAIClient(apiKey: "test-key", baseURL: #require(URL(string: "http://localhost:8080")))
         let messages: [ChatMessage] = [.user("Hello")]
-        let request = client.buildRequest(messages: messages, tools: [])
+        let request = try client.buildRequest(messages: messages, tools: [])
         let urlRequest = try client.buildURLRequest(request)
 
         #expect(urlRequest.value(forHTTPHeaderField: "Authorization") == "Bearer test-key")

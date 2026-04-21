@@ -3,7 +3,7 @@ import Foundation
 private enum MCPConstants {
     static let protocolVersion = "2025-06-18"
     static let clientName = "AgentRunKit"
-    static let clientVersion = "1.20.1"
+    static let clientVersion = "2.0.0"
 }
 
 private struct MCPInitializeResult: Decodable {
@@ -105,7 +105,7 @@ public actor MCPClient {
         do {
             initResponse = try initResult.decodeResult(as: MCPInitializeResult.self)
         } catch {
-            let err = MCPError.invalidResponse("Missing protocolVersion in initialize response")
+            let err = MCPError.invalidResponse("initialize response: \(error)")
             state = .failed(err)
             throw err
         }
@@ -224,8 +224,12 @@ public actor MCPClient {
                 for try await data in stream {
                     await handleMessage(data)
                 }
-            } catch {}
-            await handleTransportClosed()
+                await drainPendingRequests()
+            } catch is CancellationError {
+                await drainPendingRequests()
+            } catch {
+                await drainPendingRequests(reason: .connectionFailed(String(describing: error)))
+            }
         }
     }
 
@@ -252,19 +256,20 @@ public actor MCPClient {
         }
     }
 
-    private func handleTransportClosed() {
-        _ = drainPendingRequests()
-    }
-
     @discardableResult
-    private func drainPendingRequests() -> Bool {
+    private func drainPendingRequests(reason: MCPError = .transportClosed) -> Bool {
         switch state {
         case .disconnected, .failed:
             return false
         default:
             break
         }
-        state = .disconnected
+        switch reason {
+        case .transportClosed:
+            state = .disconnected
+        default:
+            state = .failed(reason)
+        }
         let timeouts = timeoutTasks
         timeoutTasks.removeAll()
         for (_, task) in timeouts {
@@ -273,7 +278,7 @@ public actor MCPClient {
         let pending = pendingRequests
         pendingRequests.removeAll()
         for (_, continuation) in pending {
-            continuation.resume(throwing: MCPError.transportClosed)
+            continuation.resume(throwing: reason)
         }
         return true
     }

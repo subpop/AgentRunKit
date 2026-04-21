@@ -50,7 +50,7 @@ struct AgentStreamTests {
         let deltas: [StreamDelta] = [
             .content("Hello"),
             .content(" world"),
-            .toolCallStart(index: 0, id: "call_1", name: "finish"),
+            .toolCallStart(index: 0, id: "call_1", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "done"}"#),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]
@@ -68,7 +68,7 @@ struct AgentStreamTests {
             .reasoning("Let me "),
             .reasoning("think"),
             .content("Answer"),
-            .toolCallStart(index: 0, id: "call_1", name: "finish"),
+            .toolCallStart(index: 0, id: "call_1", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "done"}"#),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]
@@ -90,12 +90,12 @@ struct AgentStreamTests {
         )
 
         let firstDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "echo"),
+            .toolCallStart(index: 0, id: "call_1", name: "echo", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"message": "hello"}"#),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]
         let secondDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_2", name: "finish"),
+            .toolCallStart(index: 0, id: "call_2", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "Done"}"#),
             .finished(usage: TokenUsage(input: 20, output: 10)),
         ]
@@ -126,12 +126,12 @@ struct AgentStreamTests {
         )
 
         let firstDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "fail_tool"),
+            .toolCallStart(index: 0, id: "call_1", name: "fail_tool", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"message": "test"}"#),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]
         let secondDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_2", name: "finish"),
+            .toolCallStart(index: 0, id: "call_2", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "Failed"}"#),
             .finished(usage: TokenUsage(input: 20, output: 10)),
         ]
@@ -157,7 +157,7 @@ struct AgentStreamTests {
     func finishedSetsTokenUsageAndHistory() async {
         let deltas: [StreamDelta] = [
             .content("Result"),
-            .toolCallStart(index: 0, id: "call_1", name: "finish"),
+            .toolCallStart(index: 0, id: "call_1", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "All done", "reason": "completed"}"#),
             .finished(usage: TokenUsage(input: 50, output: 25)),
         ]
@@ -180,7 +180,7 @@ struct AgentStreamTests {
             executor: { params, _ in EchoOutput(echoed: params.message) }
         )
         let loopDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "loop"),
+            .toolCallStart(index: 0, id: "call_1", name: "loop", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"message":"again"}"#),
             .finished(usage: nil),
         ]
@@ -207,7 +207,7 @@ struct AgentStreamTests {
             executor: { params, _ in EchoOutput(echoed: params.message) }
         )
         let firstDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "noop"),
+            .toolCallStart(index: 0, id: "call_1", name: "noop", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"message":"budget"}"#),
             .finished(usage: TokenUsage(input: 40, output: 40)),
         ]
@@ -226,13 +226,13 @@ struct AgentStreamTests {
     func sendResetsState() async {
         let deltas1: [StreamDelta] = [
             .content("First"),
-            .toolCallStart(index: 0, id: "call_1", name: "finish"),
+            .toolCallStart(index: 0, id: "call_1", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "done1"}"#),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]
         let deltas2: [StreamDelta] = [
             .content("Second"),
-            .toolCallStart(index: 0, id: "call_2", name: "finish"),
+            .toolCallStart(index: 0, id: "call_2", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "done2"}"#),
             .finished(usage: TokenUsage(input: 20, output: 10)),
         ]
@@ -255,7 +255,7 @@ struct AgentStreamTests {
     func cancelStopsStreaming() async {
         let deltas: [StreamDelta] = [
             .content("Hello"),
-            .toolCallStart(index: 0, id: "call_1", name: "finish"),
+            .toolCallStart(index: 0, id: "call_1", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "done"}"#),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]
@@ -286,7 +286,7 @@ struct AgentStreamTests {
     func isStreamingLifecycle() async {
         let deltas: [StreamDelta] = [
             .content("Hello"),
-            .toolCallStart(index: 0, id: "call_1", name: "finish"),
+            .toolCallStart(index: 0, id: "call_1", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "done"}"#),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]
@@ -303,7 +303,7 @@ struct AgentStreamTests {
     @MainActor @Test
     func finishContentUsedWhenNoDeltaContent() async {
         let deltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "finish"),
+            .toolCallStart(index: 0, id: "call_1", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "fallback result"}"#),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]
@@ -319,7 +319,7 @@ struct AgentStreamTests {
     func finishContentIgnoredWhenDeltaContentExists() async {
         let deltas: [StreamDelta] = [
             .content("From deltas"),
-            .toolCallStart(index: 0, id: "call_1", name: "finish"),
+            .toolCallStart(index: 0, id: "call_1", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "from finish"}"#),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]
@@ -340,12 +340,12 @@ struct AgentStreamTests {
         )
 
         let firstDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "echo"),
+            .toolCallStart(index: 0, id: "call_1", name: "echo", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"message": "hi"}"#),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]
         let secondDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_2", name: "finish"),
+            .toolCallStart(index: 0, id: "call_2", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "done"}"#),
             .finished(usage: TokenUsage(input: 20, output: 10)),
         ]
@@ -366,12 +366,12 @@ struct AgentStreamTests {
     @MainActor @Test
     func iterationUsagesResetOnNewSend() async {
         let deltas1: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "finish"),
+            .toolCallStart(index: 0, id: "call_1", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "done1"}"#),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]
         let deltas2: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_2", name: "finish"),
+            .toolCallStart(index: 0, id: "call_2", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "done2"}"#),
             .finished(usage: TokenUsage(input: 20, output: 10)),
         ]
@@ -398,12 +398,12 @@ struct AgentStreamTests {
             executor: { params, _ in EchoOutput(echoed: params.message) }
         )
         let firstDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "echo"),
+            .toolCallStart(index: 0, id: "call_1", name: "echo", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"message":"hi"}"#),
             .finished(usage: TokenUsage(input: 700, output: 100)),
         ]
         let secondDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "finish_1", name: "finish"),
+            .toolCallStart(index: 0, id: "finish_1", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content":"done"}"#),
             .finished(usage: TokenUsage(input: 10, output: 10)),
         ]
@@ -435,22 +435,22 @@ struct AgentStreamTests {
             executor: { params, _ in EchoOutput(echoed: params.message) }
         )
         let firstDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "echo"),
+            .toolCallStart(index: 0, id: "call_1", name: "echo", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"message":"hi"}"#),
             .finished(usage: TokenUsage(input: 700, output: 100)),
         ]
         let firstFinishDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "finish_1", name: "finish"),
+            .toolCallStart(index: 0, id: "finish_1", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content":"done1"}"#),
             .finished(usage: TokenUsage(input: 10, output: 10)),
         ]
         let secondDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_2", name: "echo"),
+            .toolCallStart(index: 0, id: "call_2", name: "echo", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"message":"again"}"#),
             .finished(usage: TokenUsage(input: 200, output: 100)),
         ]
         let secondFinishDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "finish_2", name: "finish"),
+            .toolCallStart(index: 0, id: "finish_2", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content":"done2"}"#),
             .finished(usage: TokenUsage(input: 200, output: 100)),
         ]
@@ -518,12 +518,12 @@ struct AgentStreamApprovalTests {
         )
 
         let firstDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "echo"),
+            .toolCallStart(index: 0, id: "call_1", name: "echo", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"message":"hello"}"#),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]
         let secondDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_2", name: "finish"),
+            .toolCallStart(index: 0, id: "call_2", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content":"done"}"#),
             .finished(usage: TokenUsage(input: 20, output: 10)),
         ]
@@ -568,12 +568,12 @@ struct AgentStreamApprovalTests {
             executor: { params, _ in EchoOutput(echoed: "Echo: \(params.message)") }
         )
         let childDeltas1: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "child_call", name: "echo"),
+            .toolCallStart(index: 0, id: "child_call", name: "echo", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"message":"child"}"#),
             .finished(usage: nil),
         ]
         let childDeltas2: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "child_finish", name: "finish"),
+            .toolCallStart(index: 0, id: "child_finish", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content":"child done"}"#),
             .finished(usage: nil),
         ]
@@ -590,12 +590,12 @@ struct AgentStreamApprovalTests {
             messageBuilder: { $0.message }
         )
         let parentDeltas1: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "delegate_call", name: "delegate"),
+            .toolCallStart(index: 0, id: "delegate_call", name: "delegate", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"message":"go"}"#),
             .finished(usage: nil),
         ]
         let parentDeltas2: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "parent_finish", name: "finish"),
+            .toolCallStart(index: 0, id: "parent_finish", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content":"parent done"}"#),
             .finished(usage: nil),
         ]

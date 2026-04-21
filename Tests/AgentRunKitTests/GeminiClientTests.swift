@@ -126,7 +126,7 @@ struct GeminiRequestSerializationTests {
     }
 
     @Test
-    func thinkingConfigEncodes() throws {
+    func thinkingConfig_onGemini25_usesBudget() throws {
         let client = makeClient(reasoningConfig: .high)
         let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
         let json = try encodeRequest(request)
@@ -134,7 +134,37 @@ struct GeminiRequestSerializationTests {
         let genConfig = json["generationConfig"] as? [String: Any]
         let thinking = genConfig?["thinkingConfig"] as? [String: Any]
         #expect(thinking?["includeThoughts"] as? Bool == true)
+        #expect(thinking?["thinkingBudget"] as? Int == 16384)
+        #expect(thinking?["thinkingLevel"] == nil)
+    }
+
+    @Test
+    func thinkingConfig_onGemini3_usesLevel() throws {
+        let client = GeminiClient(
+            apiKey: "test-key", model: "gemini-3-flash-preview",
+            reasoningConfig: .high
+        )
+        let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
+        let json = try encodeRequest(request)
+
+        let genConfig = json["generationConfig"] as? [String: Any]
+        let thinking = genConfig?["thinkingConfig"] as? [String: Any]
         #expect(thinking?["thinkingLevel"] as? String == "HIGH")
+        #expect(thinking?["thinkingBudget"] == nil)
+    }
+
+    @Test
+    func thinkingConfig_onGemini31_usesLevel() throws {
+        let client = GeminiClient(
+            apiKey: "test-key", model: "gemini-3.1-pro-preview",
+            reasoningConfig: .medium
+        )
+        let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
+        let json = try encodeRequest(request)
+
+        let genConfig = json["generationConfig"] as? [String: Any]
+        let thinking = genConfig?["thinkingConfig"] as? [String: Any]
+        #expect(thinking?["thinkingLevel"] as? String == "MEDIUM")
         #expect(thinking?["thinkingBudget"] == nil)
     }
 
@@ -200,18 +230,37 @@ struct GeminiRequestSerializationTests {
     }
 
     @Test
-    func effortMappingValues() {
-        let efforts: [(ReasoningConfig.Effort, String)] = [
+    func effortToBudgetMapping_onGemini25() throws {
+        let mapping: [(ReasoningConfig.Effort, Int)] = [
+            (.xhigh, 32768), (.high, 16384), (.medium, 8192),
+            (.low, 4096), (.minimal, 1024)
+        ]
+        for (effort, expectedBudget) in mapping {
+            let client = GeminiClient(
+                apiKey: "k", model: "gemini-2.5-flash",
+                reasoningConfig: ReasoningConfig(effort: effort)
+            )
+            let config = try client.buildThinkingConfig()
+            #expect(config?.thinkingBudget == expectedBudget)
+            #expect(config?.thinkingLevel == nil)
+            #expect(config?.includeThoughts == true)
+        }
+    }
+
+    @Test
+    func effortToLevelMapping_onGemini3() throws {
+        let mapping: [(ReasoningConfig.Effort, String)] = [
             (.xhigh, "HIGH"), (.high, "HIGH"), (.medium, "MEDIUM"),
             (.low, "LOW"), (.minimal, "MINIMAL")
         ]
-        for (effort, expectedLevel) in efforts {
+        for (effort, expectedLevel) in mapping {
             let client = GeminiClient(
-                apiKey: "k", model: "m",
+                apiKey: "k", model: "gemini-3-flash-preview",
                 reasoningConfig: ReasoningConfig(effort: effort)
             )
-            let config = client.buildThinkingConfig()
+            let config = try client.buildThinkingConfig()
             #expect(config?.thinkingLevel == expectedLevel)
+            #expect(config?.thinkingBudget == nil)
             #expect(config?.includeThoughts == true)
         }
     }
@@ -224,9 +273,10 @@ struct GeminiRequestSerializationTests {
             extraFields: ["temperature": .double(0.7), "topP": .double(0.9)]
         )
         let json = try encodeRequest(request)
+        let generationConfig = try #require(json["generationConfig"] as? [String: Any])
 
-        #expect(json["temperature"] as? Double == 0.7)
-        #expect(json["topP"] as? Double == 0.9)
+        #expect(generationConfig["temperature"] as? Double == 0.7)
+        #expect(generationConfig["topP"] as? Double == 0.9)
     }
 
     @Test
@@ -455,22 +505,11 @@ struct GeminiMessageMapperTests {
     }
 
     @Test
-    func multimodalThrows() {
-        do {
+    func imageURLMultimodalThrowsFeatureUnsupported() {
+        #expect(throws: AgentError.self) {
             _ = try GeminiMessageMapper.mapMessages([
                 .userMultimodal([.text("Hi"), .imageURL("https://example.com/img.png")])
             ])
-            Issue.record("Expected error")
-        } catch let error as AgentError {
-            guard case let .llmError(transport) = error,
-                  case let .other(msg) = transport
-            else {
-                Issue.record("Expected .other, got \(error)")
-                return
-            }
-            #expect(msg.contains("multimodal"))
-        } catch {
-            Issue.record("Expected AgentError, got \(error)")
         }
     }
 
@@ -509,7 +548,7 @@ struct GeminiMessageMapperTests {
 struct GeminiResponseFormatTests {
     @Test
     func responseFormatEncodesInGenerationConfig() throws {
-        let client = GeminiClient(apiKey: "k", model: "m")
+        let client = GeminiClient(apiKey: "k", model: "gemini-2.5-flash")
         let format = ResponseFormat.jsonSchema(TestGeminiOutput.self)
         let request = try client.buildRequest(
             messages: [.user("Hi")], tools: [], responseFormat: format
@@ -523,13 +562,14 @@ struct GeminiResponseFormatTests {
 
     @Test
     func noResponseFormatOmitsFields() throws {
-        let client = GeminiClient(apiKey: "k", model: "m")
+        let client = GeminiClient(apiKey: "k", model: "gemini-2.5-flash")
         let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
         let json = try encodeRequest(request)
 
         let genConfig = json["generationConfig"] as? [String: Any]
         #expect(genConfig?["responseMimeType"] == nil)
         #expect(genConfig?["responseSchema"] == nil)
+        #expect(genConfig?["responseJsonSchema"] == nil)
     }
 }
 
@@ -645,7 +685,7 @@ struct GeminiSchemaTests {
 
     @Test
     func responseFormatSchemaOmitsAdditionalProperties() throws {
-        let client = GeminiClient(apiKey: "k", model: "m")
+        let client = GeminiClient(apiKey: "k", model: "gemini-2.5-flash")
         let format = ResponseFormat.jsonSchema(TestGeminiOutput.self)
         let request = try client.buildRequest(
             messages: [.user("Hi")], tools: [], responseFormat: format

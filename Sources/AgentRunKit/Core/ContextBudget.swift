@@ -33,7 +33,7 @@ public struct ContextBudget: Sendable, Equatable {
         self.softThreshold = softThreshold
     }
 
-    /// Formats the budget as a display string.
+    /// Renders `.standard` as `[Token usage: N / M]`, or substitutes `{usage}` and `{window}` into a custom template.
     public func formatted(_ format: ContextBudgetVisibilityFormat) -> String {
         switch format {
         case .standard:

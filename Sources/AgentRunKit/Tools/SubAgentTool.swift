@@ -88,18 +88,6 @@ public struct SubAgentTool<P: Codable & SchemaProviding & Sendable, InnerContext
         toolCallId _: String,
         arguments: Data,
         context: SubAgentContext<InnerContext>,
-        eventHandler: @Sendable (StreamEvent) -> Void
-    ) async throws -> ToolResult {
-        try await executeStreaming(
-            toolCallId: "", arguments: arguments, context: context,
-            eventHandler: eventHandler, approvalHandler: nil
-        )
-    }
-
-    func executeStreaming(
-        toolCallId _: String,
-        arguments: Data,
-        context: SubAgentContext<InnerContext>,
         eventHandler: @Sendable (StreamEvent) -> Void,
         approvalHandler: ToolApprovalHandler?
     ) async throws -> ToolResult {

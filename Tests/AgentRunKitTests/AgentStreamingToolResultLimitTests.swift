@@ -46,12 +46,12 @@ struct AgentStreamingToolResultLimitTests {
             executor: { params, _ in StreamingLimitEchoOutput(echoed: params.message) }
         )
         let firstDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "echo"),
+            .toolCallStart(index: 0, id: "call_1", name: "echo", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"message": "\#(longOutput)"}"#),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]
         let secondDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_2", name: "finish"),
+            .toolCallStart(index: 0, id: "call_2", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "done"}"#),
             .finished(usage: TokenUsage(input: 20, output: 10)),
         ]
@@ -100,12 +100,12 @@ struct AgentStreamingToolResultLimitTests {
             executor: { params, _ in StreamingLimitEchoOutput(echoed: params.message) }
         )
         let firstDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "echo"),
+            .toolCallStart(index: 0, id: "call_1", name: "echo", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"message": "\#(longOutput)"}"#),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]
         let secondDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_2", name: "finish"),
+            .toolCallStart(index: 0, id: "call_2", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "done"}"#),
             .finished(usage: TokenUsage(input: 20, output: 10)),
         ]

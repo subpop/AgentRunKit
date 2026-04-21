@@ -10,6 +10,8 @@ public enum TransportError: Error, Sendable, Equatable, CustomStringConvertible 
     case decodingFailed(description: String)
     case noChoices
     case streamStalled
+    case capabilityMismatch(model: String, requirement: String)
+    case featureUnsupported(provider: String, feature: String)
     case other(String)
 
     public static func networkError(_ error: some Error) -> TransportError {
@@ -39,6 +41,10 @@ public enum TransportError: Error, Sendable, Equatable, CustomStringConvertible 
         case let .decodingFailed(description): "Decoding failed: \(description)"
         case .noChoices: "No choices in response"
         case .streamStalled: "Stream stalled (no data received within timeout)"
+        case let .capabilityMismatch(model, requirement):
+            "Capability mismatch for model '\(model)': \(requirement)"
+        case let .featureUnsupported(provider, feature):
+            "Feature '\(feature)' is unsupported on provider '\(provider)'"
         case let .other(message): message
         }
     }

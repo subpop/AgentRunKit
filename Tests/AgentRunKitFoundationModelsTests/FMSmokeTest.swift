@@ -30,7 +30,7 @@
         }
     }
 
-    struct FMSmokeTest {
+    @Suite(.serialized) struct FMSmokeTest {
         @Test func agentRunWithCalculator() async throws {
             guard #available(macOS 26, iOS 26, *) else { return }
             guard SystemLanguageModel.default.isAvailable else {

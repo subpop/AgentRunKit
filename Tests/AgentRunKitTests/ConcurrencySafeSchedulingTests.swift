@@ -245,14 +245,14 @@ struct ConcurrencySafeStreamingTests {
         )
 
         let firstDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "c1", name: "unsafe1"),
+            .toolCallStart(index: 0, id: "c1", name: "unsafe1", kind: .function),
             .toolCallDelta(index: 0, arguments: "{}"),
-            .toolCallStart(index: 1, id: "c2", name: "unsafe2"),
+            .toolCallStart(index: 1, id: "c2", name: "unsafe2", kind: .function),
             .toolCallDelta(index: 1, arguments: "{}"),
             .finished(usage: nil),
         ]
         let finishDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "cf", name: "finish"),
+            .toolCallStart(index: 0, id: "cf", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content":"done"}"#),
             .finished(usage: nil),
         ]
@@ -289,16 +289,16 @@ struct ConcurrencySafeStreamingTests {
         )
 
         let firstDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "c_slow", name: "slow_safe"),
+            .toolCallStart(index: 0, id: "c_slow", name: "slow_safe", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"message":"a"}"#),
-            .toolCallStart(index: 1, id: "c_fast", name: "fast_safe"),
+            .toolCallStart(index: 1, id: "c_fast", name: "fast_safe", kind: .function),
             .toolCallDelta(index: 1, arguments: #"{"message":"b"}"#),
-            .toolCallStart(index: 2, id: "c_unsafe", name: "unsafe"),
+            .toolCallStart(index: 2, id: "c_unsafe", name: "unsafe", kind: .function),
             .toolCallDelta(index: 2, arguments: #"{"message":"c"}"#),
             .finished(usage: nil),
         ]
         let finishDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "cf", name: "finish"),
+            .toolCallStart(index: 0, id: "cf", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content":"done"}"#),
             .finished(usage: nil),
         ]
@@ -335,14 +335,14 @@ struct ConcurrencySafeStreamingTests {
         )
 
         let firstDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "c1", name: "safe"),
+            .toolCallStart(index: 0, id: "c1", name: "safe", kind: .function),
             .toolCallDelta(index: 0, arguments: "{}"),
-            .toolCallStart(index: 1, id: "c2", name: "unsafe"),
+            .toolCallStart(index: 1, id: "c2", name: "unsafe", kind: .function),
             .toolCallDelta(index: 1, arguments: "{}"),
             .finished(usage: nil),
         ]
         let finishDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "cf", name: "finish"),
+            .toolCallStart(index: 0, id: "cf", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content":"done"}"#),
             .finished(usage: nil),
         ]
@@ -381,12 +381,12 @@ struct SubAgentConcurrencySafeTests {
                 }
             )
             let workDeltas: [StreamDelta] = [
-                .toolCallStart(index: 0, id: "\(name)_w", name: "work"),
+                .toolCallStart(index: 0, id: "\(name)_w", name: "work", kind: .function),
                 .toolCallDelta(index: 0, arguments: "{}"),
                 .finished(usage: nil),
             ]
             let finishDeltas: [StreamDelta] = [
-                .toolCallStart(index: 0, id: "\(name)_f", name: "finish"),
+                .toolCallStart(index: 0, id: "\(name)_f", name: "finish", kind: .function),
                 .toolCallDelta(index: 0, arguments: #"{"content":"\#(name) done"}"#),
                 .finished(usage: nil),
             ]
@@ -408,14 +408,14 @@ struct SubAgentConcurrencySafeTests {
         )
 
         let parentDeltas1: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "cs1", name: "sub1"),
+            .toolCallStart(index: 0, id: "cs1", name: "sub1", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"query":"q1"}"#),
-            .toolCallStart(index: 1, id: "cs2", name: "sub2"),
+            .toolCallStart(index: 1, id: "cs2", name: "sub2", kind: .function),
             .toolCallDelta(index: 1, arguments: #"{"query":"q2"}"#),
             .finished(usage: nil),
         ]
         let parentDeltas2: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "pf", name: "finish"),
+            .toolCallStart(index: 0, id: "pf", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content":"parent done"}"#),
             .finished(usage: nil),
         ]
@@ -445,12 +445,12 @@ struct SubAgentConcurrencySafeTests {
                 }
             )
             let workDeltas: [StreamDelta] = [
-                .toolCallStart(index: 0, id: "\(name)_w", name: "work"),
+                .toolCallStart(index: 0, id: "\(name)_w", name: "work", kind: .function),
                 .toolCallDelta(index: 0, arguments: "{}"),
                 .finished(usage: nil),
             ]
             let finishDeltas: [StreamDelta] = [
-                .toolCallStart(index: 0, id: "\(name)_f", name: "finish"),
+                .toolCallStart(index: 0, id: "\(name)_f", name: "finish", kind: .function),
                 .toolCallDelta(index: 0, arguments: #"{"content":"\#(name) done"}"#),
                 .finished(usage: nil),
             ]
@@ -474,14 +474,14 @@ struct SubAgentConcurrencySafeTests {
         )
 
         let parentDeltas1: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "cs1", name: "sub1"),
+            .toolCallStart(index: 0, id: "cs1", name: "sub1", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"query":"q1"}"#),
-            .toolCallStart(index: 1, id: "cs2", name: "sub2"),
+            .toolCallStart(index: 1, id: "cs2", name: "sub2", kind: .function),
             .toolCallDelta(index: 1, arguments: #"{"query":"q2"}"#),
             .finished(usage: nil),
         ]
         let parentDeltas2: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "pf", name: "finish"),
+            .toolCallStart(index: 0, id: "pf", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content":"parent done"}"#),
             .finished(usage: nil),
         ]

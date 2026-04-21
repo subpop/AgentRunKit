@@ -12,6 +12,7 @@ public struct Tool<P: Codable & SchemaProviding & Sendable, O: Codable & Sendabl
     public let isConcurrencySafe: Bool
     public let isReadOnly: Bool
     public let maxResultCharacters: Int?
+    public let strict: Bool?
     private let executor: @Sendable (P, C) async throws -> O
 
     public init(
@@ -20,6 +21,7 @@ public struct Tool<P: Codable & SchemaProviding & Sendable, O: Codable & Sendabl
         isConcurrencySafe: Bool = false,
         isReadOnly: Bool = false,
         maxResultCharacters: Int? = nil,
+        strict: Bool? = nil,
         executor: @escaping @Sendable (P, C) async throws -> O
     ) throws {
         if let maxResultCharacters {
@@ -31,6 +33,7 @@ public struct Tool<P: Codable & SchemaProviding & Sendable, O: Codable & Sendabl
         self.isConcurrencySafe = isConcurrencySafe
         self.isReadOnly = isReadOnly
         self.maxResultCharacters = maxResultCharacters
+        self.strict = strict
         parametersSchema = P.jsonSchema
         self.executor = executor
     }

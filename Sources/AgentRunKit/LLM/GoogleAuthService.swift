@@ -26,7 +26,12 @@ private struct TokenResponse: Decodable {
     }
 }
 
-/// Fetches OAuth2 access tokens from Google Application Default Credentials.
+/// Fetches OAuth2 access tokens from local Google Application Default Credentials.
+@available(
+    iOS,
+    unavailable,
+    message: "Reads local gcloud ADC. On iOS, use the tokenProvider initializer on a Vertex client."
+)
 public actor GoogleAuthService {
     public enum GoogleAuthError: Error, LocalizedError, Sendable {
         case credentialsFileNotFound(path: String)

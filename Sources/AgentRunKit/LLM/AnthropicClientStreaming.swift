@@ -4,6 +4,7 @@ extension AnthropicClient {
     func performStreamRequest(
         messages: [ChatMessage],
         tools: [ToolDefinition],
+        toolChoice: AnthropicToolChoice?,
         extraFields: [String: JSONValue],
         onResponse: (@Sendable (HTTPURLResponse) -> Void)?,
         continuation: AsyncThrowingStream<StreamDelta, Error>.Continuation
@@ -11,7 +12,7 @@ extension AnthropicClient {
         try messages.validateForLLMRequest()
         let request = try buildRequest(
             messages: messages, tools: tools,
-            stream: true, extraFields: extraFields
+            stream: true, toolChoice: toolChoice, extraFields: extraFields
         )
         let urlRequest = try buildURLRequest(request)
         let (bytes, httpResponse) = try await HTTPRetry.performStream(
@@ -35,6 +36,7 @@ extension AnthropicClient {
     func performRunStreamRequest(
         messages: [ChatMessage],
         tools: [ToolDefinition],
+        toolChoice: AnthropicToolChoice?,
         extraFields: [String: JSONValue],
         onResponse: (@Sendable (HTTPURLResponse) -> Void)?,
         continuation: AsyncThrowingStream<RunStreamElement, Error>.Continuation
@@ -42,7 +44,7 @@ extension AnthropicClient {
         try messages.validateForLLMRequest()
         let request = try buildRequest(
             messages: messages, tools: tools,
-            stream: true, extraFields: extraFields
+            stream: true, toolChoice: toolChoice, extraFields: extraFields
         )
         let urlRequest = try buildURLRequest(request)
         let (bytes, httpResponse) = try await HTTPRetry.performStream(
@@ -57,13 +59,13 @@ extension AnthropicClient {
             stallTimeout: retryPolicy.streamStallTimeout
         ) { line in
             try await self.handleSSELine(line, state: state) { delta in
-                _ = continuation.yield(.delta(delta))
+                continuation.yield(.delta(delta))
             }
         }
 
         if await state.isCompleted {
             let blocks = try await state.finalizedBlocks()
-            if !blocks.isEmpty {
+            if await state.supportsReplayContinuity(), !blocks.isEmpty {
                 let projection = AnthropicTurnProjection(orderedBlocks: blocks)
                 continuation.yield(.finalizedContinuity(projection.continuity))
             }
@@ -77,7 +79,7 @@ extension AnthropicClient {
         continuation: AsyncThrowingStream<StreamDelta, Error>.Continuation
     ) async throws -> Bool {
         try await handleSSELine(line, state: state) { delta in
-            _ = continuation.yield(delta)
+            continuation.yield(delta)
         }
     }
 
@@ -138,7 +140,11 @@ extension AnthropicClient {
     ) async throws {
         let event = try decodeEvent(AnthropicBlockStartEvent.self, from: data)
         let block = event.contentBlock
-        guard let blockKind = block.kind else { return }
+        guard let blockKind = block.kind else {
+            await state.setBlockType(event.index, .opaque)
+            await state.setOpaqueBlock(event.index, raw: block.raw)
+            return
+        }
 
         switch blockKind {
         case .thinking:
@@ -146,12 +152,12 @@ extension AnthropicClient {
         case .text:
             await state.setBlockType(event.index, .text)
         case .toolUse:
-            let toolIndex = await state.incrementToolCallCount()
+            let toolIndex = await state.registerToolCall(event.index)
             await state.setBlockType(event.index, .toolUse)
             if let id = block.id, let name = block.name {
                 await state.setToolInfo(event.index, id: id, name: name)
                 yield(.toolCallStart(
-                    index: toolIndex, id: id, name: name
+                    index: toolIndex, id: id, name: name, kind: .function
                 ))
             }
         }
@@ -164,7 +170,12 @@ extension AnthropicClient {
     ) async throws {
         let event = try decodeEvent(AnthropicBlockDeltaEvent.self, from: data)
         let delta = event.delta
-        guard let deltaKind = delta.kind else { return }
+        guard let deltaKind = delta.kind else {
+            if await state.blockType(for: event.index) == .opaque {
+                await state.appendOpaqueDelta(event.index, raw: delta.raw)
+            }
+            return
+        }
 
         switch deltaKind {
         case .thinkingDelta:
@@ -179,8 +190,9 @@ extension AnthropicClient {
             }
         case .inputJsonDelta:
             if let json = delta.partialJson, !json.isEmpty {
-                let toolIndex = await state.toolCallCount - 1
-                precondition(toolIndex >= 0, "input_json_delta before any tool_use block_start")
+                guard let toolIndex = await state.toolCallIndex(for: event.index) else {
+                    throw AgentError.malformedStream(.toolCallDeltaWithoutStart(index: event.index))
+                }
                 await state.appendToolInput(event.index, json)
                 yield(.toolCallDelta(
                     index: toolIndex, arguments: json
@@ -271,6 +283,7 @@ extension AnthropicClient: HistoryRewriteAwareClient {
                     try await performRunStreamRequest(
                         messages: messages,
                         tools: tools,
+                        toolChoice: requestContext?.anthropic?.toolChoice,
                         extraFields: requestContext?.extraFields ?? [:],
                         onResponse: requestContext?.onResponse,
                         continuation: continuation
@@ -280,117 +293,6 @@ extension AnthropicClient: HistoryRewriteAwareClient {
                 }
             }
             continuation.onTermination = { _ in task.cancel() }
-        }
-    }
-}
-
-actor AnthropicStreamState {
-    enum BlockType { case thinking, text, toolUse }
-
-    private var blockTypes: [Int: BlockType] = [:]
-    private var thinkingText: [Int: String] = [:]
-    private var signatures: [Int: String] = [:]
-    private var textContent: [Int: String] = [:]
-    private var toolIds: [Int: String] = [:]
-    private var toolNames: [Int: String] = [:]
-    private var toolInputs: [Int: String] = [:]
-    private(set) var toolCallCount: Int = 0
-    private(set) var inputUsage: AnthropicUsage?
-    private(set) var isCompleted: Bool = false
-    private var maxBlockIndex: Int = -1
-
-    func markCompleted() {
-        isCompleted = true
-    }
-
-    func setInputUsage(_ usage: AnthropicUsage) {
-        inputUsage = usage
-    }
-
-    func setBlockType(_ index: Int, _ type: BlockType) {
-        blockTypes[index] = type
-        maxBlockIndex = max(maxBlockIndex, index)
-    }
-
-    func blockType(for index: Int) -> BlockType? {
-        blockTypes[index]
-    }
-
-    func incrementToolCallCount() -> Int {
-        defer { toolCallCount += 1 }
-        return toolCallCount
-    }
-
-    func appendThinking(_ index: Int, _ text: String) {
-        thinkingText[index, default: ""] += text
-    }
-
-    func appendSignature(_ index: Int, _ sig: String) {
-        signatures[index, default: ""] += sig
-    }
-
-    func thinking(for index: Int) -> String? {
-        thinkingText[index]
-    }
-
-    func signature(for index: Int) -> String? {
-        signatures[index]
-    }
-
-    func appendTextContent(_ index: Int, _ text: String) {
-        textContent[index, default: ""] += text
-    }
-
-    func setToolInfo(_ index: Int, id: String, name: String) {
-        toolIds[index] = id
-        toolNames[index] = name
-    }
-
-    func appendToolInput(_ index: Int, _ json: String) {
-        toolInputs[index, default: ""] += json
-    }
-
-    func finalizedBlocks() throws -> [JSONValue] {
-        guard maxBlockIndex >= 0 else { return [] }
-        return try (0 ... maxBlockIndex).compactMap { index in
-            guard let type = blockTypes[index] else { return nil }
-            switch type {
-            case .thinking:
-                guard let thinking = thinkingText[index],
-                      let signature = signatures[index] else { return nil }
-                return .object([
-                    "type": .string("thinking"),
-                    "thinking": .string(thinking),
-                    "signature": .string(signature),
-                ])
-            case .text:
-                return .object([
-                    "type": .string("text"),
-                    "text": .string(textContent[index] ?? ""),
-                ])
-            case .toolUse:
-                guard let id = toolIds[index],
-                      let name = toolNames[index] else { return nil }
-                let rawInput = toolInputs[index] ?? ""
-                let input: JSONValue
-                if rawInput.isEmpty {
-                    input = .object([:])
-                } else {
-                    do {
-                        input = try JSONDecoder().decode(JSONValue.self, from: Data(rawInput.utf8))
-                    } catch {
-                        throw AgentError.llmError(.decodingFailed(
-                            description: "Failed to decode accumulated tool input JSON: \(rawInput)"
-                        ))
-                    }
-                }
-                return .object([
-                    "type": .string("tool_use"),
-                    "id": .string(id),
-                    "name": .string(name),
-                    "input": input,
-                ])
-            }
         }
     }
 }
@@ -440,14 +342,18 @@ private struct AnthropicBlockStartEvent: Decodable {
 
 private struct AnthropicBlockStartContent: Decodable {
     let kind: AnthropicBlockKind?
+    let rawType: String
     let id: String?
     let name: String?
+    let raw: JSONValue
 
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        kind = try AnthropicBlockKind(rawValue: container.decode(String.self, forKey: .type))
+        rawType = try container.decode(String.self, forKey: .type)
+        kind = AnthropicBlockKind(rawValue: rawType)
         id = try container.decodeIfPresent(String.self, forKey: .id)
         name = try container.decodeIfPresent(String.self, forKey: .name)
+        raw = try JSONValue(from: decoder)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -466,6 +372,7 @@ private struct AnthropicDeltaContent: Decodable {
     let thinking: String?
     let partialJson: String?
     let signature: String?
+    let raw: JSONValue
 
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -474,6 +381,7 @@ private struct AnthropicDeltaContent: Decodable {
         thinking = try container.decodeIfPresent(String.self, forKey: .thinking)
         partialJson = try container.decodeIfPresent(String.self, forKey: .partialJson)
         signature = try container.decodeIfPresent(String.self, forKey: .signature)
+        raw = try JSONValue(from: decoder)
     }
 
     private enum CodingKeys: String, CodingKey {

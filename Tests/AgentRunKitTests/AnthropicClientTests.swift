@@ -17,8 +17,8 @@ struct AnthropicRequestSerializationTests {
         anthropicReasoning: AnthropicReasoningOptions = .manual,
         interleavedThinking: Bool = false,
         maxTokens: Int = 8192
-    ) -> AnthropicClient {
-        AnthropicClient(
+    ) throws -> AnthropicClient {
+        try AnthropicClient(
             apiKey: "test-key",
             model: model,
             maxTokens: maxTokens,
@@ -30,7 +30,7 @@ struct AnthropicRequestSerializationTests {
 
     @Test
     func userMessageMapsCorrectly() throws {
-        let client = makeClient()
+        let client = try makeClient()
         let request = try client.buildRequest(messages: [.user("Hello")], tools: [])
         let json = try encodeRequest(request)
 
@@ -42,7 +42,7 @@ struct AnthropicRequestSerializationTests {
 
     @Test
     func systemMessageExtractedToTopLevel() throws {
-        let client = makeClient()
+        let client = try makeClient()
         let messages: [ChatMessage] = [.system("Be helpful"), .user("Hi")]
         let request = try client.buildRequest(messages: messages, tools: [])
         let json = try encodeRequest(request)
@@ -59,7 +59,7 @@ struct AnthropicRequestSerializationTests {
 
     @Test
     func multipleSystemMessages() throws {
-        let client = makeClient()
+        let client = try makeClient()
         let messages: [ChatMessage] = [.system("First"), .system("Second"), .user("Hi")]
         let request = try client.buildRequest(messages: messages, tools: [])
         let json = try encodeRequest(request)
@@ -72,7 +72,7 @@ struct AnthropicRequestSerializationTests {
 
     @Test
     func noSystemOmitsField() throws {
-        let client = makeClient()
+        let client = try makeClient()
         let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
         let json = try encodeRequest(request)
 
@@ -81,7 +81,7 @@ struct AnthropicRequestSerializationTests {
 
     @Test
     func toolDefinitionsEncode() throws {
-        let client = makeClient()
+        let client = try makeClient()
         let tools = [
             ToolDefinition(
                 name: "get_weather",
@@ -106,7 +106,7 @@ struct AnthropicRequestSerializationTests {
 
     @Test
     func emptyToolsOmitsField() throws {
-        let client = makeClient()
+        let client = try makeClient()
         let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
         let json = try encodeRequest(request)
 
@@ -115,7 +115,7 @@ struct AnthropicRequestSerializationTests {
 
     @Test
     func maxTokensEncodes() throws {
-        let client = makeClient(maxTokens: 4096)
+        let client = try makeClient(maxTokens: 4096)
         let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
         let json = try encodeRequest(request)
 
@@ -124,7 +124,7 @@ struct AnthropicRequestSerializationTests {
 
     @Test
     func streamFlagEncodes() throws {
-        let client = makeClient()
+        let client = try makeClient()
         let request = try client.buildRequest(messages: [.user("Hi")], tools: [], stream: true)
         let json = try encodeRequest(request)
 
@@ -133,7 +133,7 @@ struct AnthropicRequestSerializationTests {
 
     @Test
     func streamFlagOmittedWhenFalse() throws {
-        let client = makeClient()
+        let client = try makeClient()
         let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
         let json = try encodeRequest(request)
 
@@ -142,7 +142,7 @@ struct AnthropicRequestSerializationTests {
 
     @Test
     func manualThinkingConfigEncodes() throws {
-        let client = makeClient(reasoningConfig: .high, maxTokens: 65536)
+        let client = try makeClient(reasoningConfig: .high, maxTokens: 65536)
         let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
         let json = try encodeRequest(request)
 
@@ -154,7 +154,7 @@ struct AnthropicRequestSerializationTests {
 
     @Test
     func adaptiveThinkingEncodes() throws {
-        let client = makeClient(
+        let client = try makeClient(
             reasoningConfig: .high,
             anthropicReasoning: .adaptive
         )
@@ -170,7 +170,7 @@ struct AnthropicRequestSerializationTests {
 
     @Test
     func thinkingDisabledForNoneEffort() throws {
-        let client = makeClient(reasoningConfig: ReasoningConfig.none)
+        let client = try makeClient(reasoningConfig: ReasoningConfig.none)
         let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
         let json = try encodeRequest(request)
 
@@ -180,7 +180,7 @@ struct AnthropicRequestSerializationTests {
 
     @Test
     func noReasoningOmitsThinking() throws {
-        let client = makeClient()
+        let client = try makeClient()
         let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
         let json = try encodeRequest(request)
 
@@ -189,7 +189,7 @@ struct AnthropicRequestSerializationTests {
 
     @Test
     func validExtraFieldsEncode() throws {
-        let client = makeClient()
+        let client = try makeClient()
         let request = try client.buildRequest(
             messages: [.user("Hi")], tools: [],
             extraFields: ["temperature": .double(0.7), "top_p": .double(0.9)]
@@ -202,7 +202,7 @@ struct AnthropicRequestSerializationTests {
 
     @Test
     func invalidExtraFieldThrows() throws {
-        let client = makeClient()
+        let client = try makeClient()
         let request = try client.buildRequest(
             messages: [.user("Hi")], tools: [],
             extraFields: ["bad_field": .string("nope")]
@@ -219,7 +219,7 @@ struct AnthropicRequestSerializationTests {
 
     @Test
     func modelFieldEncodes() throws {
-        let client = makeClient()
+        let client = try makeClient()
         let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
         let json = try encodeRequest(request)
 
@@ -227,8 +227,8 @@ struct AnthropicRequestSerializationTests {
     }
 
     @Test
-    func adaptiveThinkingRejectsExplicitBudgetTokens() {
-        let client = makeClient(
+    func adaptiveThinkingRejectsExplicitBudgetTokens() throws {
+        let client = try makeClient(
             reasoningConfig: .budget(4096),
             anthropicReasoning: .adaptive
         )
@@ -239,8 +239,8 @@ struct AnthropicRequestSerializationTests {
     }
 
     @Test
-    func adaptiveThinkingRejectsMinimalEffort() {
-        let client = makeClient(
+    func adaptiveThinkingRejectsMinimalEffort() throws {
+        let client = try makeClient(
             reasoningConfig: .minimal,
             anthropicReasoning: .adaptive
         )
@@ -252,14 +252,13 @@ struct AnthropicRequestSerializationTests {
 
     @Test
     func adaptiveThinkingRejectsKnownUnsupportedModel() {
-        let client = makeClient(
-            model: "claude-opus-4-5-20251101",
-            reasoningConfig: .high,
-            anthropicReasoning: .adaptive
-        )
-
         #expect(throws: AgentError.self) {
-            _ = try client.buildRequest(messages: [.user("Hi")], tools: [])
+            _ = try AnthropicClient(
+                apiKey: "test-key",
+                model: "claude-opus-4-5-20251101",
+                reasoningConfig: .high,
+                anthropicReasoning: .adaptive
+            )
         }
     }
 }
@@ -267,7 +266,7 @@ struct AnthropicRequestSerializationTests {
 struct AnthropicURLRequestTests {
     @Test
     func setsCorrectHeaders() throws {
-        let client = AnthropicClient(
+        let client = try AnthropicClient(
             apiKey: "sk-ant-test-123",
             model: "claude-sonnet-4-6"
         )
@@ -283,7 +282,7 @@ struct AnthropicURLRequestTests {
 
     @Test
     func betaHeaderWhenInterleavedThinking() throws {
-        let client = AnthropicClient(
+        let client = try AnthropicClient(
             apiKey: "test-key",
             model: "claude-sonnet-4-6",
             reasoningConfig: .high,
@@ -297,7 +296,7 @@ struct AnthropicURLRequestTests {
 
     @Test
     func adaptiveThinkingDoesNotSendBetaHeader() throws {
-        let client = AnthropicClient(
+        let client = try AnthropicClient(
             apiKey: "test-key",
             model: "claude-sonnet-4-6",
             reasoningConfig: .high,
@@ -312,7 +311,7 @@ struct AnthropicURLRequestTests {
 
     @Test
     func noBetaHeaderWithoutInterleavedThinking() throws {
-        let client = AnthropicClient(
+        let client = try AnthropicClient(
             apiKey: "test-key",
             model: "claude-sonnet-4-6",
             reasoningConfig: .high,
@@ -326,7 +325,7 @@ struct AnthropicURLRequestTests {
 
     @Test
     func noBetaHeaderWithoutReasoning() throws {
-        let client = AnthropicClient(
+        let client = try AnthropicClient(
             apiKey: "test-key",
             model: "claude-sonnet-4-6",
             interleavedThinking: true
@@ -335,22 +334,6 @@ struct AnthropicURLRequestTests {
         let urlRequest = try client.buildURLRequest(request)
 
         #expect(urlRequest.value(forHTTPHeaderField: "anthropic-beta") == nil)
-    }
-
-    @Test
-    func responseFormatThrows() async {
-        let client = AnthropicClient(
-            apiKey: "test-key",
-            model: "claude-sonnet-4-6"
-        )
-        let format = ResponseFormat.jsonSchema(TestAnthropicOutput.self)
-        await #expect(throws: AgentError.self) {
-            _ = try await client.generate(
-                messages: [.user("Hi")],
-                tools: [],
-                responseFormat: format
-            )
-        }
     }
 
     @Test
@@ -368,7 +351,7 @@ struct AnthropicURLRequestTests {
 
     @Test
     func additionalHeadersApplied() throws {
-        let client = AnthropicClient(
+        let client = try AnthropicClient(
             apiKey: "test-key",
             model: "claude-sonnet-4-6",
             additionalHeaders: { ["X-Custom": "value123", "x-api-key": "fake"] }
@@ -382,7 +365,7 @@ struct AnthropicURLRequestTests {
 
     @Test
     func existingAnthropicBetaHeaderIsMerged() throws {
-        let client = AnthropicClient(
+        let client = try AnthropicClient(
             apiKey: "test-key",
             model: "claude-sonnet-4-6",
             additionalHeaders: { ["anthropic-beta": "files-api-2025-04-14"] },
@@ -399,17 +382,16 @@ struct AnthropicURLRequestTests {
     }
 
     @Test
-    func manualInterleavedThinkingRejectsOpus46() {
-        let client = AnthropicClient(
+    func manualInterleavedThinkingOnOpus46_docsSayIgnoredAccepts() throws {
+        let client = try AnthropicClient(
             apiKey: "test-key",
             model: "claude-opus-4-6",
             reasoningConfig: .high,
             interleavedThinking: true
         )
-
-        #expect(throws: AgentError.self) {
-            _ = try client.buildRequest(messages: [.user("Hi")], tools: [])
-        }
+        // Per docs: Opus 4.6 direct manual+interleaved is deprecated but the beta
+        // header is ignored server-side, so the request must not throw.
+        _ = try client.buildRequest(messages: [.user("Hi")], tools: [])
     }
 }
 
@@ -421,8 +403,8 @@ struct AnthropicBudgetMappingTests {
             (.low, 4096), (.minimal, 1024)
         ]
         for (effort, expected) in efforts {
-            let client = AnthropicClient(
-                apiKey: "k", maxTokens: 65536,
+            let client = try AnthropicClient(
+                apiKey: "k", model: "claude-opus-4-5", maxTokens: 65536,
                 reasoningConfig: ReasoningConfig(effort: effort)
             )
             let thinking = try client.buildManualThinkingConfig(ReasoningConfig(effort: effort))
@@ -436,8 +418,8 @@ struct AnthropicBudgetMappingTests {
 
     @Test
     func budgetFlooredTo1024() throws {
-        let client = AnthropicClient(
-            apiKey: "k", maxTokens: 65536,
+        let client = try AnthropicClient(
+            apiKey: "k", model: "claude-opus-4-5", maxTokens: 65536,
             reasoningConfig: .budget(500)
         )
         let config = try client.buildManualThinkingConfig(.budget(500))
@@ -446,8 +428,8 @@ struct AnthropicBudgetMappingTests {
 
     @Test
     func budgetCappedToMaxTokensMinusOne() throws {
-        let client = AnthropicClient(
-            apiKey: "k", maxTokens: 2048,
+        let client = try AnthropicClient(
+            apiKey: "k", model: "claude-opus-4-5", maxTokens: 2048,
             reasoningConfig: .budget(4096),
             interleavedThinking: false
         )
@@ -457,8 +439,8 @@ struct AnthropicBudgetMappingTests {
 
     @Test
     func interleavedSkipsCap() throws {
-        let client = AnthropicClient(
-            apiKey: "k", maxTokens: 2048,
+        let client = try AnthropicClient(
+            apiKey: "k", model: "claude-opus-4-5", maxTokens: 2048,
             reasoningConfig: .budget(4096)
         )
         let config = try client.buildManualThinkingConfig(.budget(4096))
@@ -466,9 +448,9 @@ struct AnthropicBudgetMappingTests {
     }
 
     @Test
-    func budgetBelowFloorAfterCapThrows() {
-        let client = AnthropicClient(
-            apiKey: "k", maxTokens: 1024,
+    func budgetBelowFloorAfterCapThrows() throws {
+        let client = try AnthropicClient(
+            apiKey: "k", model: "claude-opus-4-5", maxTokens: 1024,
             reasoningConfig: .budget(2048),
             interleavedThinking: false
         )
@@ -479,8 +461,8 @@ struct AnthropicBudgetMappingTests {
 
     @Test
     func explicitBudgetTokensUsed() throws {
-        let client = AnthropicClient(
-            apiKey: "k", maxTokens: 65536,
+        let client = try AnthropicClient(
+            apiKey: "k", model: "claude-opus-4-5", maxTokens: 65536,
             reasoningConfig: .budget(10000)
         )
         let config = try client.buildManualThinkingConfig(.budget(10000))
@@ -489,8 +471,8 @@ struct AnthropicBudgetMappingTests {
 
     @Test
     func noneEffortWithExplicitBudgetUsesBudget() throws {
-        let client = AnthropicClient(
-            apiKey: "k", maxTokens: 65536,
+        let client = try AnthropicClient(
+            apiKey: "k", model: "claude-opus-4-5", maxTokens: 65536,
             reasoningConfig: ReasoningConfig(effort: .none, budgetTokens: 4096)
         )
         let config = try client.buildManualThinkingConfig(
@@ -514,7 +496,7 @@ struct AnthropicCachingRequestTests {
 
     @Test
     func cachingDisabledOmitsCacheControl() throws {
-        let client = AnthropicClient(apiKey: "k", model: "m", cachingEnabled: false)
+        let client = try AnthropicClient(apiKey: "k", model: "m", cachingEnabled: false)
         let request = try client.buildRequest(
             messages: [.system("Be helpful"), .user("Hi")],
             tools: testTools
@@ -530,7 +512,7 @@ struct AnthropicCachingRequestTests {
 
     @Test
     func cachingEnabledMarksLastSystemBlock() throws {
-        let client = AnthropicClient(apiKey: "k", model: "m", cachingEnabled: true)
+        let client = try AnthropicClient(apiKey: "k", model: "m", cachingEnabled: true)
         let request = try client.buildRequest(
             messages: [.system("First"), .system("Second"), .user("Hi")],
             tools: []
@@ -546,7 +528,7 @@ struct AnthropicCachingRequestTests {
 
     @Test
     func cachingEnabledMarksLastToolDefinition() throws {
-        let client = AnthropicClient(apiKey: "k", model: "m", cachingEnabled: true)
+        let client = try AnthropicClient(apiKey: "k", model: "m", cachingEnabled: true)
         let request = try client.buildRequest(
             messages: [.user("Hi")],
             tools: testTools
@@ -562,7 +544,7 @@ struct AnthropicCachingRequestTests {
 
     @Test
     func cachingWithNoSystemOrTools() throws {
-        let client = AnthropicClient(apiKey: "k", model: "m", cachingEnabled: true)
+        let client = try AnthropicClient(apiKey: "k", model: "m", cachingEnabled: true)
         let request = try client.buildRequest(
             messages: [.user("Hi")],
             tools: []
@@ -576,7 +558,7 @@ struct AnthropicCachingRequestTests {
 struct AnthropicConversationCachingTests {
     @Test
     func conversationCachingMarksSecondToLastUserMessage() throws {
-        let client = AnthropicClient(apiKey: "k", model: "m", cachingEnabled: true)
+        let client = try AnthropicClient(apiKey: "k", model: "m", cachingEnabled: true)
         let messages: [ChatMessage] = [
             .system("Be helpful"),
             .user("First question"),
@@ -602,7 +584,7 @@ struct AnthropicConversationCachingTests {
 
     @Test
     func conversationCachingSkippedWithOneUserMessage() throws {
-        let client = AnthropicClient(apiKey: "k", model: "m", cachingEnabled: true)
+        let client = try AnthropicClient(apiKey: "k", model: "m", cachingEnabled: true)
         let request = try client.buildRequest(messages: [.user("Only one")], tools: [])
         let json = try encodeRequest(request)
 
@@ -613,7 +595,7 @@ struct AnthropicConversationCachingTests {
 
     @Test
     func conversationCachingSkippedWhenDisabled() throws {
-        let client = AnthropicClient(apiKey: "k", model: "m", cachingEnabled: false)
+        let client = try AnthropicClient(apiKey: "k", model: "m", cachingEnabled: false)
         let messages: [ChatMessage] = [
             .user("First"),
             .assistant(AssistantMessage(content: "Reply")),
@@ -629,7 +611,7 @@ struct AnthropicConversationCachingTests {
 
     @Test
     func conversationCachingWithMultipleExchanges() throws {
-        let client = AnthropicClient(apiKey: "k", model: "m", cachingEnabled: true)
+        let client = try AnthropicClient(apiKey: "k", model: "m", cachingEnabled: true)
         let messages: [ChatMessage] = [
             .user("user1"),
             .assistant(AssistantMessage(content: "asst1")),
@@ -656,7 +638,7 @@ struct AnthropicConversationCachingTests {
 
     @Test
     func conversationCachingIgnoresToolResultUserMessages() throws {
-        let client = AnthropicClient(apiKey: "k", model: "m", cachingEnabled: true)
+        let client = try AnthropicClient(apiKey: "k", model: "m", cachingEnabled: true)
         let assistant = AssistantMessage(
             content: "Let me search",
             toolCalls: [ToolCall(id: "tc_1", name: "search", arguments: "{\"q\":\"test\"}")]
@@ -682,11 +664,5 @@ struct AnthropicConversationCachingTests {
         #expect(toolResultUser?[0]["cache_control"] == nil)
 
         #expect(msgs?[3]["content"] as? String == "Thanks")
-    }
-}
-
-private enum TestAnthropicOutput: SchemaProviding {
-    static var jsonSchema: JSONSchema {
-        .object(properties: ["value": .string()], required: ["value"])
     }
 }

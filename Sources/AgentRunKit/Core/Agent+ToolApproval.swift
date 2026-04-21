@@ -60,7 +60,12 @@ extension Agent {
                 allowlist.insert(indexed.call.name)
                 approved.append(indexed)
             case let .approveWithModifiedArguments(newArgs):
-                let modified = ToolCall(id: indexed.call.id, name: indexed.call.name, arguments: newArgs)
+                let modified = ToolCall(
+                    id: indexed.call.id,
+                    name: indexed.call.name,
+                    arguments: newArgs,
+                    kind: indexed.call.kind
+                )
                 approved.append(IndexedToolCall(index: indexed.index, call: modified))
             case let .deny(reason):
                 let result = ToolResult.error(reason ?? "Tool call was denied.")

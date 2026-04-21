@@ -31,12 +31,12 @@ struct SubAgentStructuralStreamTests {
         )
 
         let parentDeltas1: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_stubborn", name: "stubborn"),
+            .toolCallStart(index: 0, id: "call_stubborn", name: "stubborn", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"query": "go"}"#),
             .finished(usage: nil),
         ]
         let parentDeltas2: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "parent_finish", name: "finish"),
+            .toolCallStart(index: 0, id: "parent_finish", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "recovered"}"#),
             .finished(usage: nil),
         ]
@@ -93,12 +93,12 @@ struct SubAgentStructuralStreamTests {
         )
 
         let parentDeltas1: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_expensive", name: "expensive"),
+            .toolCallStart(index: 0, id: "call_expensive", name: "expensive", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"query": "go"}"#),
             .finished(usage: nil),
         ]
         let parentDeltas2: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "parent_finish", name: "finish"),
+            .toolCallStart(index: 0, id: "parent_finish", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "recovered"}"#),
             .finished(usage: nil),
         ]

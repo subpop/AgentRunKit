@@ -13,7 +13,7 @@ struct ReasoningMultiTurnTests {
             baseURL: OpenAIClient.openRouterBaseURL
         )
         let messages: [ChatMessage] = [.assistant(assistantMsg)]
-        let request = client.buildRequest(messages: messages, tools: [])
+        let request = try client.buildRequest(messages: messages, tools: [])
 
         let data = try JSONEncoder().encode(request)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -41,7 +41,7 @@ struct ReasoningMultiTurnTests {
             baseURL: OpenAIClient.openRouterBaseURL
         )
         let messages: [ChatMessage] = [.assistant(assistantMsg)]
-        let request = client.buildRequest(messages: messages, tools: [])
+        let request = try client.buildRequest(messages: messages, tools: [])
 
         let data = try JSONEncoder().encode(request)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -68,7 +68,7 @@ struct ReasoningMultiTurnTests {
             assistantReplayProfile: .openRouterReasoningDetails
         )
         let messages: [ChatMessage] = [.assistant(assistantMsg)]
-        let request = client.buildRequest(messages: messages, tools: [])
+        let request = try client.buildRequest(messages: messages, tools: [])
 
         let data = try JSONEncoder().encode(request)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -100,7 +100,7 @@ struct ReasoningMultiTurnTests {
             assistantReplayProfile: .openRouterReasoningDetails
         )
         let messages: [ChatMessage] = [.assistant(assistantMsg)]
-        let request = client.buildRequest(messages: messages, tools: [])
+        let request = try client.buildRequest(messages: messages, tools: [])
 
         let data = try JSONEncoder().encode(request)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -123,7 +123,7 @@ struct ReasoningMultiTurnTests {
             baseURL: OpenAIClient.openRouterBaseURL
         )
         let messages: [ChatMessage] = [.assistant(assistantMsg)]
-        let request = client.buildRequest(messages: messages, tools: [])
+        let request = try client.buildRequest(messages: messages, tools: [])
 
         let data = try JSONEncoder().encode(request)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -146,7 +146,7 @@ struct ReasoningMultiTurnTests {
             assistantReplayProfile: .openRouterReasoningDetails
         )
         let messages: [ChatMessage] = [.assistant(assistantMsg)]
-        let request = client.buildRequest(messages: messages, tools: [])
+        let request = try client.buildRequest(messages: messages, tools: [])
 
         let data = try JSONEncoder().encode(request)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -173,7 +173,7 @@ struct ReasoningMultiTurnTests {
             assistantReplayProfile: .openRouterReasoningDetails
         )
         let messages: [ChatMessage] = [.assistant(assistantMsg)]
-        let request = client.buildRequest(messages: messages, tools: [])
+        let request = try client.buildRequest(messages: messages, tools: [])
 
         let data = try JSONEncoder().encode(request)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -203,7 +203,7 @@ struct ReasoningMultiTurnTests {
             baseURL: OpenAIClient.openRouterBaseURL
         )
         let messages: [ChatMessage] = [.assistant(assistantMsg)]
-        let request = client.buildRequest(messages: messages, tools: [])
+        let request = try client.buildRequest(messages: messages, tools: [])
 
         let data = try JSONEncoder().encode(request)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -259,7 +259,7 @@ struct ReplayProfileDefaultTests {
             baseURL: #require(URL(string: "http://localhost:8080"))
         )
         let messages: [ChatMessage] = [.assistant(assistantMsg)]
-        let request = client.buildRequest(messages: messages, tools: [])
+        let request = try client.buildRequest(messages: messages, tools: [])
 
         let data = try JSONEncoder().encode(request)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]

@@ -65,7 +65,7 @@ struct StreamingIntegrationTests {
 
         for try await delta in client.stream(messages: messages, tools: [weatherTool]) {
             switch delta {
-            case let .toolCallStart(index, _, name):
+            case let .toolCallStart(index, _, name, _):
                 if name == "get_weather" {
                     toolCallStartName = name
                     toolCallStartIndex = index

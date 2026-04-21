@@ -22,7 +22,7 @@ struct SubAgentStreamingLifecycleTests {
     func emitsLifecycleEvents() async throws {
         let childDeltas: [StreamDelta] = [
             .content("child thinking..."),
-            .toolCallStart(index: 0, id: "child_finish", name: "finish"),
+            .toolCallStart(index: 0, id: "child_finish", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "child result"}"#),
             .finished(usage: nil),
         ]
@@ -37,12 +37,12 @@ struct SubAgentStreamingLifecycleTests {
         )
 
         let parentDeltas1: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_sub", name: "research"),
+            .toolCallStart(index: 0, id: "call_sub", name: "research", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"query": "test"}"#),
             .finished(usage: nil),
         ]
         let parentDeltas2: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_finish", name: "finish"),
+            .toolCallStart(index: 0, id: "call_finish", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "parent done"}"#),
             .finished(usage: nil),
         ]
@@ -102,7 +102,7 @@ struct SubAgentStreamingLifecycleTests {
     func emittedEventsCarryStage1EnvelopeMetadata() async throws {
         let childDeltas: [StreamDelta] = [
             .content("child thinking..."),
-            .toolCallStart(index: 0, id: "child_finish", name: "finish"),
+            .toolCallStart(index: 0, id: "child_finish", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "child result"}"#),
             .finished(usage: nil),
         ]
@@ -117,12 +117,12 @@ struct SubAgentStreamingLifecycleTests {
         )
 
         let parentDeltas1: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_sub", name: "research"),
+            .toolCallStart(index: 0, id: "call_sub", name: "research", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"query": "test"}"#),
             .finished(usage: nil),
         ]
         let parentDeltas2: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_finish", name: "finish"),
+            .toolCallStart(index: 0, id: "call_finish", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "parent done"}"#),
             .finished(usage: nil),
         ]
@@ -152,7 +152,7 @@ struct SubAgentStreamingLifecycleTests {
     func identityInEvents() async throws {
         let childDeltas: [StreamDelta] = [
             .content("working"),
-            .toolCallStart(index: 0, id: "cf", name: "finish"),
+            .toolCallStart(index: 0, id: "cf", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "done"}"#),
             .finished(usage: nil),
         ]
@@ -167,12 +167,12 @@ struct SubAgentStreamingLifecycleTests {
         )
 
         let parentDeltas1: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_xyz", name: "analyzer"),
+            .toolCallStart(index: 0, id: "call_xyz", name: "analyzer", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"query": "analyze this"}"#),
             .finished(usage: nil),
         ]
         let parentDeltas2: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "pf", name: "finish"),
+            .toolCallStart(index: 0, id: "pf", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "all done"}"#),
             .finished(usage: nil),
         ]
@@ -221,12 +221,12 @@ struct SubAgentStreamingLifecycleTests {
         )
 
         let parentDeltas1: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_fail", name: "failing"),
+            .toolCallStart(index: 0, id: "call_fail", name: "failing", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"query": "boom"}"#),
             .finished(usage: nil),
         ]
         let parentDeltas2: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "pf", name: "finish"),
+            .toolCallStart(index: 0, id: "pf", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "ok"}"#),
             .finished(usage: nil),
         ]
@@ -259,7 +259,7 @@ struct SubAgentSystemPromptTests {
     @Test
     func overrideUsedInStreaming() async throws {
         let childDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "cf", name: "finish"),
+            .toolCallStart(index: 0, id: "cf", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "child done"}"#),
             .finished(usage: nil),
         ]
@@ -278,12 +278,12 @@ struct SubAgentSystemPromptTests {
         )
 
         let parentDeltas1: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_sub", name: "research"),
+            .toolCallStart(index: 0, id: "call_sub", name: "research", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"query": "climate change"}"#),
             .finished(usage: nil),
         ]
         let parentDeltas2: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "pf", name: "finish"),
+            .toolCallStart(index: 0, id: "pf", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "done"}"#),
             .finished(usage: nil),
         ]
@@ -358,12 +358,12 @@ struct SubAgentTimeoutTests {
         )
 
         let parentDeltas1: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_fail", name: "failing"),
+            .toolCallStart(index: 0, id: "call_fail", name: "failing", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"query": "boom"}"#),
             .finished(usage: nil),
         ]
         let parentDeltas2: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "pf", name: "finish"),
+            .toolCallStart(index: 0, id: "pf", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "recovered"}"#),
             .finished(usage: nil),
         ]
@@ -405,12 +405,12 @@ struct SubAgentTimeoutTests {
         )
 
         let parentDeltas1: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_slow", name: "slow"),
+            .toolCallStart(index: 0, id: "call_slow", name: "slow", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"query": "think hard"}"#),
             .finished(usage: nil),
         ]
         let parentDeltas2: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "pf", name: "finish"),
+            .toolCallStart(index: 0, id: "pf", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "done"}"#),
             .finished(usage: nil),
         ]
@@ -427,7 +427,7 @@ struct SubAgentTimeoutTests {
                 } catch {
                     return
                 }
-                await childClient.yieldDelta(.toolCallStart(index: 0, id: "cf", name: "finish"))
+                await childClient.yieldDelta(.toolCallStart(index: 0, id: "cf", name: "finish", kind: .function))
                 await childClient.yieldDelta(.toolCallDelta(index: 0, arguments: #"{"content": "slow result"}"#))
                 await childClient.yieldDelta(.finished(usage: nil))
                 await childClient.finishStream()
@@ -463,12 +463,12 @@ struct SubAgentTimeoutTests {
         )
 
         let parentDeltas1: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_slow", name: "slow"),
+            .toolCallStart(index: 0, id: "call_slow", name: "slow", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"query": "think"}"#),
             .finished(usage: nil),
         ]
         let parentDeltas2: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "pf", name: "finish"),
+            .toolCallStart(index: 0, id: "pf", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "recovered"}"#),
             .finished(usage: nil),
         ]
@@ -499,7 +499,7 @@ struct SubAgentNestingTests {
     func nestedSubAgentsStreamRecursively() async throws {
         let innerDeltas: [StreamDelta] = [
             .content("inner working"),
-            .toolCallStart(index: 0, id: "inner_f", name: "finish"),
+            .toolCallStart(index: 0, id: "inner_f", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "inner result"}"#),
             .finished(usage: nil),
         ]
@@ -514,12 +514,12 @@ struct SubAgentNestingTests {
         )
 
         let outerDeltas1: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_inner", name: "inner"),
+            .toolCallStart(index: 0, id: "call_inner", name: "inner", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"query": "go deeper"}"#),
             .finished(usage: nil),
         ]
         let outerDeltas2: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "outer_f", name: "finish"),
+            .toolCallStart(index: 0, id: "outer_f", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "outer result"}"#),
             .finished(usage: nil),
         ]
@@ -534,12 +534,12 @@ struct SubAgentNestingTests {
         )
 
         let rootDeltas1: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_outer", name: "outer"),
+            .toolCallStart(index: 0, id: "call_outer", name: "outer", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"query": "start"}"#),
             .finished(usage: nil),
         ]
         let rootDeltas2: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "root_f", name: "finish"),
+            .toolCallStart(index: 0, id: "root_f", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "root done"}"#),
             .finished(usage: nil),
         ]
@@ -585,12 +585,12 @@ struct SubAgentApprovalStreamingTests {
             executor: { _, _ in NoopOutput() }
         )
         let childDeltas1: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "child_tool", name: "child_noop"),
+            .toolCallStart(index: 0, id: "child_tool", name: "child_noop", kind: .function),
             .toolCallDelta(index: 0, arguments: "{}"),
             .finished(usage: nil),
         ]
         let childDeltas2: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "child_finish", name: "finish"),
+            .toolCallStart(index: 0, id: "child_finish", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content":"child done"}"#),
             .finished(usage: nil),
         ]
@@ -608,12 +608,12 @@ struct SubAgentApprovalStreamingTests {
         )
 
         let parentDeltas1: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "parent_tool", name: "delegate"),
+            .toolCallStart(index: 0, id: "parent_tool", name: "delegate", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"query":"go"}"#),
             .finished(usage: nil),
         ]
         let parentDeltas2: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "parent_finish", name: "finish"),
+            .toolCallStart(index: 0, id: "parent_finish", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content":"parent done"}"#),
             .finished(usage: nil),
         ]
@@ -702,7 +702,8 @@ private struct BlockingStreamableTool: AnyTool, StreamableSubAgentTool {
         toolCallId _: String,
         arguments _: Data,
         context _: Context,
-        eventHandler _: @Sendable (StreamEvent) -> Void
+        eventHandler _: @Sendable (StreamEvent) -> Void,
+        approvalHandler _: ToolApprovalHandler?
     ) async throws -> ToolResult {
         try await Task.sleep(for: .seconds(60))
         return .error("Should not reach here")
@@ -715,7 +716,7 @@ struct SubAgentCancellationTests {
         let tool = BlockingStreamableTool()
 
         let parentDeltas1: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_block", name: "blocking"),
+            .toolCallStart(index: 0, id: "call_block", name: "blocking", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"query": "wait"}"#),
             .finished(usage: nil),
         ]
@@ -797,7 +798,7 @@ struct SubAgentInheritHistoryStreamingTests {
     @Test
     func childSeesParentHistoryInStreaming() async throws {
         let childDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "cf", name: "finish"),
+            .toolCallStart(index: 0, id: "cf", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "child done"}"#),
             .finished(usage: nil),
         ]
@@ -815,12 +816,12 @@ struct SubAgentInheritHistoryStreamingTests {
         )
 
         let parentDeltas1: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "cs", name: "research"),
+            .toolCallStart(index: 0, id: "cs", name: "research", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"query": "task"}"#),
             .finished(usage: nil),
         ]
         let parentDeltas2: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "pf", name: "finish"),
+            .toolCallStart(index: 0, id: "pf", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "parent done"}"#),
             .finished(usage: nil),
         ]
@@ -855,7 +856,7 @@ struct SubAgentInheritHistoryStreamingTests {
     @Test
     func parallelSiblingsInheritSameHistory() async throws {
         let child1Deltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "cf1", name: "finish"),
+            .toolCallStart(index: 0, id: "cf1", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "child1 done"}"#),
             .finished(usage: nil),
         ]
@@ -874,7 +875,7 @@ struct SubAgentInheritHistoryStreamingTests {
         )
 
         let child2Deltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "cf2", name: "finish"),
+            .toolCallStart(index: 0, id: "cf2", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "child2 done"}"#),
             .finished(usage: nil),
         ]
@@ -893,14 +894,14 @@ struct SubAgentInheritHistoryStreamingTests {
         )
 
         let parentDeltas1: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "cs1", name: "research1"),
+            .toolCallStart(index: 0, id: "cs1", name: "research1", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"query": "task1"}"#),
-            .toolCallStart(index: 1, id: "cs2", name: "research2"),
+            .toolCallStart(index: 1, id: "cs2", name: "research2", kind: .function),
             .toolCallDelta(index: 1, arguments: #"{"query": "task2"}"#),
             .finished(usage: nil),
         ]
         let parentDeltas2: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "pf", name: "finish"),
+            .toolCallStart(index: 0, id: "pf", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "parent done"}"#),
             .finished(usage: nil),
         ]
@@ -935,7 +936,7 @@ struct SubAgentInheritHistoryStreamingTests {
             ])
         )
         let childDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "cf", name: "finish"),
+            .toolCallStart(index: 0, id: "cf", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "child done"}"#),
             .finished(usage: nil),
         ]
@@ -953,12 +954,12 @@ struct SubAgentInheritHistoryStreamingTests {
         )
 
         let parentDeltas1: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "cs", name: "research"),
+            .toolCallStart(index: 0, id: "cs", name: "research", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"query": "task"}"#),
             .finished(usage: nil),
         ]
         let parentDeltas2: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "pf", name: "finish"),
+            .toolCallStart(index: 0, id: "pf", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "parent done"}"#),
             .finished(usage: nil),
         ]

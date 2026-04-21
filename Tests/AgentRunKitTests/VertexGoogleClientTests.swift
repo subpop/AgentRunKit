@@ -136,14 +136,28 @@ struct VertexGoogleResponseTests {
     }
 
     @Test
-    func thinkingConfigPassedThrough() {
+    func thinkingConfigPassedThrough_onGemini3() throws {
         let client = VertexGoogleClient(
-            projectID: "p", location: "l", model: "m",
+            projectID: "p", location: "l", model: "gemini-3-flash-preview",
             tokenProvider: { "tok" },
             reasoningConfig: .high
         )
-        let config = client.gemini.buildThinkingConfig()
+        let config = try client.gemini.buildThinkingConfig()
         #expect(config?.thinkingLevel == "HIGH")
+        #expect(config?.thinkingBudget == nil)
+        #expect(config?.includeThoughts == true)
+    }
+
+    @Test
+    func thinkingConfigPassedThrough_onGemini25() throws {
+        let client = VertexGoogleClient(
+            projectID: "p", location: "l", model: "gemini-2.5-pro",
+            tokenProvider: { "tok" },
+            reasoningConfig: .high
+        )
+        let config = try client.gemini.buildThinkingConfig()
+        #expect(config?.thinkingBudget == 16384)
+        #expect(config?.thinkingLevel == nil)
         #expect(config?.includeThoughts == true)
     }
 }

@@ -1,8 +1,8 @@
 import Foundation
 
-/// Encodes and decodes canonical transcript JSON for streamed events.
+/// Stable JSON encoding for persisting and replaying streamed events.
 public enum StreamEventJSONCodec {
-    /// Returns the canonical encoder for transcript-grade event JSON.
+    /// Returns a `JSONEncoder` configured for the stable event wire format.
     public static func makeEncoder() -> JSONEncoder {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
@@ -11,7 +11,7 @@ public enum StreamEventJSONCodec {
         return encoder
     }
 
-    /// Returns the canonical decoder for transcript-grade event JSON.
+    /// Returns a `JSONDecoder` configured for the stable event wire format.
     public static func makeDecoder() -> JSONDecoder {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .useDefaultKeys
@@ -19,12 +19,12 @@ public enum StreamEventJSONCodec {
         return decoder
     }
 
-    /// Encodes an event using the canonical transcript JSON configuration.
+    /// Encodes `event` using the stable wire format.
     public static func encode(_ event: StreamEvent) throws -> Data {
         try makeEncoder().encode(event)
     }
 
-    /// Decodes an event using the canonical transcript JSON configuration.
+    /// Decodes `data` as a ``StreamEvent`` using the stable wire format.
     public static func decode(_ data: Data) throws -> StreamEvent {
         try makeDecoder().decode(StreamEvent.self, from: data)
     }

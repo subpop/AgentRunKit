@@ -4,6 +4,18 @@ import Foundation
 public struct ReasoningConfig: Sendable, Equatable {
     public enum Effort: String, Sendable, Codable {
         case xhigh, high, medium, low, minimal, none
+
+        /// The default thinking-token budget mapped from this effort level.
+        public var defaultBudgetTokens: Int {
+            switch self {
+            case .xhigh: 32768
+            case .high: 16384
+            case .medium: 8192
+            case .low: 4096
+            case .minimal: 1024
+            case .none: 0
+            }
+        }
     }
 
     public let effort: Effort

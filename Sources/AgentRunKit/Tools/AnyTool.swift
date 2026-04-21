@@ -19,6 +19,9 @@ public protocol AnyTool<Context>: Sendable {
     /// Per-tool override for the maximum tool result length before truncation, or `nil` to use the global default.
     var maxResultCharacters: Int? { get }
 
+    /// Whether to request provider-side strict schema enforcement on this tool's arguments.
+    var strict: Bool? { get }
+
     func execute(arguments: Data, context: Context) async throws -> ToolResult
 }
 
@@ -32,6 +35,10 @@ public extension AnyTool {
     }
 
     var maxResultCharacters: Int? {
+        nil
+    }
+
+    var strict: Bool? {
         nil
     }
 }

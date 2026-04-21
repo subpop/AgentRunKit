@@ -69,7 +69,7 @@ struct GeminiStreamingTests {
             if case .toolCallStart = $0 { return true }; return false
         }
         #expect(startDeltas.count == 1)
-        if case let .toolCallStart(index, id, name) = startDeltas[0] {
+        if case let .toolCallStart(index, id, name, _) = startDeltas[0] {
             #expect(index == 0)
             #expect(id == "call_01")
             #expect(name == "get_weather")
@@ -203,12 +203,12 @@ struct GeminiStreamingTests {
             if case .toolCallStart = $0 { return true }; return false
         }
         #expect(startDeltas.count == 2)
-        if case let .toolCallStart(index0, id0, name0) = startDeltas[0] {
+        if case let .toolCallStart(index0, id0, name0, _) = startDeltas[0] {
             #expect(index0 == 0)
             #expect(id0 == "call_a")
             #expect(name0 == "search")
         }
-        if case let .toolCallStart(index1, id1, name1) = startDeltas[1] {
+        if case let .toolCallStart(index1, id1, name1, _) = startDeltas[1] {
             #expect(index1 == 1)
             #expect(id1 == "call_b")
             #expect(name1 == "lookup")
@@ -226,7 +226,7 @@ struct GeminiStreamingTests {
             if case .toolCallStart = $0 { return true }; return false
         }
         #expect(startDeltas.count == 1)
-        if case let .toolCallStart(_, id, _) = startDeltas[0] {
+        if case let .toolCallStart(_, id, _, _) = startDeltas[0] {
             #expect(id == "gemini_call_0")
         }
     }

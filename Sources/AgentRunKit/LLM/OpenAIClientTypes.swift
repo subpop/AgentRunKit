@@ -15,39 +15,6 @@ extension OpenAIChatAssistantReplayProfile {
     }
 }
 
-/// Per-request metadata and provider-specific parameters.
-public struct RequestContext: Sendable {
-    public let extraFields: [String: JSONValue]
-    public let onResponse: (@Sendable (HTTPURLResponse) -> Void)?
-
-    public init(
-        extraFields: [String: JSONValue] = [:],
-        onResponse: (@Sendable (HTTPURLResponse) -> Void)? = nil
-    ) {
-        self.extraFields = extraFields
-        self.onResponse = onResponse
-    }
-}
-
-struct DynamicCodingKey: CodingKey {
-    var stringValue: String
-    var intValue: Int? {
-        nil
-    }
-
-    init(_ key: String) {
-        stringValue = key
-    }
-
-    init?(stringValue: String) {
-        self.stringValue = stringValue
-    }
-
-    init?(intValue _: Int) {
-        nil
-    }
-}
-
 struct StreamOptions: Encodable {
     let includeUsage: Bool
 
@@ -85,7 +52,8 @@ struct ChatCompletionRequest: Encodable {
     let model: String?
     let messages: [RequestMessage]
     let tools: [RequestTool]?
-    let toolChoice: String?
+    let toolChoice: OpenAIChatToolChoice?
+    let parallelToolCalls: Bool?
     let maxTokens: Int
     let tokenFieldName: String
     let stream: Bool?
@@ -94,20 +62,40 @@ struct ChatCompletionRequest: Encodable {
     let reasoning: RequestReasoning?
     let extraFields: [String: JSONValue]
 
+    private static let reservedKeys: Set<String> = [
+        "model", "messages", "tools", "tool_choice", "reasoning",
+        "stream", "stream_options", "response_format",
+        "max_tokens", "max_completion_tokens", "parallel_tool_calls"
+    ]
+
     enum CodingKeys: String, CodingKey {
         case model, messages, tools, reasoning
         case toolChoice = "tool_choice"
+        case parallelToolCalls = "parallel_tool_calls"
         case stream
         case streamOptions = "stream_options"
         case responseFormat = "response_format"
     }
 
     func encode(to encoder: any Encoder) throws {
+        let colliding = extraFields.keys.filter { Self.reservedKeys.contains($0) }
+        if !colliding.isEmpty {
+            throw EncodingError.invalidValue(
+                extraFields,
+                EncodingError.Context(
+                    codingPath: encoder.codingPath,
+                    debugDescription: "Reserved extraFields keys for OpenAI Chat: "
+                        + colliding.sorted().joined(separator: ", ")
+                )
+            )
+        }
+
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encodeIfPresent(model, forKey: .model)
         try container.encode(messages, forKey: .messages)
         try container.encodeIfPresent(tools, forKey: .tools)
         try container.encodeIfPresent(toolChoice, forKey: .toolChoice)
+        try container.encodeIfPresent(parallelToolCalls, forKey: .parallelToolCalls)
         try container.encodeIfPresent(stream, forKey: .stream)
         try container.encodeIfPresent(streamOptions, forKey: .streamOptions)
         try container.encodeIfPresent(responseFormat, forKey: .responseFormat)
@@ -153,7 +141,7 @@ struct RequestMessage: Encodable {
         }
     }
 
-    init(_ message: ChatMessage, replayProfile: OpenAIChatAssistantReplayProfile) {
+    init(_ message: ChatMessage, replayProfile: OpenAIChatAssistantReplayProfile) throws {
         switch message {
         case let .system(text):
             role = "system"
@@ -182,7 +170,7 @@ struct RequestMessage: Encodable {
         case let .assistant(msg):
             role = "assistant"
             content = .text(msg.content)
-            toolCalls = msg.toolCalls.isEmpty ? nil : msg.toolCalls.map(RequestToolCall.init)
+            toolCalls = msg.toolCalls.isEmpty ? nil : try msg.toolCalls.map(RequestToolCall.init)
             toolCallId = nil
             name = nil
             reasoningContent = nil
@@ -202,12 +190,20 @@ struct RequestMessage: Encodable {
 struct RequestToolCall: Encodable {
     let id: String
     let type: String
-    let function: RequestFunction
+    let function: RequestFunction?
+    let custom: RequestCustomToolInput?
 
-    init(_ toolCall: ToolCall) {
+    init(_ toolCall: ToolCall) throws {
         id = toolCall.id
-        type = "function"
-        function = RequestFunction(name: toolCall.name, arguments: toolCall.arguments)
+        type = toolCall.kind.rawValue
+        switch toolCall.kind {
+        case .function:
+            function = RequestFunction(name: toolCall.name, arguments: toolCall.arguments)
+            custom = nil
+        case .custom:
+            function = nil
+            custom = RequestCustomToolInput(name: toolCall.name, input: toolCall.arguments)
+        }
     }
 }
 
@@ -216,26 +212,9 @@ struct RequestFunction: Encodable {
     let arguments: String
 }
 
-struct RequestTool: Encodable {
-    let type: String
-    let function: RequestToolFunction
-
-    init(_ definition: ToolDefinition) {
-        type = "function"
-        function = RequestToolFunction(definition)
-    }
-}
-
-struct RequestToolFunction: Encodable {
+struct RequestCustomToolInput: Encodable {
     let name: String
-    let description: String
-    let parameters: JSONSchema
-
-    init(_ definition: ToolDefinition) {
-        name = definition.name
-        description = definition.description
-        parameters = definition.parametersSchema
-    }
+    let input: String
 }
 
 struct ChatCompletionResponse: Decodable {
@@ -258,22 +237,39 @@ struct ResponseMessage: Decodable {
 
 struct ResponseToolCall: Decodable {
     let id: String
-    let type: String
-    let function: ResponseFunction
+    let kind: ToolCallKind
+    let name: String
+    let arguments: String
 
     enum CodingKeys: String, CodingKey {
-        case id, type, function
+        case id, type, function, custom
     }
 
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
-        type = try container.decode(String.self, forKey: .type)
-        function = try container.decode(ResponseFunction.self, forKey: .function)
+        let rawType = try container.decodeIfPresent(String.self, forKey: .type) ?? ToolCallKind.function.rawValue
+        guard let kind = ToolCallKind(rawValue: rawType) else {
+            throw AgentError.llmError(.featureUnsupported(
+                provider: "openai-chat",
+                feature: "response tool call type '\(rawType)'"
+            ))
+        }
+        self.kind = kind
         guard !id.isEmpty else {
             throw DecodingError.dataCorruptedError(
                 forKey: .id, in: container, debugDescription: "tool call id is empty"
             )
+        }
+        switch kind {
+        case .function:
+            let function = try container.decode(ResponseFunction.self, forKey: .function)
+            name = function.name
+            arguments = function.arguments
+        case .custom:
+            let custom = try container.decode(ResponseCustomToolCall.self, forKey: .custom)
+            name = custom.name
+            arguments = custom.input
         }
     }
 }
@@ -293,6 +289,26 @@ struct ResponseFunction: Decodable {
         guard !name.isEmpty else {
             throw DecodingError.dataCorruptedError(
                 forKey: .name, in: container, debugDescription: "function name is empty"
+            )
+        }
+    }
+}
+
+struct ResponseCustomToolCall: Decodable {
+    let name: String
+    let input: String
+
+    enum CodingKeys: String, CodingKey {
+        case name, input
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+        input = try container.decode(String.self, forKey: .input)
+        guard !name.isEmpty else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .name, in: container, debugDescription: "custom tool call name is empty"
             )
         }
     }
@@ -342,12 +358,19 @@ struct StreamingDelta: Decodable {
 struct StreamingToolCall: Decodable {
     let index: Int
     let id: String?
+    let type: String?
     let function: StreamingFunction?
+    let custom: StreamingCustom?
 }
 
 struct StreamingFunction: Decodable {
     let name: String?
     let arguments: String?
+}
+
+struct StreamingCustom: Decodable {
+    let name: String?
+    let input: String?
 }
 
 public enum TranscriptionAudioFormat: String, Sendable, Codable, CaseIterable {

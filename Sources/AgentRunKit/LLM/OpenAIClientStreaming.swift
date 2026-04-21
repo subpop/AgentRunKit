@@ -4,12 +4,19 @@ extension OpenAIClient {
     func performStreamRequest(
         messages: [ChatMessage],
         tools: [ToolDefinition],
+        options: OpenAIChatRequestOptions?,
         extraFields: [String: JSONValue],
         onResponse: (@Sendable (HTTPURLResponse) -> Void)?,
         continuation: AsyncThrowingStream<StreamDelta, Error>.Continuation
     ) async throws {
         try messages.validateForLLMRequest()
-        let request = buildRequest(messages: messages, tools: tools, stream: true, extraFields: extraFields)
+        let request = try buildRequest(
+            messages: messages,
+            tools: tools,
+            stream: true,
+            extraFields: extraFields,
+            options: options
+        )
         let urlRequest = try buildURLRequest(request)
         let (bytes, httpResponse) = try await HTTPRetry.performStream(
             urlRequest: urlRequest, session: session, retryPolicy: retryPolicy
@@ -119,7 +126,7 @@ extension OpenAIClient {
             if let content = choice.delta.content, !content.isEmpty {
                 deltas.append(.content(content))
             }
-            extractToolCallDeltas(from: choice.delta, into: &deltas)
+            try extractToolCallDeltas(from: choice.delta, into: &deltas)
             try extractAudioDeltas(from: choice.delta, into: &deltas)
             if choice.finishReason != nil {
                 deltas.append(.finished(usage: chunk.usage.map(\.tokenUsage)))
@@ -132,16 +139,35 @@ extension OpenAIClient {
         return deltas
     }
 
-    private func extractToolCallDeltas(from delta: StreamingDelta, into deltas: inout [StreamDelta]) {
+    private func extractToolCallDeltas(
+        from delta: StreamingDelta,
+        into deltas: inout [StreamDelta]
+    ) throws {
         guard let toolCalls = delta.toolCalls else { return }
         for call in toolCalls {
-            if let id = call.id, !id.isEmpty, let name = call.function?.name, !name.isEmpty {
-                deltas.append(.toolCallStart(index: call.index, id: id, name: name))
+            let kind = try resolveToolCallKind(call)
+            let name = call.function?.name ?? call.custom?.name
+            if let id = call.id, !id.isEmpty, let name, !name.isEmpty {
+                deltas.append(.toolCallStart(index: call.index, id: id, name: name, kind: kind))
             }
-            if let args = call.function?.arguments, !args.isEmpty {
-                deltas.append(.toolCallDelta(index: call.index, arguments: args))
+            let payload = call.function?.arguments ?? call.custom?.input
+            if let payload, !payload.isEmpty {
+                deltas.append(.toolCallDelta(index: call.index, arguments: payload))
             }
         }
+    }
+
+    private func resolveToolCallKind(_ call: StreamingToolCall) throws -> ToolCallKind {
+        if let rawType = call.type {
+            guard let kind = ToolCallKind(rawValue: rawType) else {
+                throw AgentError.llmError(.featureUnsupported(
+                    provider: "openai-chat",
+                    feature: "streaming tool call type '\(rawType)'"
+                ))
+            }
+            return kind
+        }
+        return call.custom != nil ? .custom : .function
     }
 
     private func extractAudioDeltas(from delta: StreamingDelta, into deltas: inout [StreamDelta]) throws {

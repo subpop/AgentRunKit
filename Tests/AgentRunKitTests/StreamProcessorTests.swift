@@ -83,7 +83,7 @@ struct StreamProcessorEmittedOutputTests {
     @Test
     func toolCallStartUnderChatPolicySetsEmittedOutput() async {
         let client = ScriptedStreamClient(
-            deltas: [.toolCallStart(index: 0, id: "call_1", name: "search")],
+            deltas: [.toolCallStart(index: 0, id: "call_1", name: "search", kind: .function)],
             error: promptTooLongError
         )
         let processor = StreamProcessor(client: client, toolDefinitions: [], policy: .chat)
@@ -107,7 +107,7 @@ struct StreamProcessorEmittedOutputTests {
     @Test
     func terminalToolUnderAgentPolicyDoesNotSetEmittedOutput() async {
         let client = ScriptedStreamClient(
-            deltas: [.toolCallStart(index: 0, id: "finish_1", name: "finish")],
+            deltas: [.toolCallStart(index: 0, id: "finish_1", name: "finish", kind: .function)],
             error: promptTooLongError
         )
         let processor = StreamProcessor(client: client, toolDefinitions: [], policy: .agent)

@@ -355,12 +355,12 @@ struct ContextBudgetStreamEventTests {
         let client = BudgetStreamingMockLLMClient(
             streamSequences: [
                 [
-                    .toolCallStart(index: 0, id: "call_1", name: "noop"),
+                    .toolCallStart(index: 0, id: "call_1", name: "noop", kind: .function),
                     .toolCallDelta(index: 0, arguments: "{}"),
                     .finished(usage: TokenUsage(input: 3000, output: 500)),
                 ],
                 [
-                    .toolCallStart(index: 0, id: "f", name: "finish"),
+                    .toolCallStart(index: 0, id: "f", name: "finish", kind: .function),
                     .toolCallDelta(index: 0, arguments: #"{"content":"done"}"#),
                     .finished(usage: TokenUsage(input: 4000, output: 200)),
                 ],
@@ -390,12 +390,12 @@ struct ContextBudgetStreamEventTests {
         let client = BudgetStreamingMockLLMClient(
             streamSequences: [
                 [
-                    .toolCallStart(index: 0, id: "call_1", name: "noop"),
+                    .toolCallStart(index: 0, id: "call_1", name: "noop", kind: .function),
                     .toolCallDelta(index: 0, arguments: "{}"),
                     .finished(usage: TokenUsage(input: 700, output: 100)),
                 ],
                 [
-                    .toolCallStart(index: 0, id: "f", name: "finish"),
+                    .toolCallStart(index: 0, id: "f", name: "finish", kind: .function),
                     .toolCallDelta(index: 0, arguments: #"{"content":"done"}"#),
                     .finished(usage: TokenUsage(input: 800, output: 100)),
                 ],
@@ -421,12 +421,12 @@ struct ContextBudgetStreamEventTests {
         let client = BudgetStreamingMockLLMClient(
             streamSequences: [
                 [
-                    .toolCallStart(index: 0, id: "call_1", name: "noop"),
+                    .toolCallStart(index: 0, id: "call_1", name: "noop", kind: .function),
                     .toolCallDelta(index: 0, arguments: "{}"),
                     .finished(usage: TokenUsage(input: 700, output: 100)),
                 ],
                 [
-                    .toolCallStart(index: 0, id: "f", name: "finish"),
+                    .toolCallStart(index: 0, id: "f", name: "finish", kind: .function),
                     .toolCallDelta(index: 0, arguments: #"{"content":"done"}"#),
                     .finished(usage: TokenUsage(input: 800, output: 100)),
                 ],
@@ -466,7 +466,7 @@ struct ContextBudgetStreamEventTests {
         let client = BudgetStreamingMockLLMClient(
             streamSequences: [
                 [
-                    .toolCallStart(index: 0, id: "f", name: "finish"),
+                    .toolCallStart(index: 0, id: "f", name: "finish", kind: .function),
                     .toolCallDelta(index: 0, arguments: #"{"content":"done"}"#),
                     .finished(usage: TokenUsage(input: 100, output: 10)),
                 ],
@@ -523,17 +523,17 @@ struct ContextBudgetStreamingPruneTests {
         let client = BudgetStreamingMockLLMClient(
             streamSequences: [
                 [
-                    .toolCallStart(index: 0, id: "call_1", name: "noop"),
+                    .toolCallStart(index: 0, id: "call_1", name: "noop", kind: .function),
                     .toolCallDelta(index: 0, arguments: "{}"),
                     .finished(usage: TokenUsage(input: 500, output: 50)),
                 ],
                 [
-                    .toolCallStart(index: 0, id: "prune_1", name: "prune_context"),
+                    .toolCallStart(index: 0, id: "prune_1", name: "prune_context", kind: .function),
                     .toolCallDelta(index: 0, arguments: #"{"tool_call_ids":["call_1"]}"#),
                     .finished(usage: TokenUsage(input: 600, output: 30)),
                 ],
                 [
-                    .toolCallStart(index: 0, id: "f", name: "finish"),
+                    .toolCallStart(index: 0, id: "f", name: "finish", kind: .function),
                     .toolCallDelta(index: 0, arguments: #"{"content":"done"}"#),
                     .finished(usage: TokenUsage(input: 400, output: 10)),
                 ],
@@ -562,17 +562,17 @@ struct ContextBudgetStreamingPruneTests {
         let client = BudgetStreamingMockLLMClient(
             streamSequences: [
                 [
-                    .toolCallStart(index: 0, id: "call_1", name: "noop"),
+                    .toolCallStart(index: 0, id: "call_1", name: "noop", kind: .function),
                     .toolCallDelta(index: 0, arguments: "{}"),
                     .finished(usage: TokenUsage(input: 500, output: 50)),
                 ],
                 [
-                    .toolCallStart(index: 0, id: "prune_1", name: "prune_context"),
+                    .toolCallStart(index: 0, id: "prune_1", name: "prune_context", kind: .function),
                     .toolCallDelta(index: 0, arguments: #"{"tool_call_ids":["call_1"]}"#),
                     .finished(usage: TokenUsage(input: 600, output: 30)),
                 ],
                 [
-                    .toolCallStart(index: 0, id: "f", name: "finish"),
+                    .toolCallStart(index: 0, id: "f", name: "finish", kind: .function),
                     .toolCallDelta(index: 0, arguments: #"{"content":"done"}"#),
                     .finished(usage: TokenUsage(input: 400, output: 10)),
                 ],
@@ -601,12 +601,12 @@ struct ContextBudgetStreamingPruneTests {
         let client = BudgetStreamingMockLLMClient(
             streamSequences: [
                 [
-                    .toolCallStart(index: 0, id: "prune_1", name: "prune_context"),
+                    .toolCallStart(index: 0, id: "prune_1", name: "prune_context", kind: .function),
                     .toolCallDelta(index: 0, arguments: #"{"tool_call_ids":["call_1"]}"#),
                     .finished(usage: TokenUsage(input: 400, output: 20)),
                 ],
                 [
-                    .toolCallStart(index: 0, id: "f", name: "finish"),
+                    .toolCallStart(index: 0, id: "f", name: "finish", kind: .function),
                     .toolCallDelta(index: 0, arguments: #"{"content":"done"}"#),
                     .finished(usage: TokenUsage(input: 300, output: 10)),
                 ],
@@ -713,7 +713,7 @@ struct ContextBudgetUsageRequirementTests {
         )
         let client = BudgetStreamingMockLLMClient(
             streamSequences: [[
-                .toolCallStart(index: 0, id: "call_1", name: "noop"),
+                .toolCallStart(index: 0, id: "call_1", name: "noop", kind: .function),
                 .toolCallDelta(index: 0, arguments: "{}"),
                 .finished(usage: nil),
             ]],
@@ -733,7 +733,7 @@ struct ContextBudgetUsageRequirementTests {
     @Test func missingTokenUsageOnFinishThrowsInStream() async throws {
         let client = BudgetStreamingMockLLMClient(
             streamSequences: [[
-                .toolCallStart(index: 0, id: "finish_1", name: "finish"),
+                .toolCallStart(index: 0, id: "finish_1", name: "finish", kind: .function),
                 .toolCallDelta(index: 0, arguments: #"{"content":"done"}"#),
                 .finished(usage: nil),
             ]],
@@ -752,7 +752,7 @@ struct ContextBudgetUsageRequirementTests {
     @Test func visibilityWithoutContextWindowSizeThrowsInStream() async throws {
         let client = BudgetStreamingMockLLMClient(
             streamSequences: [[
-                .toolCallStart(index: 0, id: "finish_1", name: "finish"),
+                .toolCallStart(index: 0, id: "finish_1", name: "finish", kind: .function),
                 .toolCallDelta(index: 0, arguments: #"{"content":"done"}"#),
                 .finished(usage: TokenUsage(input: 3000, output: 200)),
             ]],

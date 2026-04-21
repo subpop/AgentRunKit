@@ -10,8 +10,8 @@ struct VertexAnthropicURLTests {
         reasoningConfig: ReasoningConfig? = nil,
         anthropicReasoning: AnthropicReasoningOptions = .manual,
         interleavedThinking: Bool = true
-    ) -> VertexAnthropicClient {
-        VertexAnthropicClient(
+    ) throws -> VertexAnthropicClient {
+        try VertexAnthropicClient(
             projectID: projectID,
             location: location,
             model: model,
@@ -24,7 +24,7 @@ struct VertexAnthropicURLTests {
 
     @Test
     func vertexURLHasCorrectPath() throws {
-        let client = makeClient()
+        let client = try makeClient()
         let request = try client.anthropic.buildRequest(messages: [.user("Hi")], tools: [])
         let wrapped = VertexAnthropicRequest(inner: request)
         let urlRequest = try client.buildVertexURLRequest(wrapped, stream: false, token: "tok")
@@ -38,7 +38,7 @@ struct VertexAnthropicURLTests {
 
     @Test
     func vertexStreamURLUsesStreamRawPredict() throws {
-        let client = makeClient()
+        let client = try makeClient()
         let request = try client.anthropic.buildRequest(
             messages: [.user("Hi")], tools: [], stream: true
         )
@@ -50,7 +50,7 @@ struct VertexAnthropicURLTests {
 
     @Test
     func bearerTokenInAuthHeader() throws {
-        let client = makeClient()
+        let client = try makeClient()
         let request = try client.anthropic.buildRequest(messages: [.user("Hi")], tools: [])
         let wrapped = VertexAnthropicRequest(inner: request)
         let urlRequest = try client.buildVertexURLRequest(wrapped, stream: false, token: "my-oauth-token")
@@ -60,7 +60,7 @@ struct VertexAnthropicURLTests {
 
     @Test
     func noApiKeyHeader() throws {
-        let client = makeClient()
+        let client = try makeClient()
         let request = try client.anthropic.buildRequest(messages: [.user("Hi")], tools: [])
         let wrapped = VertexAnthropicRequest(inner: request)
         let urlRequest = try client.buildVertexURLRequest(wrapped, stream: false, token: "tok")
@@ -71,7 +71,7 @@ struct VertexAnthropicURLTests {
 
     @Test
     func httpMethodIsPost() throws {
-        let client = makeClient()
+        let client = try makeClient()
         let request = try client.anthropic.buildRequest(messages: [.user("Hi")], tools: [])
         let wrapped = VertexAnthropicRequest(inner: request)
         let urlRequest = try client.buildVertexURLRequest(wrapped, stream: false, token: "tok")
@@ -82,7 +82,7 @@ struct VertexAnthropicURLTests {
 
     @Test
     func differentLocationsChangeHost() throws {
-        let client = makeClient(location: "europe-west4")
+        let client = try makeClient(location: "europe-west4")
         let request = try client.anthropic.buildRequest(messages: [.user("Hi")], tools: [])
         let wrapped = VertexAnthropicRequest(inner: request)
         let urlRequest = try client.buildVertexURLRequest(wrapped, stream: false, token: "tok")
@@ -93,7 +93,7 @@ struct VertexAnthropicURLTests {
 
     @Test
     func betaHeaderWhenManualInterleavedThinking() throws {
-        let client = makeClient(reasoningConfig: .high, interleavedThinking: true)
+        let client = try makeClient(reasoningConfig: .high, interleavedThinking: true)
         let request = try client.anthropic.buildRequest(
             messages: [.user("Hi")],
             tools: [],
@@ -107,7 +107,7 @@ struct VertexAnthropicURLTests {
 
     @Test
     func adaptiveThinkingDoesNotSendBetaHeader() throws {
-        let client = makeClient(
+        let client = try makeClient(
             reasoningConfig: .high,
             anthropicReasoning: .adaptive,
             interleavedThinking: true
@@ -127,7 +127,7 @@ struct VertexAnthropicURLTests {
 struct VertexAnthropicRequestTests {
     @Test
     func requestBodyContainsAnthropicVersion() throws {
-        let client = VertexAnthropicClient(
+        let client = try VertexAnthropicClient(
             projectID: "p", location: "l", model: "m",
             tokenProvider: { "tok" }
         )
@@ -141,7 +141,7 @@ struct VertexAnthropicRequestTests {
 
     @Test
     func requestBodyPreservesAnthropicFields() throws {
-        let client = VertexAnthropicClient(
+        let client = try VertexAnthropicClient(
             projectID: "p", location: "l", model: "claude-sonnet-4-6",
             tokenProvider: { "tok" },
             maxTokens: 4096
@@ -179,7 +179,7 @@ struct VertexAnthropicRequestTests {
 
     @Test
     func streamFieldEncodesInBody() throws {
-        let client = VertexAnthropicClient(
+        let client = try VertexAnthropicClient(
             projectID: "p", location: "l", model: "m",
             tokenProvider: { "tok" }
         )
@@ -196,7 +196,7 @@ struct VertexAnthropicRequestTests {
 
     @Test
     func adaptiveThinkingPreservesOutputConfig() throws {
-        let client = VertexAnthropicClient(
+        let client = try VertexAnthropicClient(
             projectID: "p",
             location: "l",
             model: "claude-sonnet-4-6",
@@ -220,8 +220,8 @@ struct VertexAnthropicRequestTests {
     }
 
     @Test
-    func manualInterleavedThinkingRejectsUnsupportedVertexModel() {
-        let client = VertexAnthropicClient(
+    func manualInterleavedThinkingRejectsUnsupportedVertexModel() throws {
+        let client = try VertexAnthropicClient(
             projectID: "p",
             location: "l",
             model: "claude-haiku-4-5@20251001",
@@ -243,7 +243,7 @@ struct VertexAnthropicRequestTests {
 struct VertexAnthropicResponseTests {
     @Test
     func responseParsingDelegatedToAnthropic() throws {
-        let client = VertexAnthropicClient(
+        let client = try VertexAnthropicClient(
             projectID: "p", location: "l", model: "m",
             tokenProvider: { "tok" }
         )
@@ -264,27 +264,32 @@ struct VertexAnthropicResponseTests {
     }
 
     @Test
-    func responseFormatThrows() async {
-        let client = VertexAnthropicClient(
+    func responseFormatEncodesThroughVertexRequest() throws {
+        let client = try VertexAnthropicClient(
             projectID: "p", location: "l", model: "m",
             tokenProvider: { "tok" }
         )
         let format = ResponseFormat.jsonSchema(TestVertexAnthropicOutput.self)
-        await #expect(throws: AgentError.self) {
-            _ = try await client.generate(
-                messages: [.user("Hi")],
-                tools: [],
-                responseFormat: format
-            )
-        }
+        let request = try client.anthropic.buildRequest(
+            messages: [.user("Hi")],
+            tools: [],
+            transport: .vertex,
+            responseFormat: format
+        )
+        let wrapped = VertexAnthropicRequest(inner: request)
+        let data = try JSONEncoder().encode(wrapped)
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let outputConfig = try #require(json["output_config"] as? [String: Any])
+        let formatJSON = try #require(outputConfig["format"] as? [String: Any])
+        #expect(formatJSON["type"] as? String == "json_schema")
     }
 }
 
 struct VertexAnthropicContinuityTests {
     @Test
     func vertexBlockingParseMatchesDirectAnthropic() throws {
-        let directClient = AnthropicClient(apiKey: "test-key", model: "claude-sonnet-4-6")
-        let vertexClient = VertexAnthropicClient(
+        let directClient = try AnthropicClient(apiKey: "test-key", model: "claude-sonnet-4-6")
+        let vertexClient = try VertexAnthropicClient(
             projectID: "p", location: "l", model: "claude-sonnet-4-6",
             tokenProvider: { "tok" }
         )
@@ -314,7 +319,7 @@ struct VertexAnthropicContinuityTests {
 
     @Test
     func vertexParseIncludesContinuity() throws {
-        let client = VertexAnthropicClient(
+        let client = try VertexAnthropicClient(
             projectID: "p", location: "l", model: "m",
             tokenProvider: { "tok" }
         )
@@ -340,7 +345,7 @@ struct VertexAnthropicStreamingContinuityTests {
 
     @Test
     func vertexStreamingEmitsContinuityViaYieldPath() async throws {
-        let vertexClient = VertexAnthropicClient(
+        let vertexClient = try VertexAnthropicClient(
             projectID: "p", location: "l", model: "claude-sonnet-4-6",
             tokenProvider: { "tok" }
         )
@@ -403,8 +408,8 @@ struct VertexAnthropicHistoryValidationTests {
     ]
 
     @Test
-    func generateRejectsMalformedHistory() async {
-        let client = VertexAnthropicClient(
+    func generateRejectsMalformedHistory() async throws {
+        let client = try VertexAnthropicClient(
             projectID: "p",
             location: "l",
             model: "m",
@@ -422,8 +427,8 @@ struct VertexAnthropicHistoryValidationTests {
     }
 
     @Test
-    func streamRejectsMalformedHistory() async {
-        let client = VertexAnthropicClient(
+    func streamRejectsMalformedHistory() async throws {
+        let client = try VertexAnthropicClient(
             projectID: "p",
             location: "l",
             model: "m",

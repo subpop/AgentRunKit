@@ -78,7 +78,7 @@ struct AgentStreamingRecoveryTests {
     @Test
     func streamingRecoveryOnPromptTooLongBeforeOutput() async throws {
         let finishDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "finish"),
+            .toolCallStart(index: 0, id: "call_1", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content":"recovered"}"#),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]

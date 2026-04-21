@@ -24,8 +24,9 @@ public struct VertexAnthropicClient: LLMClient, Sendable {
         reasoningConfig: ReasoningConfig? = nil,
         anthropicReasoning: AnthropicReasoningOptions = .manual,
         interleavedThinking: Bool = true,
-        cachingEnabled: Bool = false
-    ) {
+        cachingEnabled: Bool = false,
+        cacheControlTTL: CacheControlTTL? = nil
+    ) throws {
         self.projectID = projectID
         self.location = location
         modelIdentifier = model
@@ -33,7 +34,7 @@ public struct VertexAnthropicClient: LLMClient, Sendable {
         self.session = session
         self.retryPolicy = retryPolicy
         self.contextWindowSize = contextWindowSize
-        anthropic = AnthropicClient(
+        anthropic = try AnthropicClient(
             apiKey: "",
             model: model,
             maxTokens: maxTokens,
@@ -43,10 +44,17 @@ public struct VertexAnthropicClient: LLMClient, Sendable {
             reasoningConfig: reasoningConfig,
             anthropicReasoning: anthropicReasoning,
             interleavedThinking: interleavedThinking,
-            cachingEnabled: cachingEnabled
+            cachingEnabled: cachingEnabled,
+            cacheControlTTL: cacheControlTTL,
+            capabilityTransport: .vertex
         )
     }
 
+    @available(
+        iOS,
+        unavailable,
+        message: "Use the tokenProvider initializer to supply access tokens."
+    )
     public init(
         projectID: String,
         location: String,
@@ -59,9 +67,10 @@ public struct VertexAnthropicClient: LLMClient, Sendable {
         reasoningConfig: ReasoningConfig? = nil,
         anthropicReasoning: AnthropicReasoningOptions = .manual,
         interleavedThinking: Bool = true,
-        cachingEnabled: Bool = false
-    ) {
-        self.init(
+        cachingEnabled: Bool = false,
+        cacheControlTTL: CacheControlTTL? = nil
+    ) throws {
+        try self.init(
             projectID: projectID,
             location: location,
             model: model,
@@ -73,7 +82,8 @@ public struct VertexAnthropicClient: LLMClient, Sendable {
             reasoningConfig: reasoningConfig,
             anthropicReasoning: anthropicReasoning,
             interleavedThinking: interleavedThinking,
-            cachingEnabled: cachingEnabled
+            cachingEnabled: cachingEnabled,
+            cacheControlTTL: cacheControlTTL
         )
     }
 
@@ -84,13 +94,12 @@ public struct VertexAnthropicClient: LLMClient, Sendable {
         requestContext: RequestContext?
     ) async throws -> AssistantMessage {
         try messages.validateForLLMRequest()
-        if responseFormat != nil {
-            throw AgentError.llmError(.other("VertexAnthropicClient does not support responseFormat"))
-        }
         let request = try anthropic.buildRequest(
             messages: messages,
             tools: tools,
             transport: .vertex,
+            responseFormat: responseFormat,
+            toolChoice: requestContext?.anthropic?.toolChoice,
             extraFields: requestContext?.extraFields ?? [:]
         )
         let token = try await tokenProvider()
@@ -115,6 +124,7 @@ public struct VertexAnthropicClient: LLMClient, Sendable {
                     try await performStreamRequest(
                         messages: messages,
                         tools: tools,
+                        toolChoice: requestContext?.anthropic?.toolChoice,
                         extraFields: requestContext?.extraFields ?? [:],
                         onResponse: requestContext?.onResponse,
                         continuation: continuation
@@ -130,6 +140,7 @@ public struct VertexAnthropicClient: LLMClient, Sendable {
     private func performStreamRequest(
         messages: [ChatMessage],
         tools: [ToolDefinition],
+        toolChoice: AnthropicToolChoice?,
         extraFields: [String: JSONValue],
         onResponse: (@Sendable (HTTPURLResponse) -> Void)?,
         continuation: AsyncThrowingStream<StreamDelta, Error>.Continuation
@@ -137,7 +148,7 @@ public struct VertexAnthropicClient: LLMClient, Sendable {
         try messages.validateForLLMRequest()
         let request = try anthropic.buildRequest(
             messages: messages, tools: tools,
-            stream: true, transport: .vertex, extraFields: extraFields
+            stream: true, transport: .vertex, toolChoice: toolChoice, extraFields: extraFields
         )
         let token = try await tokenProvider()
         let urlRequest = try buildVertexURLRequest(
@@ -164,6 +175,7 @@ public struct VertexAnthropicClient: LLMClient, Sendable {
     private func performRunStreamRequest(
         messages: [ChatMessage],
         tools: [ToolDefinition],
+        toolChoice: AnthropicToolChoice?,
         extraFields: [String: JSONValue],
         onResponse: (@Sendable (HTTPURLResponse) -> Void)?,
         continuation: AsyncThrowingStream<RunStreamElement, Error>.Continuation
@@ -171,7 +183,7 @@ public struct VertexAnthropicClient: LLMClient, Sendable {
         try messages.validateForLLMRequest()
         let request = try anthropic.buildRequest(
             messages: messages, tools: tools,
-            stream: true, transport: .vertex, extraFields: extraFields
+            stream: true, transport: .vertex, toolChoice: toolChoice, extraFields: extraFields
         )
         let token = try await tokenProvider()
         let urlRequest = try buildVertexURLRequest(
@@ -189,13 +201,13 @@ public struct VertexAnthropicClient: LLMClient, Sendable {
             stallTimeout: retryPolicy.streamStallTimeout
         ) { line in
             try await anthropic.handleSSELine(line, state: state) { delta in
-                _ = continuation.yield(.delta(delta))
+                continuation.yield(.delta(delta))
             }
         }
 
         if await state.isCompleted {
             let blocks = try await state.finalizedBlocks()
-            if !blocks.isEmpty {
+            if await state.supportsReplayContinuity(), !blocks.isEmpty {
                 let projection = AnthropicTurnProjection(orderedBlocks: blocks)
                 continuation.yield(.finalizedContinuity(projection.continuity))
             }
@@ -208,9 +220,12 @@ public struct VertexAnthropicClient: LLMClient, Sendable {
         stream: Bool,
         token: String
     ) throws -> URLRequest {
+        guard let modelIdentifier else {
+            throw AgentError.llmError(.other("Vertex model identifier is required"))
+        }
         let action = stream ? "streamRawPredict" : "rawPredict"
         let basePath = "v1/projects/\(projectID)/locations/\(location)"
-            + "/publishers/anthropic/models/\(modelIdentifier ?? ""):\(action)"
+            + "/publishers/anthropic/models/\(modelIdentifier):\(action)"
         guard let baseURL = URL(string: "https://\(location)-aiplatform.googleapis.com") else {
             throw AgentError.llmError(.other("Invalid Vertex AI location: \(location)"))
         }
@@ -235,6 +250,7 @@ extension VertexAnthropicClient: HistoryRewriteAwareClient {
                     try await performRunStreamRequest(
                         messages: messages,
                         tools: tools,
+                        toolChoice: requestContext?.anthropic?.toolChoice,
                         extraFields: requestContext?.extraFields ?? [:],
                         onResponse: requestContext?.onResponse,
                         continuation: continuation
@@ -254,19 +270,9 @@ struct VertexAnthropicRequest: Encodable {
     let inner: AnthropicRequest
 
     func encode(to encoder: any Encoder) throws {
-        // Re-encode the inner request without the `model` field, which is
-        // specified in the Vertex AI URL path and rejected in the body.
-        let withoutModel = AnthropicRequest(
-            model: nil,
-            messages: inner.messages,
-            system: inner.system,
-            tools: inner.tools,
-            maxTokens: inner.maxTokens,
-            stream: inner.stream,
-            thinking: inner.thinking,
-            outputConfig: inner.outputConfig,
-            extraFields: inner.extraFields
-        )
+        // Model goes in the URL path, not the body.
+        var withoutModel = inner
+        withoutModel.model = nil
         try withoutModel.encode(to: encoder)
         var container = encoder.container(keyedBy: DynamicCodingKey.self)
         try container.encode(

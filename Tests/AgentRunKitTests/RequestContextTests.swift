@@ -143,6 +143,25 @@ struct RequestContextTests {
         let context = RequestContext(onResponse: { _ in })
         #expect(context.onResponse != nil)
     }
+
+    @Test
+    func initializesWithProviderSpecificOptions() {
+        let context = RequestContext(
+            openAIChat: OpenAIChatRequestOptions(
+                toolChoice: .required,
+                parallelToolCalls: false,
+                customTools: [OpenAIChatCustomToolDefinition(name: "grammar_query")]
+            ),
+            anthropic: AnthropicRequestOptions(toolChoice: AnthropicToolChoice.none),
+            gemini: GeminiRequestOptions(functionCallingMode: .validated, allowedFunctionNames: ["search"]),
+            responses: ResponsesRequestOptions(hostedTools: [.fileSearch(vectorStoreIDs: ["vs_123"])])
+        )
+        #expect(context.openAIChat?.parallelToolCalls == false)
+        #expect(context.anthropic?.toolChoice == AnthropicToolChoice.none)
+        #expect(context.gemini?.functionCallingMode == .validated)
+        #expect(context.gemini?.allowedFunctionNames == ["search"])
+        #expect(context.responses?.hostedTools.count == 1)
+    }
 }
 
 struct ChatCompletionRequestExtraFieldsTests {
@@ -154,7 +173,7 @@ struct ChatCompletionRequestExtraFieldsTests {
             baseURL: OpenAIClient.openRouterBaseURL
         )
         let messages: [ChatMessage] = [.user("Hello")]
-        let request = client.buildRequest(
+        let request = try client.buildRequest(
             messages: messages,
             tools: [],
             extraFields: ["temperature": .double(0.7), "top_p": .double(0.9)]
@@ -176,7 +195,7 @@ struct ChatCompletionRequestExtraFieldsTests {
             baseURL: OpenAIClient.openRouterBaseURL
         )
         let messages: [ChatMessage] = [.user("Hello")]
-        let request = client.buildRequest(messages: messages, tools: [], extraFields: [:])
+        let request = try client.buildRequest(messages: messages, tools: [], extraFields: [:])
 
         let data = try JSONEncoder().encode(request)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -193,7 +212,7 @@ struct ChatCompletionRequestExtraFieldsTests {
             baseURL: OpenAIClient.openRouterBaseURL
         )
         let messages: [ChatMessage] = [.user("Hello")]
-        let request = client.buildRequest(
+        let request = try client.buildRequest(
             messages: messages,
             tools: [],
             extraFields: [
@@ -220,7 +239,7 @@ struct ChatCompletionRequestExtraFieldsTests {
             baseURL: OpenAIClient.openRouterBaseURL
         )
         let messages: [ChatMessage] = [.user("Hello")]
-        let request = client.buildRequest(
+        let request = try client.buildRequest(
             messages: messages,
             tools: [],
             extraFields: [
@@ -253,7 +272,7 @@ struct ReasoningConfigEncodingTests {
             reasoningConfig: .high
         )
         let messages: [ChatMessage] = [.user("Hello")]
-        let request = client.buildRequest(messages: messages, tools: [])
+        let request = try client.buildRequest(messages: messages, tools: [])
 
         let data = try JSONEncoder().encode(request)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -274,7 +293,7 @@ struct ReasoningConfigEncodingTests {
             baseURL: OpenAIClient.openRouterBaseURL
         )
         let messages: [ChatMessage] = [.user("Hello")]
-        let request = client.buildRequest(messages: messages, tools: [])
+        let request = try client.buildRequest(messages: messages, tools: [])
 
         let data = try JSONEncoder().encode(request)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -300,7 +319,7 @@ struct ReasoningConfigEncodingTests {
                 baseURL: OpenAIClient.openRouterBaseURL,
                 reasoningConfig: config
             )
-            let request = client.buildRequest(messages: [.user("Hi")], tools: [])
+            let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
             let data = try JSONEncoder().encode(request)
             let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
 
@@ -318,7 +337,7 @@ struct ReasoningConfigEncodingTests {
             baseURL: OpenAIClient.openRouterBaseURL,
             reasoningConfig: config
         )
-        let request = client.buildRequest(messages: [.user("Hi")], tools: [])
+        let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
         let data = try JSONEncoder().encode(request)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
 
@@ -337,7 +356,7 @@ struct ReasoningConfigEncodingTests {
             baseURL: OpenAIClient.openRouterBaseURL,
             reasoningConfig: config
         )
-        let request = client.buildRequest(messages: [.user("Hi")], tools: [])
+        let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
         let data = try JSONEncoder().encode(request)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
 
@@ -356,7 +375,7 @@ struct ReasoningConfigEncodingTests {
             baseURL: OpenAIClient.openRouterBaseURL,
             reasoningConfig: config
         )
-        let request = client.buildRequest(messages: [.user("Hi")], tools: [])
+        let request = try client.buildRequest(messages: [.user("Hi")], tools: [])
         let data = try JSONEncoder().encode(request)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
 
@@ -464,7 +483,7 @@ struct RequestContextForwardingTests {
     @Test
     func agentStreamForwardsRequestContext() async throws {
         let finishDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "finish"),
+            .toolCallStart(index: 0, id: "call_1", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content":"done"}"#),
             .finished(usage: nil)
         ]

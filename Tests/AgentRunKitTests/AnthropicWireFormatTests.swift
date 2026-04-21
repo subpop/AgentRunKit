@@ -91,7 +91,7 @@ struct AnthropicContentBlockEncodingTests {
 
     @Test
     func thinkingConfigAdaptiveWireFormat() throws {
-        let config = AnthropicThinkingConfig.adaptive
+        let config = AnthropicThinkingConfig.adaptive(display: nil)
         let data = try JSONEncoder().encode(config)
         let object = try JSONSerialization.jsonObject(with: data)
         let json = object as? [String: Any]
@@ -179,25 +179,26 @@ struct AnthropicCacheControlWireFormatTests {
 
 struct AnthropicMessageContentEncodingTests {
     @Test
-    func textWithCacheControlEncodesAsBlockArray() throws {
-        let content = AnthropicMessageContent.textWithCacheControl("Hi")
+    func blocksWithCacheControlEncodeAsBlockArray() throws {
+        let content = AnthropicMessageContent.blocks([
+            .text("Hi", cacheControl: CacheControl())
+        ])
         let data = try JSONEncoder().encode(content)
-        let array = try JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+        let array = try #require(JSONSerialization.jsonObject(with: data) as? [[String: Any]])
 
-        #expect(array?.count == 1)
-        let block = array?[0]
-        #expect(block?["type"] as? String == "text")
-        #expect(block?["text"] as? String == "Hi")
-        let cacheControl = block?["cache_control"] as? [String: Any]
-        #expect(cacheControl?["type"] as? String == "ephemeral")
-        #expect(block?.count == 3)
+        #expect(array.count == 1)
+        let block = array[0]
+        #expect(block["type"] as? String == "text")
+        #expect(block["text"] as? String == "Hi")
+        let cacheControl = try #require(block["cache_control"] as? [String: Any])
+        #expect(cacheControl["type"] as? String == "ephemeral")
     }
 }
 
 struct AnthropicErrorHandlingTests {
     @Test
-    func malformedResponseThrowsDecodingError() {
-        let client = AnthropicClient(apiKey: "test-key", model: "claude-sonnet-4-6")
+    func malformedResponseThrowsDecodingError() throws {
+        let client = try AnthropicClient(apiKey: "test-key", model: "claude-sonnet-4-6")
         let garbage = Data("not json at all".utf8)
 
         #expect(throws: AgentError.self) {
@@ -206,18 +207,83 @@ struct AnthropicErrorHandlingTests {
     }
 
     @Test
-    func unknownContentBlockTypeThrows() {
+    func unknownContentBlockDecodesAsOpaque() throws {
         let json = """
         {
             "id": "msg_001",
             "type": "message",
             "role": "assistant",
-            "content": [{"type": "unknown_block", "data": "something"}],
+            "content": [
+                {"type": "text", "text": "Hello"},
+                {"type": "web_search_tool_result", "content": [{"url": "example.com"}]}
+            ],
             "stop_reason": "end_turn",
             "usage": {"input_tokens": 10, "output_tokens": 5}
         }
         """
-        let client = AnthropicClient(apiKey: "test-key", model: "claude-sonnet-4-6")
+        let client = try AnthropicClient(apiKey: "test-key", model: "claude-sonnet-4-6")
+
+        let message = try client.parseResponse(Data(json.utf8))
+
+        #expect(message.content == "Hello")
+        #expect(message.toolCalls.isEmpty)
+        let continuityPayload = message.continuity?.payload
+        guard case let .object(payload) = continuityPayload,
+              case let .array(blocks) = payload["content"]
+        else {
+            Issue.record("expected continuity content array")
+            return
+        }
+        #expect(blocks.count == 2)
+
+        guard case let .object(opaqueBlock) = blocks[1],
+              case let .string(type) = opaqueBlock["type"]
+        else {
+            Issue.record("expected opaque block to preserve type")
+            return
+        }
+        #expect(type == "web_search_tool_result")
+    }
+
+    @Test
+    func opaqueContinuityBlockReplaysWithoutThrowing() throws {
+        let continuity = AssistantContinuity(
+            substrate: .anthropicMessages,
+            payload: .object([
+                "content": .array([
+                    .object([
+                        "type": .string("text"),
+                        "text": .string("Hello"),
+                    ]),
+                    .object([
+                        "type": .string("web_search_tool_result"),
+                        "content": .array([
+                            .object(["url": .string("example.com")])
+                        ]),
+                    ]),
+                ])
+            ])
+        )
+        let blocks = try AnthropicTurnProjection.replayBlocks(from: continuity)
+        #expect(blocks.count == 2)
+        let data = try JSONEncoder().encode(blocks[1])
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(json["type"] as? String == "web_search_tool_result")
+    }
+
+    @Test
+    func malformedKnownBlockStillThrows() throws {
+        let json = """
+        {
+            "id": "msg_001",
+            "type": "message",
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "call_1"}],
+            "stop_reason": "tool_use",
+            "usage": {"input_tokens": 10, "output_tokens": 5}
+        }
+        """
+        let client = try AnthropicClient(apiKey: "test-key", model: "claude-sonnet-4-6")
 
         #expect(throws: AgentError.self) {
             _ = try client.parseResponse(Data(json.utf8))

@@ -369,7 +369,12 @@ private extension Chat {
                 approvalHandler: approvalHandler
             )
         case let .approveWithModifiedArguments(newArgs):
-            let modified = ToolCall(id: call.id, name: call.name, arguments: newArgs)
+            let modified = ToolCall(
+                id: call.id,
+                name: call.name,
+                arguments: newArgs,
+                kind: call.kind
+            )
             return try await executeToolSafely(
                 modified,
                 resolvedTool: tool,

@@ -5,7 +5,7 @@
     import Foundation
     import Testing
 
-    struct FoundationModelsClientTests {
+    @Suite(.serialized) struct FoundationModelsClientTests {
         @Test func contextWindowSize() {
             guard #available(macOS 26, iOS 26, *) else { return }
             let client = FoundationModelsClient<EmptyContext>(context: EmptyContext())

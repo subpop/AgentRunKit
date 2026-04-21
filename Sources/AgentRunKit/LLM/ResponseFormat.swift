@@ -7,13 +7,20 @@ public struct ResponseFormat: Sendable, Encodable {
     private let type: String
     private let jsonSchema: ResponseJSONSchema
 
-    private init(name: String, schema: JSONSchema) {
+    private init(name: String, schema: JSONSchema, strict: Bool) {
         type = "json_schema"
-        jsonSchema = ResponseJSONSchema(name: name, strict: true, schema: schema)
+        jsonSchema = ResponseJSONSchema(name: name, strict: strict, schema: schema)
     }
 
-    public static func jsonSchema<T: SchemaProviding>(_: T.Type) -> ResponseFormat {
-        ResponseFormat(name: sanitizeTypeName(String(describing: T.self)), schema: T.jsonSchema)
+    public static func jsonSchema<T: SchemaProviding>(
+        _: T.Type,
+        strict: Bool = true
+    ) -> ResponseFormat {
+        ResponseFormat(
+            name: sanitizeTypeName(String(describing: T.self)),
+            schema: T.jsonSchema,
+            strict: strict
+        )
     }
 
     private static func sanitizeTypeName(_ name: String) -> String {
@@ -43,5 +50,9 @@ extension ResponseFormat {
 package extension ResponseFormat {
     var schema: JSONSchema {
         jsonSchema.schema
+    }
+
+    var isStrict: Bool {
+        jsonSchema.strict
     }
 }

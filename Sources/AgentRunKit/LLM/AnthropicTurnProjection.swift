@@ -100,9 +100,7 @@ struct AnthropicTurnProjection {
                 }
                 return .toolUse(id: id, name: name, input: input)
             default:
-                throw AgentError.llmError(.other(
-                    "Unknown Anthropic block type in continuity: \(type)"
-                ))
+                return .opaque(blockValue)
             }
         }
     }
@@ -124,6 +122,8 @@ struct AnthropicTurnProjection {
                 "name": .string(name),
                 "input": input,
             ])
+        case let .opaque(item):
+            item.raw
         }
     }
 }

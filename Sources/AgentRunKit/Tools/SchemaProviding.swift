@@ -10,7 +10,14 @@ public extension SchemaProviding {
 
 public extension SchemaProviding where Self: Decodable {
     static var jsonSchema: JSONSchema {
-        (try? SchemaDecoder.decode(Self.self)) ?? .string()
+        do {
+            return try SchemaDecoder.decode(Self.self)
+        } catch {
+            preconditionFailure(
+                "Schema inference failed for \(Self.self): \(error). " +
+                    "Implement jsonSchema manually, or call validateSchema() at construction to surface this earlier."
+            )
+        }
     }
 
     static func validateSchema() throws(AgentError) {

@@ -3,8 +3,8 @@ import Foundation
 import Testing
 
 struct AnthropicStreamingTests {
-    private func makeClient() -> AnthropicClient {
-        AnthropicClient(apiKey: "test-key", model: "claude-sonnet-4-6")
+    private func makeClient() throws -> AnthropicClient {
+        try AnthropicClient(apiKey: "test-key", model: "claude-sonnet-4-6")
     }
 
     private func sseLine(_ json: String) -> String {
@@ -106,7 +106,7 @@ struct AnthropicStreamingTests {
 
         let starts = deltas.filter { if case .toolCallStart = $0 { return true }; return false }
         #expect(starts.count == 1)
-        #expect(starts[0] == .toolCallStart(index: 0, id: "toolu_01", name: "search"))
+        #expect(starts[0] == .toolCallStart(index: 0, id: "toolu_01", name: "search", kind: .function))
 
         let argDeltas = deltas.filter { if case .toolCallDelta = $0 { return true }; return false }
         #expect(argDeltas.count == 2)
@@ -222,7 +222,7 @@ struct AnthropicStreamingTests {
 
         let toolStart = deltas.filter { if case .toolCallStart = $0 { return true }; return false }
         #expect(toolStart.count == 1)
-        #expect(toolStart[0] == .toolCallStart(index: 0, id: "toolu_01", name: "search"))
+        #expect(toolStart[0] == .toolCallStart(index: 0, id: "toolu_01", name: "search", kind: .function))
     }
 
     @Test
@@ -242,7 +242,7 @@ struct AnthropicStreamingTests {
 
         let starts = deltas.filter { if case .toolCallStart = $0 { return true }; return false }
         #expect(starts.count == 1)
-        #expect(starts[0] == .toolCallStart(index: 0, id: "toolu_01", name: "list_items"))
+        #expect(starts[0] == .toolCallStart(index: 0, id: "toolu_01", name: "list_items", kind: .function))
 
         let argDeltas = deltas.filter { if case .toolCallDelta = $0 { return true }; return false }
         #expect(argDeltas.isEmpty)
@@ -283,14 +283,14 @@ struct AnthropicStreamingTests {
 
         let starts = deltas.filter { if case .toolCallStart = $0 { return true }; return false }
         #expect(starts.count == 2)
-        #expect(starts[0] == .toolCallStart(index: 0, id: "toolu_a", name: "search"))
-        #expect(starts[1] == .toolCallStart(index: 1, id: "toolu_b", name: "lookup"))
+        #expect(starts[0] == .toolCallStart(index: 0, id: "toolu_a", name: "search", kind: .function))
+        #expect(starts[1] == .toolCallStart(index: 1, id: "toolu_b", name: "lookup", kind: .function))
     }
 }
 
 struct AnthropicStreamingInputUsageTests {
-    private func makeClient() -> AnthropicClient {
-        AnthropicClient(apiKey: "test-key", model: "claude-sonnet-4-6")
+    private func makeClient() throws -> AnthropicClient {
+        try AnthropicClient(apiKey: "test-key", model: "claude-sonnet-4-6")
     }
 
     private func sseLine(_ json: String) -> String {
@@ -401,8 +401,8 @@ struct AnthropicStreamingInputUsageTests {
 }
 
 struct AnthropicStreamingContinuityTests {
-    private func makeClient() -> AnthropicClient {
-        AnthropicClient(apiKey: "test-key", model: "claude-sonnet-4-6")
+    private func makeClient() throws -> AnthropicClient {
+        try AnthropicClient(apiKey: "test-key", model: "claude-sonnet-4-6")
     }
 
     private func sseLine(_ json: String) -> String {
@@ -434,7 +434,7 @@ struct AnthropicStreamingContinuityTests {
 
     @Test
     func streamingFinalizationProducesContinuity() async throws {
-        let client = makeClient()
+        let client = try makeClient()
         let lines = [
             sseLine(#"{"type":"content_block_start","index":0,"content_block":{"type":"text"}}"#),
             sseLine(#"{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello world"}}"#),
@@ -451,7 +451,7 @@ struct AnthropicStreamingContinuityTests {
 
     @Test
     func streamingPreservesInterleavedBlockOrder() async throws {
-        let client = makeClient()
+        let client = try makeClient()
         let toolBlock = #"{"type":"content_block_start","index":2,"content_block":"#
             + #"{"type":"tool_use","id":"toolu_01","name":"search"}}"#
         let toolDelta = #"{"type":"content_block_delta","index":2,"delta":"#
@@ -487,7 +487,7 @@ struct AnthropicStreamingContinuityTests {
 
     @Test
     func blockingAndStreamingProduceSameContinuity() async throws {
-        let client = makeClient()
+        let client = try makeClient()
 
         let blockingJSON = """
         {
@@ -539,7 +539,7 @@ struct AnthropicStreamingContinuityTests {
 
     @Test
     func emptyToolInputParityBetweenBlockingAndStreaming() async throws {
-        let client = makeClient()
+        let client = try makeClient()
 
         let blockingJSON = """
         {

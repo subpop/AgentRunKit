@@ -9,6 +9,7 @@ extension ResponsesAPIClient {
         extraFields: [String: JSONValue],
         onResponse: (@Sendable (HTTPURLResponse) -> Void)?,
         requestMode: RunRequestMode = .auto,
+        options: ResponsesRequestOptions?,
         continuation: AsyncThrowingStream<RunStreamElement, Error>.Continuation
     ) async throws {
         try messages.validateForLLMRequest()
@@ -18,7 +19,7 @@ extension ResponsesAPIClient {
         let request = try buildRequest(
             messages: messages, tools: tools,
             stream: true, extraFields: extraFields,
-            requestMode: requestMode
+            requestMode: requestMode, options: options
         )
         let urlRequest = try buildURLRequest(request)
         let (bytes, httpResponse) = try await HTTPRetry.performStream(
@@ -166,7 +167,8 @@ extension ResponsesAPIClient {
         let delta = StreamDelta.toolCallStart(
             index: event.outputIndex,
             id: callId,
-            name: name
+            name: name,
+            kind: .function
         )
         await semanticState.record(delta)
         continuation.yield(.delta(delta))
@@ -359,7 +361,7 @@ private actor ResponsesStreamingSemanticState {
             reasoning += text
         case let .reasoningDetails(details):
             reasoningDetails.append(contentsOf: details)
-        case let .toolCallStart(index, id, name):
+        case let .toolCallStart(index, id, name, _):
             toolCalls[index] = ResponsesStreamedToolCall(
                 id: id,
                 name: name,
@@ -428,7 +430,7 @@ private actor ResponsesStreamingSemanticState {
                     throw AgentError.malformedStream(.finalizedSemanticStateDiverged)
                 }
                 if existing.id == nil, let id = targetCall.id, let name = targetCall.name {
-                    deltas.append(.toolCallStart(index: index, id: id, name: name))
+                    deltas.append(.toolCallStart(index: index, id: id, name: name, kind: .function))
                 }
                 if !argumentsSuffix.isEmpty {
                     toolCalls[index] = ResponsesStreamedToolCall(
@@ -440,7 +442,7 @@ private actor ResponsesStreamingSemanticState {
                 }
             } else if let id = targetCall.id, let name = targetCall.name {
                 toolCalls[index] = targetCall
-                deltas.append(.toolCallStart(index: index, id: id, name: name))
+                deltas.append(.toolCallStart(index: index, id: id, name: name, kind: .function))
                 if !targetCall.arguments.isEmpty {
                     deltas.append(.toolCallDelta(index: index, arguments: targetCall.arguments))
                 }

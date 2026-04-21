@@ -5,13 +5,6 @@ protocol StreamableSubAgentTool<Context>: AnyTool {
         toolCallId: String,
         arguments: Data,
         context: Context,
-        eventHandler: @Sendable (StreamEvent) -> Void
-    ) async throws -> ToolResult
-
-    func executeStreaming(
-        toolCallId: String,
-        arguments: Data,
-        context: Context,
         eventHandler: @Sendable (StreamEvent) -> Void,
         approvalHandler: ToolApprovalHandler?
     ) async throws -> ToolResult
@@ -22,12 +15,14 @@ extension StreamableSubAgentTool {
         toolCallId: String,
         arguments: Data,
         context: Context,
-        eventHandler: @Sendable (StreamEvent) -> Void,
-        approvalHandler _: ToolApprovalHandler?
+        eventHandler: @Sendable (StreamEvent) -> Void
     ) async throws -> ToolResult {
         try await executeStreaming(
-            toolCallId: toolCallId, arguments: arguments,
-            context: context, eventHandler: eventHandler
+            toolCallId: toolCallId,
+            arguments: arguments,
+            context: context,
+            eventHandler: eventHandler,
+            approvalHandler: nil
         )
     }
 }

@@ -66,7 +66,7 @@ struct ChatTests {
 
         let firstStreamDeltas: [StreamDelta] = [
             .content("Let me "),
-            .toolCallStart(index: 0, id: "call_1", name: "echo"),
+            .toolCallStart(index: 0, id: "call_1", name: "echo", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"message":"#),
             .toolCallDelta(index: 0, arguments: #""hello"}"#),
             .finished(usage: TokenUsage(input: 10, output: 5))
@@ -115,7 +115,7 @@ struct ChatTests {
         )
 
         let firstStreamDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "failing"),
+            .toolCallStart(index: 0, id: "call_1", name: "failing", kind: .function),
             .toolCallDelta(index: 0, arguments: "{}"),
             .finished(usage: TokenUsage(input: 10, output: 5))
         ]
@@ -145,7 +145,7 @@ struct ChatTests {
     @Test
     func handleToolNotFoundGracefully() async throws {
         let firstStreamDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "nonexistent"),
+            .toolCallStart(index: 0, id: "call_1", name: "nonexistent", kind: .function),
             .toolCallDelta(index: 0, arguments: "{}"),
             .finished(usage: TokenUsage(input: 10, output: 5))
         ]
@@ -175,7 +175,7 @@ struct ChatTests {
     @Test
     func unknownToolFeedbackSurvivesContentOnlyTermination() async throws {
         let firstStreamDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "nonexistent"),
+            .toolCallStart(index: 0, id: "call_1", name: "nonexistent", kind: .function),
             .toolCallDelta(index: 0, arguments: "{}"),
             .finished(usage: TokenUsage(input: 10, output: 5))
         ]
@@ -442,7 +442,7 @@ struct ChatTests {
         )
 
         let loopDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "echo"),
+            .toolCallStart(index: 0, id: "call_1", name: "echo", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"message":"loop"}"#),
             .finished(usage: TokenUsage(input: 10, output: 5))
         ]
@@ -541,7 +541,7 @@ struct ChatStreamingEdgeTests {
 
         let firstStreamDeltas: [StreamDelta] = [
             .toolCallDelta(index: 0, arguments: #"{"mes"#),
-            .toolCallStart(index: 0, id: "call_1", name: "echo"),
+            .toolCallStart(index: 0, id: "call_1", name: "echo", kind: .function),
             .toolCallDelta(index: 0, arguments: #"sage":"hello"}"#),
             .finished(usage: nil)
         ]
@@ -601,8 +601,8 @@ struct ChatStreamingEdgeTests {
         )
 
         let firstStreamDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "add"),
-            .toolCallStart(index: 1, id: "call_2", name: "add"),
+            .toolCallStart(index: 0, id: "call_1", name: "add", kind: .function),
+            .toolCallStart(index: 1, id: "call_2", name: "add", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"lhs": 1, "rhs": 2}"#),
             .toolCallDelta(index: 1, arguments: #"{"lhs": 3, "rhs": 4}"#),
             .finished(usage: TokenUsage(input: 10, output: 5))
@@ -774,7 +774,7 @@ struct ChatApprovalTests {
     @Test
     func unknownToolSkipsApprovalHandler() async throws {
         let firstStreamDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "nonexistent"),
+            .toolCallStart(index: 0, id: "call_1", name: "nonexistent", kind: .function),
             .toolCallDelta(index: 0, arguments: "{}"),
             .finished(usage: nil),
         ]
@@ -844,7 +844,7 @@ struct ChatApprovalTests {
         )
 
         let firstStreamDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "delegate_call", name: "delegate"),
+            .toolCallStart(index: 0, id: "delegate_call", name: "delegate", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"message":"research"}"#),
             .finished(usage: nil),
         ]
@@ -910,7 +910,7 @@ struct ChatApprovalTests {
         )
 
         let firstStreamDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "delegate_call", name: "delegate"),
+            .toolCallStart(index: 0, id: "delegate_call", name: "delegate", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"message":"research"}"#),
             .finished(usage: nil),
         ]

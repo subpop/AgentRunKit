@@ -59,100 +59,6 @@ struct ResponsesRequest: Encodable {
     }
 }
 
-enum ResponsesInputItem: Encodable {
-    case userMessage(role: String, content: String)
-    case assistantMessage(ResponsesAssistantItem)
-    case functionCall(ResponsesFunctionCallItem)
-    case functionCallOutput(ResponsesFunctionCallOutputItem)
-    case reasoning(JSONValue)
-    case raw(JSONValue)
-
-    func encode(to encoder: any Encoder) throws {
-        switch self {
-        case let .userMessage(role, content):
-            var container = encoder.container(keyedBy: UserMessageKeys.self)
-            try container.encode("message", forKey: .type)
-            try container.encode(role, forKey: .role)
-            try container.encode(content, forKey: .content)
-        case let .assistantMessage(item):
-            try item.encode(to: encoder)
-        case let .functionCall(item):
-            try item.encode(to: encoder)
-        case let .functionCallOutput(item):
-            try item.encode(to: encoder)
-        case let .reasoning(value):
-            try value.encode(to: encoder)
-        case let .raw(value):
-            try value.encode(to: encoder)
-        }
-    }
-
-    private enum UserMessageKeys: String, CodingKey {
-        case type, role, content
-    }
-}
-
-struct ResponsesAssistantItem: Encodable {
-    let type = "message"
-    let role = "assistant"
-    let content: [ResponsesOutputTextItem]
-
-    enum CodingKeys: String, CodingKey {
-        case type, role, content
-    }
-}
-
-struct ResponsesOutputTextItem: Encodable {
-    let type = "output_text"
-    let text: String
-
-    enum CodingKeys: String, CodingKey {
-        case type, text
-    }
-}
-
-struct ResponsesFunctionCallItem: Encodable {
-    let type = "function_call"
-    let callId: String
-    let name: String
-    let arguments: String
-
-    enum CodingKeys: String, CodingKey {
-        case type
-        case callId = "call_id"
-        case name, arguments
-    }
-}
-
-struct ResponsesFunctionCallOutputItem: Encodable {
-    let type = "function_call_output"
-    let callId: String
-    let output: String
-
-    enum CodingKeys: String, CodingKey {
-        case type
-        case callId = "call_id"
-        case output
-    }
-}
-
-struct ResponsesToolDefinition: Encodable {
-    let type = "function"
-    let name: String
-    let description: String
-    let parameters: JSONSchema
-
-    enum CodingKeys: String, CodingKey {
-        case type, name, description, parameters
-    }
-
-    init(_ definition: ToolDefinition) {
-        name = definition.name
-        description = definition.description
-        parameters = definition.parametersSchema
-    }
-}
-
 struct ResponsesTextConfig: Encodable {
     let format: ResponsesFormatConfig
 }
@@ -160,7 +66,7 @@ struct ResponsesTextConfig: Encodable {
 struct ResponsesFormatConfig: Encodable {
     let type = "json_schema"
     let name: String
-    let strict = true
+    let strict: Bool
     let schema: JSONSchema
 
     enum CodingKeys: String, CodingKey {
@@ -168,9 +74,15 @@ struct ResponsesFormatConfig: Encodable {
     }
 }
 
+enum ResponsesReasoningSummary: String, Codable, Equatable, CaseIterable {
+    case auto
+    case concise
+    case detailed
+}
+
 struct ResponsesReasoningConfig: Encodable {
     let effort: String
-    let summary: String?
+    let summary: ResponsesReasoningSummary?
 
     enum CodingKeys: String, CodingKey {
         case effort, summary
@@ -178,7 +90,7 @@ struct ResponsesReasoningConfig: Encodable {
 
     init(_ config: ReasoningConfig) {
         effort = config.effort.rawValue
-        summary = config.exclude == true ? "disabled" : "auto"
+        summary = config.exclude == true ? nil : .auto
     }
 }
 
@@ -208,7 +120,7 @@ enum ResponsesOutputItem {
     case message(ResponsesMessageOutput)
     case functionCall(ResponsesFunctionCallOutput)
     case reasoning(ResponsesReasoningOutput)
-    case opaque(JSONValue)
+    case opaque(OpaqueResponseItem)
 
     init(_ raw: JSONValue) throws {
         let type = try raw.requiredType()
@@ -220,7 +132,7 @@ enum ResponsesOutputItem {
         case "reasoning":
             self = .reasoning(ResponsesReasoningOutput(raw: raw))
         default:
-            self = .opaque(raw)
+            self = .opaque(OpaqueResponseItem(provider: "responses", type: type, raw: raw))
         }
     }
 }
@@ -299,7 +211,7 @@ struct ResponsesReplayState: Equatable {
     }
 
     init(response: ResponsesAPIResponse) {
-        output = response.output.compactMap(ResponsesReplayItem.init)
+        output = response.output.map(ResponsesReplayItem.init)
         responseId = response.id
     }
 
@@ -308,15 +220,15 @@ struct ResponsesReplayState: Equatable {
             throw AgentError.llmError(.other("Responses replay requested for non-Responses continuity"))
         }
         guard case let .object(payload) = continuity.payload else {
-            throw AgentError.llmError(.other("Malformed Responses continuity payload"))
+            throw AgentError.llmError(.other("Responses continuity payload is not a JSON object"))
         }
         guard case let .array(outputValues) = payload["output"] else {
-            throw AgentError.llmError(.other("Malformed Responses continuity payload"))
+            throw AgentError.llmError(.other("Responses continuity payload is missing the 'output' array"))
         }
 
         output = try outputValues.map(ResponsesReplayItem.init)
         guard !output.isEmpty else {
-            throw AgentError.llmError(.other("Malformed Responses continuity payload"))
+            throw AgentError.llmError(.other("Responses continuity payload has an empty 'output' array"))
         }
         if case let .string(id) = payload["response_id"] {
             responseId = id
@@ -363,8 +275,9 @@ enum ResponsesReplayItem: Equatable {
     case message(JSONValue)
     case functionCall(JSONValue)
     case reasoning(JSONValue)
+    case opaque(OpaqueResponseItem)
 
-    init?(_ outputItem: ResponsesOutputItem) {
+    init(_ outputItem: ResponsesOutputItem) {
         switch outputItem {
         case let .message(message):
             self = .message(message.replayRaw)
@@ -372,8 +285,8 @@ enum ResponsesReplayItem: Equatable {
             self = .functionCall(call.raw)
         case let .reasoning(reasoning):
             self = .reasoning(reasoning.raw)
-        case .opaque:
-            return nil
+        case let .opaque(item):
+            self = .opaque(item)
         }
     }
 
@@ -389,16 +302,18 @@ enum ResponsesReplayItem: Equatable {
         case "reasoning":
             self = .reasoning(raw)
         default:
-            throw AgentError.llmError(
-                .decodingFailed(description: "Unsupported Responses replay item type '\(type)'")
-            )
+            self = .opaque(OpaqueResponseItem(provider: "responses", type: type, raw: raw))
         }
     }
 
     var raw: JSONValue {
         switch self {
-        case let .message(raw), let .functionCall(raw), let .reasoning(raw):
+        case let .message(raw),
+             let .functionCall(raw),
+             let .reasoning(raw):
             raw
+        case let .opaque(item):
+            item.raw
         }
     }
 

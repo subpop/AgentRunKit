@@ -6,7 +6,7 @@
     import FoundationModels
     import Testing
 
-    struct FMSchemaConverterTests {
+    @Suite(.serialized) struct FMSchemaConverterTests {
         @Test func flatObjectProducesValidSchema() throws {
             guard #available(macOS 26, iOS 26, *) else { return }
             let schema = JSONSchema.object(

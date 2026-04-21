@@ -4,13 +4,19 @@ extension GeminiClient {
     func performStreamRequest(
         messages: [ChatMessage],
         tools: [ToolDefinition],
+        functionCallingMode: GeminiFunctionCallingMode,
+        allowedFunctionNames: [String]?,
         extraFields: [String: JSONValue],
         onResponse: (@Sendable (HTTPURLResponse) -> Void)?,
         continuation: AsyncThrowingStream<StreamDelta, Error>.Continuation
     ) async throws {
         try messages.validateForLLMRequest()
         let request = try buildRequest(
-            messages: messages, tools: tools, extraFields: extraFields
+            messages: messages,
+            tools: tools,
+            functionCallingMode: functionCallingMode,
+            allowedFunctionNames: allowedFunctionNames,
+            extraFields: extraFields
         )
         let urlRequest = try buildURLRequest(request, stream: true)
         let (bytes, httpResponse) = try await HTTPRetry.performStream(
@@ -70,7 +76,7 @@ extension GeminiClient {
                     ]))
                 }
                 continuation.yield(.toolCallStart(
-                    index: toolIndex, id: callId, name: functionCall.name
+                    index: toolIndex, id: callId, name: functionCall.name, kind: .function
                 ))
                 let arguments = try encodeFunctionCallArgs(functionCall.args)
                 continuation.yield(.toolCallDelta(

@@ -7,7 +7,7 @@ struct StreamingFinishDecodingTests {
     func malformedFinishArgumentsThrowsInStreaming() async throws {
         let deltas: [StreamDelta] = [
             .content("Here is your answer"),
-            .toolCallStart(index: 0, id: "call_1", name: "finish"),
+            .toolCallStart(index: 0, id: "call_1", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: "not valid json at all"),
             .finished(usage: TokenUsage(input: 10, output: 5))
         ]
@@ -29,7 +29,7 @@ struct StreamingFinishDecodingTests {
     @Test
     func malformedFinishWithMissingContentFieldThrows() async throws {
         let deltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "finish"),
+            .toolCallStart(index: 0, id: "call_1", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"reason": "completed"}"#),
             .finished(usage: nil)
         ]
@@ -50,7 +50,7 @@ struct StreamingFinishDecodingTests {
     @Test
     func truncatedJSONInFinishThrows() async throws {
         let deltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "finish"),
+            .toolCallStart(index: 0, id: "call_1", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "incomplete"#),
             .finished(usage: nil)
         ]
@@ -207,15 +207,15 @@ struct InterleavedOutOfOrderDeltaTests {
         let firstDeltas: [StreamDelta] = [
             .toolCallDelta(index: 0, arguments: #"{"mes"#),
             .toolCallDelta(index: 1, arguments: #"{"mes"#),
-            .toolCallStart(index: 0, id: "call_1", name: "echo"),
+            .toolCallStart(index: 0, id: "call_1", name: "echo", kind: .function),
             .toolCallDelta(index: 0, arguments: #"sage":"first"}"#),
-            .toolCallStart(index: 1, id: "call_2", name: "echo"),
+            .toolCallStart(index: 1, id: "call_2", name: "echo", kind: .function),
             .toolCallDelta(index: 1, arguments: #"sage":"second"}"#),
             .finished(usage: nil)
         ]
 
         let secondDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_3", name: "finish"),
+            .toolCallStart(index: 0, id: "call_3", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "done"}"#),
             .finished(usage: nil)
         ]
@@ -248,13 +248,13 @@ struct InterleavedOutOfOrderDeltaTests {
             .toolCallDelta(index: 0, arguments: #""message""#),
             .toolCallDelta(index: 0, arguments: #":"#),
             .toolCallDelta(index: 0, arguments: #""test""#),
-            .toolCallStart(index: 0, id: "call_1", name: "echo"),
+            .toolCallStart(index: 0, id: "call_1", name: "echo", kind: .function),
             .toolCallDelta(index: 0, arguments: #"}"#),
             .finished(usage: nil)
         ]
 
         let secondDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_2", name: "finish"),
+            .toolCallStart(index: 0, id: "call_2", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "done"}"#),
             .finished(usage: nil)
         ]
@@ -284,17 +284,17 @@ struct InterleavedOutOfOrderDeltaTests {
             .toolCallDelta(index: 2, arguments: #"{"lhs":5,"#),
             .toolCallDelta(index: 0, arguments: #"{"lhs":1,"#),
             .toolCallDelta(index: 1, arguments: #"{"lhs":3,"#),
-            .toolCallStart(index: 1, id: "call_2", name: "add"),
-            .toolCallStart(index: 0, id: "call_1", name: "add"),
+            .toolCallStart(index: 1, id: "call_2", name: "add", kind: .function),
+            .toolCallStart(index: 0, id: "call_1", name: "add", kind: .function),
             .toolCallDelta(index: 1, arguments: #""rhs":4}"#),
-            .toolCallStart(index: 2, id: "call_3", name: "add"),
+            .toolCallStart(index: 2, id: "call_3", name: "add", kind: .function),
             .toolCallDelta(index: 0, arguments: #""rhs":2}"#),
             .toolCallDelta(index: 2, arguments: #""rhs":6}"#),
             .finished(usage: nil)
         ]
 
         let secondDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_4", name: "finish"),
+            .toolCallStart(index: 0, id: "call_4", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content": "done"}"#),
             .finished(usage: nil)
         ]
@@ -404,7 +404,7 @@ struct OrphanedStreamDeltaTests {
         )
 
         let deltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "echo"),
+            .toolCallStart(index: 0, id: "call_1", name: "echo", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"message":"valid"}"#),
             .toolCallDelta(index: 5, arguments: #"{"orphaned":true}"#),
             .finished(usage: nil)

@@ -276,7 +276,7 @@ struct ResponsesRequestSerializationTests {
     }
 
     @Test
-    func malformedResponsesContinuityUnsupportedItemTypeThrows() async throws {
+    func unsupportedContinuityItemPreservedAsOpaqueAcrossReplay() async throws {
         let client = makeClient()
         let message = AssistantMessage(
             content: "",
@@ -293,9 +293,11 @@ struct ResponsesRequestSerializationTests {
             )
         )
 
-        await #expect(throws: AgentError.self) {
-            _ = try await client.buildRequest(messages: [.assistant(message)], tools: [])
-        }
+        let request = try await client.buildRequest(messages: [.assistant(message)], tools: [])
+        let encoded = try encodeRequest(request)
+        let input = try #require(encoded["input"] as? [[String: Any]])
+        #expect(input.count == 1)
+        #expect(input[0]["type"] as? String == "image")
     }
 
     @Test
@@ -334,6 +336,43 @@ struct ResponsesRequestSerializationTests {
         #expect(jsonTools?[0]["description"] as? String == "Get weather")
         #expect(jsonTools?[0]["parameters"] != nil)
         #expect(jsonTools?[0]["function"] == nil)
+    }
+
+    @Test
+    func hostedToolsEncodeAlongsideFunctionTools() async throws {
+        let client = makeClient()
+        let tools = [
+            ToolDefinition(
+                name: "get_weather",
+                description: "Get weather",
+                parametersSchema: .object(properties: ["city": .string()], required: ["city"])
+            )
+        ]
+        let request = try await client.buildRequest(
+            messages: [.user("Hi")],
+            tools: tools,
+            options: ResponsesRequestOptions(hostedTools: [
+                .fileSearch(vectorStoreIDs: ["vs_123"], maxNumResults: 5),
+                .webSearch(
+                    externalWebAccess: false,
+                    userLocation: ResponsesApproximateUserLocation(country: "US", city: "SF")
+                ),
+            ])
+        )
+        let json = try encodeRequest(request)
+
+        let jsonTools = try #require(json["tools"] as? [[String: Any]])
+        #expect(jsonTools.count == 3)
+        #expect(jsonTools[0]["type"] as? String == "function")
+        #expect(jsonTools[1]["type"] as? String == "file_search")
+        #expect(jsonTools[1]["vector_store_ids"] as? [String] == ["vs_123"])
+        #expect(jsonTools[1]["max_num_results"] as? Int == 5)
+        #expect(jsonTools[2]["type"] as? String == "web_search")
+        #expect(jsonTools[2]["external_web_access"] as? Bool == false)
+        let location = try #require(jsonTools[2]["user_location"] as? [String: Any])
+        #expect(location["type"] as? String == "approximate")
+        #expect(location["country"] as? String == "US")
+        #expect(location["city"] as? String == "SF")
     }
 
     @Test
@@ -525,7 +564,7 @@ struct ResponsesResponseParsingTests {
     }
 
     @Test
-    func unsupportedOutputItemTypeDoesNotEnterContinuity() async throws {
+    func unsupportedOutputItemPreservedAsOpaqueInContinuity() async throws {
         let json = """
         {
             "id": "resp_unknown_output",
@@ -559,19 +598,24 @@ struct ResponsesResponseParsingTests {
             Issue.record("Expected output array in continuity payload")
             return
         }
-        #expect(output.count == 1)
+        #expect(output.count == 2)
         guard case let .object(first) = output[0] else {
             Issue.record("Expected replay item to be an object")
             return
         }
-        #expect(first["type"] == .string("message"))
+        #expect(first["type"] == .string("image"))
+        guard case let .object(second) = output[1] else {
+            Issue.record("Expected replay item to be an object")
+            return
+        }
+        #expect(second["type"] == .string("message"))
         let input = encoded["input"] as? [[String: Any]]
         #expect(encoded["previous_response_id"] as? String == "resp_unknown_output")
         #expect(input?.isEmpty == true)
     }
 
     @Test
-    func opaqueOnlyOutputDoesNotPersistResponsesContinuity() async throws {
+    func opaqueOnlyOutputPersistsResponsesContinuity() async throws {
         let json = """
         {
             "id": "resp_opaque_only",
@@ -590,7 +634,17 @@ struct ResponsesResponseParsingTests {
         #expect(message.content.isEmpty)
         #expect(message.toolCalls.isEmpty)
         #expect(message.reasoningDetails == nil)
-        #expect(message.continuity == nil)
+        let continuity = try #require(message.continuity)
+        guard case let .object(payload) = continuity.payload,
+              case let .array(output) = payload["output"]
+        else {
+            Issue.record("Expected output array in continuity payload")
+            return
+        }
+        #expect(output.count == 1)
+        if case let .object(item) = output[0] {
+            #expect(item["type"] == .string("image"))
+        }
     }
 
     @Test
@@ -900,93 +954,5 @@ struct ResponsesExtraFieldsTests {
         let expectedKeys: Set = ["model", "input", "store", "include"]
         let actualKeys = Set(json.keys)
         #expect(actualKeys == expectedKeys)
-    }
-}
-
-struct ResponsesEdgeCaseTests {
-    @Test
-    func emptyToolsArrayOmitsToolsField() async throws {
-        let client = ResponsesAPIClient(
-            apiKey: "test-key", model: "gpt-4.1",
-            baseURL: ResponsesAPIClient.openAIBaseURL, store: false
-        )
-        let request = try await client.buildRequest(messages: [.user("Hi")], tools: [])
-        let json = try encodeRequest(request)
-
-        #expect(json["tools"] == nil)
-    }
-
-    @Test
-    func emptyOutputArrayParsesToEmptyMessage() async throws {
-        let json = """
-        {
-            "id": "resp_empty",
-            "status": "completed",
-            "output": [],
-            "usage": {"input_tokens": 10, "output_tokens": 0}
-        }
-        """
-        let client = ResponsesAPIClient(
-            apiKey: "test-key", model: "gpt-4.1",
-            baseURL: ResponsesAPIClient.openAIBaseURL
-        )
-        let response = try await client.decodeResponse(Data(json.utf8))
-        let msg = await client.parseResponse(response)
-
-        #expect(msg.content == "")
-        #expect(msg.toolCalls.isEmpty)
-        #expect(msg.tokenUsage?.input == 10)
-        #expect(msg.tokenUsage?.output == 0)
-    }
-
-    @Test
-    func usageWithoutReasoningTokensDefaultsToZero() async throws {
-        let json = """
-        {
-            "id": "resp_no_reasoning",
-            "status": "completed",
-            "output": [{"type": "message", "content": [{"type": "output_text", "text": "Hi"}]}],
-            "usage": {"input_tokens": 50, "output_tokens": 20, "output_tokens_details": {}}
-        }
-        """
-        let client = ResponsesAPIClient(
-            apiKey: "test-key", model: "gpt-4.1",
-            baseURL: ResponsesAPIClient.openAIBaseURL
-        )
-        let response = try await client.decodeResponse(Data(json.utf8))
-        let msg = await client.parseResponse(response)
-
-        #expect(msg.tokenUsage == TokenUsage(input: 50, output: 20, reasoning: 0))
-    }
-
-    @Test
-    func multimodalWithNonTextPartThrows() async throws {
-        let client = ResponsesAPIClient(
-            apiKey: "test-key", model: "gpt-4.1",
-            baseURL: ResponsesAPIClient.openAIBaseURL
-        )
-        let messages: [ChatMessage] = [
-            .userMultimodal([.text("Look at this"), .imageURL("https://example.com/img.png")])
-        ]
-
-        await #expect(throws: AgentError.self) {
-            _ = try await client.buildRequest(messages: messages, tools: [])
-        }
-    }
-
-    @Test
-    func multimodalWithOnlyTextPartsSucceeds() async throws {
-        let client = ResponsesAPIClient(
-            apiKey: "test-key", model: "gpt-4.1",
-            baseURL: ResponsesAPIClient.openAIBaseURL
-        )
-        let messages: [ChatMessage] = [
-            .userMultimodal([.text("Part one"), .text("Part two")])
-        ]
-
-        let request = try await client.buildRequest(messages: messages, tools: [])
-        let json = try encodeRequest(request)
-        let input = json["input"] as? [[String: Any]]
-        #expect(input?[0]["content"] as? String == "Part one\nPart two")
     }
 }

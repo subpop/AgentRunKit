@@ -71,7 +71,7 @@ struct ChatCompletionRequestResponseFormatTests {
         )
         let messages: [ChatMessage] = [.user("Extract data")]
         let format = ResponseFormat.jsonSchema(TestStructuredOutput.self)
-        let request = client.buildRequest(
+        let request = try client.buildRequest(
             messages: messages,
             tools: [],
             responseFormat: format
@@ -98,7 +98,7 @@ struct ChatCompletionRequestResponseFormatTests {
             baseURL: OpenAIClient.openRouterBaseURL
         )
         let messages: [ChatMessage] = [.user("Hello")]
-        let request = client.buildRequest(messages: messages, tools: [])
+        let request = try client.buildRequest(messages: messages, tools: [])
 
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase

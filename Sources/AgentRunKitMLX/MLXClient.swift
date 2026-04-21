@@ -85,7 +85,7 @@ public struct MLXClient: LLMClient, Sendable {
                         case let .toolCall(call):
                             let mapped = MLXMessageMapper.mapToolCall(call, index: toolCallIndex)
                             continuation.yield(.toolCallStart(
-                                index: toolCallIndex, id: mapped.id, name: mapped.name
+                                index: toolCallIndex, id: mapped.id, name: mapped.name, kind: .function
                             ))
                             continuation.yield(.toolCallDelta(
                                 index: toolCallIndex, arguments: mapped.arguments

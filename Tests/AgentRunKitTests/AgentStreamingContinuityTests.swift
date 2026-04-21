@@ -15,13 +15,13 @@ struct StreamingContinuityTests {
         )
         let firstIteration: [RunStreamElement] = [
             .delta(.content("Looking that up")),
-            .delta(.toolCallStart(index: 0, id: "call_1", name: "echo")),
+            .delta(.toolCallStart(index: 0, id: "call_1", name: "echo", kind: .function)),
             .delta(.toolCallDelta(index: 0, arguments: #"{"message": "hello"}"#)),
             .finalizedContinuity(continuity),
             .delta(.finished(usage: nil)),
         ]
         let secondIteration: [RunStreamElement] = [
-            .delta(.toolCallStart(index: 0, id: "call_2", name: "finish")),
+            .delta(.toolCallStart(index: 0, id: "call_2", name: "finish", kind: .function)),
             .delta(.toolCallDelta(index: 0, arguments: #"{"content": "done"}"#)),
             .delta(.finished(usage: nil)),
         ]

@@ -364,17 +364,17 @@ struct ToolApprovalAgentTests {
     func streamingApproveAlwaysSkipsSubsequentHandlerCalls() async throws {
         let echoTool = try makeEchoTool()
         let firstDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "echo"),
+            .toolCallStart(index: 0, id: "call_1", name: "echo", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"message":"first"}"#),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]
         let secondDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_2", name: "echo"),
+            .toolCallStart(index: 0, id: "call_2", name: "echo", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"message":"second"}"#),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]
         let finishDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_f", name: "finish"),
+            .toolCallStart(index: 0, id: "call_f", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content":"done"}"#),
             .finished(usage: nil),
         ]
@@ -395,12 +395,12 @@ struct ToolApprovalAgentTests {
     func streamingApproveWithModifiedArguments() async throws {
         let echoTool = try makeEchoTool()
         let deltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "echo"),
+            .toolCallStart(index: 0, id: "call_1", name: "echo", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"message":"original"}"#),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]
         let finishDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_f", name: "finish"),
+            .toolCallStart(index: 0, id: "call_f", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content":"done"}"#),
             .finished(usage: nil),
         ]
@@ -432,12 +432,12 @@ struct ToolApprovalStreamingTests {
     func streamEmitsApprovalEvents() async throws {
         let echoTool = try makeEchoTool()
         let deltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "echo"),
+            .toolCallStart(index: 0, id: "call_1", name: "echo", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"message":"hello"}"#),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]
         let finishDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_f", name: "finish"),
+            .toolCallStart(index: 0, id: "call_f", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content":"done"}"#),
             .finished(usage: nil),
         ]
@@ -469,12 +469,12 @@ struct ToolApprovalStreamingTests {
     func deniedToolEmitsToolCallCompleted() async throws {
         let echoTool = try makeEchoTool()
         let deltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "echo"),
+            .toolCallStart(index: 0, id: "call_1", name: "echo", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"message":"hello"}"#),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]
         let finishDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_f", name: "finish"),
+            .toolCallStart(index: 0, id: "call_f", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content":"denied"}"#),
             .finished(usage: nil),
         ]
@@ -503,12 +503,12 @@ struct ToolApprovalStreamingTests {
         let echoTool = try makeEchoTool()
         let denialReason = String(repeating: "B", count: 200)
         let deltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "echo"),
+            .toolCallStart(index: 0, id: "call_1", name: "echo", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"message":"hello"}"#),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]
         let finishDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_f", name: "finish"),
+            .toolCallStart(index: 0, id: "call_f", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content":"denied"}"#),
             .finished(usage: nil),
         ]
@@ -550,12 +550,12 @@ struct ToolApprovalStreamingTests {
     func approvalEventsInCorrectOrder() async throws {
         let echoTool = try makeEchoTool()
         let deltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_1", name: "echo"),
+            .toolCallStart(index: 0, id: "call_1", name: "echo", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"message":"hello"}"#),
             .finished(usage: TokenUsage(input: 10, output: 5)),
         ]
         let finishDeltas: [StreamDelta] = [
-            .toolCallStart(index: 0, id: "call_f", name: "finish"),
+            .toolCallStart(index: 0, id: "call_f", name: "finish", kind: .function),
             .toolCallDelta(index: 0, arguments: #"{"content":"done"}"#),
             .finished(usage: nil),
         ]
