@@ -392,7 +392,7 @@ struct SubAgentTimeoutTests {
     }
 
     @Test
-    func nilTimeoutMeansNoTimeout() async throws {
+    func nilToolTimeoutInheritsParentTimeout() async throws {
         let childClient = ControllableStreamingMockLLMClient()
         let childAgent = Agent<SubAgentContext<EmptyContext>>(client: childClient, tools: [])
 
@@ -440,13 +440,13 @@ struct SubAgentTimeoutTests {
             events.append(event)
         }
 
-        let completed = events.contains { event in
+        let timedOut = events.contains { event in
             if case let .subAgentCompleted(_, _, result) = event.kind {
-                return result.content == "slow result" && !result.isError
+                return result.isError && result.content.contains("timed out")
             }
             return false
         }
-        #expect(completed)
+        #expect(timedOut)
     }
 
     @Test

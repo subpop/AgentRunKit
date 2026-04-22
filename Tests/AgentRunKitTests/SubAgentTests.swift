@@ -393,12 +393,12 @@ struct SubAgentToolTests {
     }
 
     @Test
-    func nilToolTimeoutBypassesAgentTimeoutInNonStreamingPath() async throws {
+    func nilToolTimeoutInheritsParentTimeoutInNonStreamingPath() async throws {
         let delayTool = try Tool<NoopParams, NoopOutput, SubAgentContext<EmptyContext>>(
             name: "delay",
             description: "Delays",
             executor: { _, _ in
-                try await Task.sleep(for: .milliseconds(100))
+                try await Task.sleep(for: .milliseconds(200))
                 return NoopOutput()
             }
         )
@@ -421,11 +421,11 @@ struct SubAgentToolTests {
 
         let subCall = ToolCall(id: "cs", name: "slow_sub", arguments: #"{"query": "go"}"#)
         let parentFinish = ToolCall(id: "pf", name: "finish", arguments: #"{"content": "parent done"}"#)
-        let parentClient = MockLLMClient(responses: [
+        let parentClient = CapturingMockLLMClient(responses: [
             AssistantMessage(content: "", toolCalls: [subCall]),
             AssistantMessage(content: "", toolCalls: [parentFinish]),
         ])
-        let config = AgentConfiguration(toolTimeout: .milliseconds(1))
+        let config = AgentConfiguration(toolTimeout: .milliseconds(50))
         let parentAgent = Agent<SubAgentContext<EmptyContext>>(
             client: parentClient, tools: [tool], configuration: config
         )
@@ -433,6 +433,14 @@ struct SubAgentToolTests {
         let ctx = SubAgentContext(inner: EmptyContext(), maxDepth: 3)
         let result = try await parentAgent.run(userMessage: "Go", context: ctx)
         #expect(try requireContent(result) == "parent done")
+
+        let capturedMessages = await parentClient.capturedMessages
+        let toolMessage = capturedMessages.compactMap { msg -> (String, String)? in
+            guard case let .tool(_, name, content) = msg else { return nil }
+            return (name, content)
+        }.last
+        #expect(toolMessage?.0 == "slow_sub")
+        #expect(toolMessage?.1.contains("timed out") == true)
     }
 
     @Test

@@ -321,6 +321,14 @@ private extension Chat {
         ContextCompactor.truncateToolResult(result, maxCharacters: toolResultCharacterLimit(for: toolName))
     }
 
+    func resolveTimeout(for tool: any AnyTool<C>) -> Duration {
+        if let overriding = tool as? any TimeoutOverriding,
+           let override = overriding.toolTimeout {
+            return override
+        }
+        return toolTimeout
+    }
+
     func resolveAndExecuteTool(
         _ call: ToolCall,
         context: C,
@@ -403,12 +411,12 @@ private extension Chat {
                     )
                 }
                 group.addTask {
-                    try await Task.sleep(for: self.toolTimeout)
+                    try await Task.sleep(for: self.resolveTimeout(for: resolvedTool))
                     throw AgentError.toolTimeout(tool: call.name)
                 }
 
                 guard let result = try await group.next() else {
-                    return .error(AgentError.toolTimeout(tool: call.name).feedbackMessage)
+                    preconditionFailure("ThrowingTaskGroup with two tasks must yield a result")
                 }
                 group.cancelAll()
                 return result

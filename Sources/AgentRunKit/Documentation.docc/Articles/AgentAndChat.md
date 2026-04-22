@@ -70,7 +70,7 @@ print(result.score) // 0.95
 | Property | Default | Description |
 |---|---|---|
 | `maxIterations` | 10 | Maximum generate/tool-call cycles before returning `.maxIterationsReached(limit:)` |
-| `toolTimeout` | 30s | Per-tool execution timeout |
+| `toolTimeout` | 30s | Default per-tool execution timeout. Individual tools override it; see <doc:DefiningTools#Per-Tool-Timeout>. |
 
 **System prompt:**
 

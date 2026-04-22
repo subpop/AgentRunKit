@@ -134,6 +134,23 @@ Defaults are fail-closed: tools are assumed non-concurrent and non-read-only unl
 
 When ``Agent`` executes sibling tool calls, it groups contiguous `isConcurrencySafe` calls into concurrent waves and treats each unsafe or unresolved call as an exclusive barrier. ``Chat`` executes tool calls sequentially regardless of this property.
 
+## Per-Tool Timeout
+
+Override ``AgentConfiguration/toolTimeout`` for a specific tool by passing `toolTimeout: Duration?` to ``Tool/init(name:description:isConcurrencySafe:isReadOnly:maxResultCharacters:strict:toolTimeout:executor:)``. `nil` (the default) inherits the agent's configured timeout. Set an explicit `Duration` to apply a per-tool ceiling:
+
+```swift
+let deepPoll = try Tool<PollParams, PollResult, AppContext>(
+    name: "long_poll",
+    description: "Polls an upstream service",
+    toolTimeout: .minutes(30),
+    executor: { params, ctx in try await upstream.poll(params) }
+)
+```
+
+Both ``Agent`` and ``Chat`` honor the per-tool override. ``SubAgentTool`` exposes the same `toolTimeout` parameter with identical semantics.
+
+Tools that don't declare a timeout inherit the agent's or chat's configured default. Tools surfaced through other adapters do not participate: ``MCPTool`` falls back to the global because the MCP wire format carries no timeout metadata, and tools invoked through `AgentRunKitFoundationModels` are dispatched inside Apple's on-device session and bypass this machinery entirely.
+
 ## Topics
 
 ### Core Types

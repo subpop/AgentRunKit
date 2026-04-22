@@ -36,6 +36,9 @@ public struct SubAgentTool<P: Codable & SchemaProviding & Sendable, InnerContext
         if let maxResultCharacters {
             precondition(maxResultCharacters >= 1, "maxResultCharacters must be at least 1")
         }
+        if let toolTimeout {
+            precondition(toolTimeout >= .milliseconds(1), "toolTimeout must be at least 1ms")
+        }
         try P.validateSchema()
         self.name = name
         self.description = description

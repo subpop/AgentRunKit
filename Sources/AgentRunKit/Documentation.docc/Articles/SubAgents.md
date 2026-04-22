@@ -94,7 +94,7 @@ When a sub-agent executes, ``SubAgentTool`` calls `descending()` to increment th
 
 **Parent message inheritance.** When `inheritParentMessages` is `true`, the parent's conversation history (excluding system messages) is forwarded to the child. This gives the child agent conversational context without re-prompting.
 
-**Tool timeout.** `toolTimeout` overrides the parent agent's default tool timeout for this sub-agent invocation.
+**Tool timeout.** `toolTimeout` overrides the parent agent's default tool timeout for this sub-agent invocation. `nil` (the default) inherits the parent's ``AgentConfiguration/toolTimeout``.
 
 **Tool metadata.** `SubAgentTool` also exposes `isConcurrencySafe`, `isReadOnly`, and `maxResultCharacters`, matching `Tool`. ``Agent`` honors `isConcurrencySafe` for scheduling: sibling sub-agents default to sequential execution and must opt in to concurrent execution. `isReadOnly` remains advisory.
 

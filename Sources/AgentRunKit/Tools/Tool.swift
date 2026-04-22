@@ -3,7 +3,8 @@ import Foundation
 /// A typed tool with compile-time schema validation.
 ///
 /// For guidance on defining tools, see <doc:DefiningTools>.
-public struct Tool<P: Codable & SchemaProviding & Sendable, O: Codable & Sendable, C: ToolContext>: AnyTool {
+public struct Tool<P: Codable & SchemaProviding & Sendable, O: Codable & Sendable, C: ToolContext>: AnyTool,
+    TimeoutOverriding {
     public typealias Context = C
 
     public let name: String
@@ -13,6 +14,7 @@ public struct Tool<P: Codable & SchemaProviding & Sendable, O: Codable & Sendabl
     public let isReadOnly: Bool
     public let maxResultCharacters: Int?
     public let strict: Bool?
+    let toolTimeout: Duration?
     private let executor: @Sendable (P, C) async throws -> O
 
     public init(
@@ -22,10 +24,14 @@ public struct Tool<P: Codable & SchemaProviding & Sendable, O: Codable & Sendabl
         isReadOnly: Bool = false,
         maxResultCharacters: Int? = nil,
         strict: Bool? = nil,
+        toolTimeout: Duration? = nil,
         executor: @escaping @Sendable (P, C) async throws -> O
     ) throws {
         if let maxResultCharacters {
             precondition(maxResultCharacters >= 1, "maxResultCharacters must be at least 1")
+        }
+        if let toolTimeout {
+            precondition(toolTimeout >= .milliseconds(1), "toolTimeout must be at least 1ms")
         }
         try P.validateSchema()
         self.name = name
@@ -34,6 +40,7 @@ public struct Tool<P: Codable & SchemaProviding & Sendable, O: Codable & Sendabl
         self.isReadOnly = isReadOnly
         self.maxResultCharacters = maxResultCharacters
         self.strict = strict
+        self.toolTimeout = toolTimeout
         parametersSchema = P.jsonSchema
         self.executor = executor
     }

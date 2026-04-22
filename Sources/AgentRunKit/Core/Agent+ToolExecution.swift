@@ -5,30 +5,30 @@ extension Agent {
         tools.first(where: { $0.name == name })
     }
 
-    func resolveTimeout(for call: ToolCall) -> Duration? {
+    func resolveTimeout(for call: ToolCall) -> Duration {
         guard let tool = tool(named: call.name) else {
             return configuration.toolTimeout
         }
-        if let overriding = tool as? any TimeoutOverriding {
-            return overriding.toolTimeout
+        if let overriding = tool as? any TimeoutOverriding,
+           let override = overriding.toolTimeout {
+            return override
         }
         return configuration.toolTimeout
     }
 
     func withTimeout<T: Sendable>(
-        _ timeout: Duration?,
+        _ timeout: Duration,
         toolName: String,
         operation: @Sendable @escaping () async throws -> T
     ) async throws -> T {
-        guard let timeout else { return try await operation() }
-        return try await withThrowingTaskGroup(of: T.self) { group in
+        try await withThrowingTaskGroup(of: T.self) { group in
             group.addTask { try await operation() }
             group.addTask {
                 try await Task.sleep(for: timeout)
                 throw AgentError.toolTimeout(tool: toolName)
             }
             guard let result = try await group.next() else {
-                throw AgentError.toolTimeout(tool: toolName)
+                preconditionFailure("ThrowingTaskGroup with two tasks must yield a result")
             }
             group.cancelAll()
             return result

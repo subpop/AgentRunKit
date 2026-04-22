@@ -197,6 +197,94 @@ struct AgentTests {
     }
 
     @Test
+    func perToolTimeoutOverrideRespected() async throws {
+        let slowTool = try Tool<NoopParams, NoopOutput, EmptyContext>(
+            name: "slow",
+            description: "Slow tool",
+            toolTimeout: .milliseconds(50),
+            executor: { _, _ in
+                try await Task.sleep(for: .seconds(10))
+                return NoopOutput()
+            }
+        )
+        let toolCall = ToolCall(id: "call_1", name: "slow", arguments: "{}")
+        let finishCall = ToolCall(id: "call_2", name: "finish", arguments: #"{"content": "recovered"}"#)
+        let client = CapturingMockLLMClient(responses: [
+            AssistantMessage(content: "", toolCalls: [toolCall]),
+            AssistantMessage(content: "", toolCalls: [finishCall]),
+        ])
+        let config = AgentConfiguration(toolTimeout: .seconds(30))
+        let agent = Agent<EmptyContext>(client: client, tools: [slowTool], configuration: config)
+
+        let result = try await agent.run(userMessage: "Timeout", context: EmptyContext())
+        #expect(try requireContent(result) == "recovered")
+
+        let capturedMessages = await client.capturedMessages
+        let toolMessage = capturedMessages.compactMap { msg -> (String, String)? in
+            guard case let .tool(_, name, content) = msg else { return nil }
+            return (name, content)
+        }.last
+        #expect(toolMessage?.0 == "slow")
+        #expect(toolMessage?.1.contains("timed out") == true)
+    }
+
+    @Test
+    func perToolTimeoutNilInheritsGlobal() async throws {
+        let slowTool = try Tool<NoopParams, NoopOutput, EmptyContext>(
+            name: "slow",
+            description: "Slow tool",
+            toolTimeout: nil,
+            executor: { _, _ in
+                try await Task.sleep(for: .milliseconds(500))
+                return NoopOutput()
+            }
+        )
+        let toolCall = ToolCall(id: "call_1", name: "slow", arguments: "{}")
+        let finishCall = ToolCall(id: "call_2", name: "finish", arguments: #"{"content": "recovered"}"#)
+        let client = CapturingMockLLMClient(responses: [
+            AssistantMessage(content: "", toolCalls: [toolCall]),
+            AssistantMessage(content: "", toolCalls: [finishCall]),
+        ])
+        let config = AgentConfiguration(toolTimeout: .milliseconds(50))
+        let agent = Agent<EmptyContext>(client: client, tools: [slowTool], configuration: config)
+
+        let result = try await agent.run(userMessage: "Timeout", context: EmptyContext())
+        #expect(try requireContent(result) == "recovered")
+
+        let capturedMessages = await client.capturedMessages
+        let toolMessage = capturedMessages.compactMap { msg -> (String, String)? in
+            guard case let .tool(_, name, content) = msg else { return nil }
+            return (name, content)
+        }.last
+        #expect(toolMessage?.0 == "slow")
+        #expect(toolMessage?.1.contains("timed out") == true)
+    }
+
+    @Test
+    func perToolTimeoutWiderThanGlobalCompletes() async throws {
+        let quickTool = try Tool<NoopParams, NoopOutput, EmptyContext>(
+            name: "quick",
+            description: "Tool with generous per-tool override",
+            toolTimeout: .seconds(2),
+            executor: { _, _ in
+                try await Task.sleep(for: .milliseconds(100))
+                return NoopOutput()
+            }
+        )
+        let toolCall = ToolCall(id: "call_1", name: "quick", arguments: "{}")
+        let finishCall = ToolCall(id: "call_2", name: "finish", arguments: #"{"content": "done"}"#)
+        let client = MockLLMClient(responses: [
+            AssistantMessage(content: "", toolCalls: [toolCall]),
+            AssistantMessage(content: "", toolCalls: [finishCall]),
+        ])
+        let config = AgentConfiguration(toolTimeout: .milliseconds(50))
+        let agent = Agent<EmptyContext>(client: client, tools: [quickTool], configuration: config)
+
+        let result = try await agent.run(userMessage: "Go", context: EmptyContext())
+        #expect(try requireContent(result) == "done")
+    }
+
+    @Test
     func systemPromptIncluded() async throws {
         let client = CapturingMockLLMClient(
             responses: [AssistantMessage(content: "", toolCalls: [
