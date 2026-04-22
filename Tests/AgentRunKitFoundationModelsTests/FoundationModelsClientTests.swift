@@ -9,7 +9,26 @@
         @Test func contextWindowSize() {
             guard #available(macOS 26, iOS 26, *) else { return }
             let client = FoundationModelsClient<EmptyContext>(context: EmptyContext())
-            #expect(client.contextWindowSize == 4096)
+            #expect(client.contextWindowSize == nil)
+        }
+
+        @Test func contextBudgetConfigurationThrowsBecauseWindowSizeIsNil() async {
+            guard #available(macOS 26, iOS 26, *) else { return }
+            let client = FoundationModelsClient<EmptyContext>(context: EmptyContext())
+            let agent = Agent<EmptyContext>(
+                client: client,
+                tools: [],
+                configuration: AgentConfiguration(
+                    contextBudget: ContextBudgetConfig(enableVisibility: true)
+                )
+            )
+
+            await #expect(throws: AgentError.contextBudgetWindowSizeUnavailable) {
+                _ = try await agent.run(userMessage: "go", context: EmptyContext())
+            }
+            await #expect(throws: AgentError.contextBudgetWindowSizeUnavailable) {
+                for try await _ in agent.stream(userMessage: "go", context: EmptyContext()) {}
+            }
         }
 
         @Test func responseFormatThrows() async {

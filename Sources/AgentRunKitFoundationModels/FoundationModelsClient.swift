@@ -7,7 +7,7 @@
     /// An LLM client that runs on Apple's on-device foundation model.
     @available(macOS 26, iOS 26, *)
     public struct FoundationModelsClient<C: ToolContext>: LLMClient, Sendable {
-        public let contextWindowSize: Int? = 4096
+        public let contextWindowSize: Int? = nil
 
         private let tools: [any AnyTool<C>]
         private let context: C
