@@ -322,11 +322,7 @@ private extension Chat {
     }
 
     func resolveTimeout(for tool: any AnyTool<C>) -> Duration {
-        if let overriding = tool as? any TimeoutOverriding,
-           let override = overriding.toolTimeout {
-            return override
-        }
-        return toolTimeout
+        resolvedToolTimeout(for: tool, default: toolTimeout)
     }
 
     func resolveAndExecuteTool(

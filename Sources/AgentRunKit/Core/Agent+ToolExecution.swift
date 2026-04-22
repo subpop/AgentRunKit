@@ -9,11 +9,7 @@ extension Agent {
         guard let tool = tool(named: call.name) else {
             return configuration.toolTimeout
         }
-        if let overriding = tool as? any TimeoutOverriding,
-           let override = overriding.toolTimeout {
-            return override
-        }
-        return configuration.toolTimeout
+        return resolvedToolTimeout(for: tool, default: configuration.toolTimeout)
     }
 
     func withTimeout<T: Sendable>(
