@@ -628,127 +628,9 @@ struct ContextBudgetStreamingPruneTests {
     }
 }
 
-// MARK: - Usage Requirements
+// MARK: - Missing Usage Behavior
 
-struct ContextBudgetUsageRequirementTests {
-    @Test func missingTokenUsagePreventsToolExecutionInRun() async throws {
-        let counter = InvocationCounter()
-        let noopTool = try Tool<NoopParams, NoopOutput, EmptyContext>(
-            name: "noop",
-            description: "noop",
-            executor: { _, _ in
-                await counter.increment()
-                return NoopOutput()
-            }
-        )
-        let client = BudgetMockLLMClient(
-            responses: [
-                AssistantMessage(content: "", toolCalls: [
-                    ToolCall(id: "call_1", name: "noop", arguments: "{}"),
-                ]),
-            ],
-            contextWindowSize: 10000
-        )
-        let config = AgentConfiguration(
-            contextBudget: ContextBudgetConfig(enableVisibility: true)
-        )
-        let agent = Agent<EmptyContext>(client: client, tools: [noopTool], configuration: config)
-
-        await #expect(throws: AgentError.contextBudgetUsageUnavailable) {
-            _ = try await agent.run(userMessage: "go", context: EmptyContext())
-        }
-        #expect(await counter.currentValue() == 0)
-    }
-
-    @Test func missingTokenUsageThrowsInRun() async throws {
-        let noopTool = try Tool<NoopParams, NoopOutput, EmptyContext>(
-            name: "noop", description: "noop", executor: { _, _ in NoopOutput() }
-        )
-        let client = BudgetMockLLMClient(
-            responses: [
-                AssistantMessage(content: "", toolCalls: [
-                    ToolCall(id: "call_1", name: "noop", arguments: "{}"),
-                ]),
-            ],
-            contextWindowSize: 10000
-        )
-        let config = AgentConfiguration(
-            contextBudget: ContextBudgetConfig(enableVisibility: true)
-        )
-        let agent = Agent<EmptyContext>(client: client, tools: [noopTool], configuration: config)
-
-        await #expect(throws: AgentError.contextBudgetUsageUnavailable) {
-            _ = try await agent.run(userMessage: "go", context: EmptyContext())
-        }
-    }
-
-    @Test func missingTokenUsageOnFinishThrowsInRun() async throws {
-        let client = BudgetMockLLMClient(
-            responses: [
-                AssistantMessage(content: "", toolCalls: [
-                    ToolCall(id: "finish_1", name: "finish", arguments: #"{"content":"done"}"#),
-                ]),
-            ],
-            contextWindowSize: 10000
-        )
-        let config = AgentConfiguration(
-            contextBudget: ContextBudgetConfig(enableVisibility: true)
-        )
-        let agent = Agent<EmptyContext>(client: client, tools: [], configuration: config)
-
-        await #expect(throws: AgentError.contextBudgetUsageUnavailable) {
-            _ = try await agent.run(userMessage: "go", context: EmptyContext())
-        }
-    }
-
-    @Test func missingTokenUsageThrowsInStream() async throws {
-        let counter = InvocationCounter()
-        let noopTool = try Tool<NoopParams, NoopOutput, EmptyContext>(
-            name: "noop",
-            description: "noop",
-            executor: { _, _ in
-                await counter.increment()
-                return NoopOutput()
-            }
-        )
-        let client = BudgetStreamingMockLLMClient(
-            streamSequences: [[
-                .toolCallStart(index: 0, id: "call_1", name: "noop", kind: .function),
-                .toolCallDelta(index: 0, arguments: "{}"),
-                .finished(usage: nil),
-            ]],
-            contextWindowSize: 10000
-        )
-        let config = AgentConfiguration(
-            contextBudget: ContextBudgetConfig(enableVisibility: true)
-        )
-        let agent = Agent<EmptyContext>(client: client, tools: [noopTool], configuration: config)
-
-        await #expect(throws: AgentError.contextBudgetUsageUnavailable) {
-            for try await _ in agent.stream(userMessage: "go", context: EmptyContext()) {}
-        }
-        #expect(await counter.currentValue() == 0)
-    }
-
-    @Test func missingTokenUsageOnFinishThrowsInStream() async throws {
-        let client = BudgetStreamingMockLLMClient(
-            streamSequences: [[
-                .toolCallStart(index: 0, id: "finish_1", name: "finish", kind: .function),
-                .toolCallDelta(index: 0, arguments: #"{"content":"done"}"#),
-                .finished(usage: nil),
-            ]],
-            contextWindowSize: 10000
-        )
-        let config = AgentConfiguration(
-            contextBudget: ContextBudgetConfig(enableVisibility: true)
-        )
-        let agent = Agent<EmptyContext>(client: client, tools: [], configuration: config)
-
-        await #expect(throws: AgentError.contextBudgetUsageUnavailable) {
-            for try await _ in agent.stream(userMessage: "go", context: EmptyContext()) {}
-        }
-    }
-
+struct ContextBudgetMissingUsageBehaviorTests {
     @Test func visibilityWithoutContextWindowSizeThrowsInStream() async throws {
         let client = BudgetStreamingMockLLMClient(
             streamSequences: [[
@@ -766,5 +648,95 @@ struct ContextBudgetUsageRequirementTests {
         await #expect(throws: AgentError.contextBudgetWindowSizeUnavailable) {
             for try await _ in agent.stream(userMessage: "go", context: EmptyContext()) {}
         }
+    }
+
+    @Test func missingTokenUsageContinuesRunAndResumesOnNextIteration() async throws {
+        let counter = InvocationCounter()
+        let noopTool = try Tool<NoopParams, NoopOutput, EmptyContext>(
+            name: "noop",
+            description: "noop",
+            executor: { _, _ in
+                await counter.increment()
+                return NoopOutput()
+            }
+        )
+        let iter2Usage = TokenUsage(input: 400, output: 20)
+        let iter3Usage = TokenUsage(input: 500, output: 30)
+        let client = BudgetMockLLMClient(
+            responses: [
+                AssistantMessage(content: "", toolCalls: [
+                    ToolCall(id: "call_1", name: "noop", arguments: "{}"),
+                ]),
+                AssistantMessage(content: "", toolCalls: [
+                    ToolCall(id: "call_2", name: "noop", arguments: "{}"),
+                ], tokenUsage: iter2Usage),
+                AssistantMessage(content: "", toolCalls: [
+                    ToolCall(id: "f", name: "finish", arguments: #"{"content":"done"}"#),
+                ], tokenUsage: iter3Usage),
+            ],
+            contextWindowSize: 10000
+        )
+        let config = AgentConfiguration(
+            contextBudget: ContextBudgetConfig(softThreshold: 0.8, enableVisibility: true)
+        )
+        let agent = Agent<EmptyContext>(client: client, tools: [noopTool], configuration: config)
+
+        let result = try await agent.run(userMessage: "go", context: EmptyContext())
+
+        #expect(try requireContent(result) == "done")
+        #expect(result.iterations == 3)
+        #expect(await counter.currentValue() == 2)
+        #expect(result.totalTokenUsage == iter2Usage + iter3Usage)
+    }
+
+    @Test func missingTokenUsageContinuesStreamAndResumesOnNextIteration() async throws {
+        let counter = InvocationCounter()
+        let noopTool = try Tool<NoopParams, NoopOutput, EmptyContext>(
+            name: "noop",
+            description: "noop",
+            executor: { _, _ in
+                await counter.increment()
+                return NoopOutput()
+            }
+        )
+        let iter2Usage = TokenUsage(input: 400, output: 20)
+        let client = BudgetStreamingMockLLMClient(
+            streamSequences: [
+                [
+                    .toolCallStart(index: 0, id: "call_1", name: "noop", kind: .function),
+                    .toolCallDelta(index: 0, arguments: "{}"),
+                    .finished(usage: nil),
+                ],
+                [
+                    .toolCallStart(index: 0, id: "call_2", name: "noop", kind: .function),
+                    .toolCallDelta(index: 0, arguments: "{}"),
+                    .finished(usage: iter2Usage),
+                ],
+                [
+                    .toolCallStart(index: 0, id: "f", name: "finish", kind: .function),
+                    .toolCallDelta(index: 0, arguments: #"{"content":"done"}"#),
+                    .finished(usage: TokenUsage(input: 500, output: 30)),
+                ],
+            ],
+            contextWindowSize: 10000
+        )
+        let config = AgentConfiguration(
+            contextBudget: ContextBudgetConfig(softThreshold: 0.8, enableVisibility: true)
+        )
+        let agent = Agent<EmptyContext>(client: client, tools: [noopTool], configuration: config)
+
+        var budgetUpdates: [ContextBudget] = []
+        var events: [StreamEvent.Kind] = []
+        for try await event in agent.stream(userMessage: "go", context: EmptyContext()) {
+            events.append(event.kind)
+            if case let .budgetUpdated(budget) = event.kind {
+                budgetUpdates.append(budget)
+            }
+        }
+
+        #expect(events.contains(where: { if case .finished = $0 { true } else { false } }))
+        #expect(await counter.currentValue() == 2)
+        #expect(budgetUpdates.count == 1)
+        #expect(budgetUpdates.first?.currentUsage == iter2Usage.inputOutputTotal)
     }
 }

@@ -93,7 +93,7 @@ Use ``ContextBudget/formatted(_:)`` to render a human-readable annotation, eithe
 | `enableVisibility` | false | Appends a token usage annotation to history after each turn |
 | `visibilityFormat` | `.standard` | Format for the visibility annotation |
 
-Budget features that track usage require the client to report both `contextWindowSize` and per-turn `tokenUsage`.
+Budget features require the client to report `contextWindowSize`. Per-turn `tokenUsage` is consumed when the provider reports it; iterations that return nil usage (transient SSE chunk drops, proxies that omit the usage block) are skipped and the next iteration with reported usage resumes tracking.
 
 ## Streaming Events
 

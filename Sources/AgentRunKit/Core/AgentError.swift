@@ -65,7 +65,6 @@ public enum AgentError: Error, Sendable, Equatable, LocalizedError {
     case malformedStream(MalformedStreamReason)
     case schemaInferenceFailed(type: String, message: String)
     case maxDepthExceeded(depth: Int)
-    case contextBudgetUsageUnavailable
     case contextBudgetWindowSizeUnavailable
 
     public var errorDescription: String? {
@@ -94,8 +93,6 @@ public enum AgentError: Error, Sendable, Equatable, LocalizedError {
             "Schema inference failed for '\(type)': \(message)"
         case let .maxDepthExceeded(depth):
             "Sub-agent max depth exceeded (current depth: \(depth))"
-        case .contextBudgetUsageUnavailable:
-            "Context budget requires provider-reported token usage for every budgeted turn"
         case .contextBudgetWindowSizeUnavailable:
             "Context budget requires a client contextWindowSize for usage-based features"
         }
@@ -115,8 +112,6 @@ public enum AgentError: Error, Sendable, Equatable, LocalizedError {
         case let .malformedStream(reason): "Error: Malformed stream: \(reason)"
         case let .schemaInferenceFailed(type, message): "Error: Schema inference failed for '\(type)': \(message)"
         case let .maxDepthExceeded(depth): "Error: Sub-agent max depth exceeded (current depth: \(depth))."
-        case .contextBudgetUsageUnavailable:
-            "Error: Context budget requires provider-reported token usage for every budgeted turn."
         case .contextBudgetWindowSizeUnavailable:
             "Error: Context budget requires a client contextWindowSize for usage-based features."
         }

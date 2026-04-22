@@ -13,14 +13,6 @@ extension Agent {
         return ContextBudgetPhase(config: budgetConfig, windowSize: windowSize)
     }
 
-    func requireBudgetUsage(_ usage: TokenUsage?, budgetPhase: ContextBudgetPhase?) throws -> TokenUsage? {
-        guard budgetPhase != nil else { return usage }
-        guard let usage else {
-            throw AgentError.contextBudgetUsageUnavailable
-        }
-        return usage
-    }
-
     func applyBudgetPhase(
         _ budgetPhase: inout ContextBudgetPhase?,
         usage: TokenUsage,

@@ -153,13 +153,9 @@ struct AgentErrorTests {
         #expect(error10.feedbackMessage.contains("7"))
         #expect(error10.feedbackMessage.contains("name"))
 
-        let error11 = AgentError.contextBudgetUsageUnavailable
+        let error11 = AgentError.contextBudgetWindowSizeUnavailable
         #expect(error11.feedbackMessage.contains("Context budget"))
-        #expect(error11.feedbackMessage.contains("token usage"))
-
-        let error12 = AgentError.contextBudgetWindowSizeUnavailable
-        #expect(error12.feedbackMessage.contains("Context budget"))
-        #expect(error12.feedbackMessage.contains("contextWindowSize"))
+        #expect(error11.feedbackMessage.contains("contextWindowSize"))
     }
 }
 

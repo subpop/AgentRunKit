@@ -167,7 +167,7 @@ extension Agent {
                 historyWasRewrittenLocally: &state.historyWasRewrittenLocally,
                 requestContext: options.requestContext
             )
-            let budgetUsage = try requireBudgetUsage(response.tokenUsage, budgetPhase: state.budgetPhase)
+            let budgetUsage = response.tokenUsage
 
             if let finishCall = try exclusiveFinishCall(in: response.toolCalls) {
                 return try parseFinishResult(
@@ -351,7 +351,7 @@ extension Agent {
                 continuation.yield(.make(.iterationCompleted(usage: usage, iteration: iterationNumber)))
             }
             state.messages.append(.assistant(iteration.toAssistantMessage()))
-            let budgetUsage = try requireBudgetUsage(iteration.usage, budgetPhase: state.budgetPhase)
+            let budgetUsage = iteration.usage
 
             if try tryFinishOnTerminalEvent(
                 iteration: iteration,
