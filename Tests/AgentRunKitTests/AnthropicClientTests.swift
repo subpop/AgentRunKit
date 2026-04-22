@@ -105,7 +105,7 @@ struct AnthropicRequestSerializationTests {
     }
 
     @Test
-    func strictNeverAppearsInWireBody() throws {
+    func strictTrueThrowsFeatureUnsupported() throws {
         let client = try makeClient()
         let tools = [
             ToolDefinition(
@@ -113,7 +113,22 @@ struct AnthropicRequestSerializationTests {
                 description: "",
                 parametersSchema: .object(properties: [:], required: []),
                 strict: true
-            ),
+            )
+        ]
+        #expect {
+            _ = try client.buildRequest(messages: [.user("hi")], tools: tools)
+        } throws: { error in
+            guard case let AgentError.llmError(inner) = error,
+                  case let .featureUnsupported(provider, feature) = inner
+            else { return false }
+            return provider == "anthropic" && feature == "strict function schemas"
+        }
+    }
+
+    @Test
+    func strictFalseAndNilOmitWireField() throws {
+        let client = try makeClient()
+        let tools = [
             ToolDefinition(
                 name: "strict_false",
                 description: "",
@@ -127,8 +142,12 @@ struct AnthropicRequestSerializationTests {
             )
         ]
         let request = try client.buildRequest(messages: [.user("hi")], tools: tools)
-        let raw = try #require(String(data: JSONEncoder().encode(request), encoding: .utf8))
-        #expect(!raw.contains("\"strict\""), "strict must not appear in Anthropic wire body: \(raw)")
+        let json = try encodeRequest(request)
+        let jsonTools = try #require(json["tools"] as? [[String: Any]])
+        #expect(jsonTools.count == 2)
+        for tool in jsonTools {
+            #expect(tool["strict"] == nil, "Anthropic tool wire body must omit 'strict': \(tool)")
+        }
     }
 
     @Test

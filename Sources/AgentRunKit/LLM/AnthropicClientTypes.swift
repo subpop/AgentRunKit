@@ -202,7 +202,13 @@ struct AnthropicToolDefinition: Encodable {
         case cacheControl = "cache_control"
     }
 
-    init(_ definition: ToolDefinition) {
+    init(_ definition: ToolDefinition) throws {
+        if definition.strict == true {
+            throw AgentError.llmError(.featureUnsupported(
+                provider: "anthropic",
+                feature: "strict function schemas"
+            ))
+        }
         name = definition.name
         description = definition.description
         inputSchema = definition.parametersSchema

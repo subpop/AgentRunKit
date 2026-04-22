@@ -67,6 +67,44 @@ struct AnthropicContentBlockEncodingTests {
     }
 
     @Test
+    func opaqueBlockEncodesObjectRawPayloadWithoutWrapperKeys() throws {
+        let raw: JSONValue = .object([
+            "type": .string("web_search_tool_result"),
+            "tool_use_id": .string("srvtu_01"),
+            "content": .array([.object(["url": .string("example.com")])]),
+        ])
+        let json = try encodeBlock(.opaque(raw))
+
+        #expect(json.count == 3, "opaque encoding must carry exactly the raw payload's keys")
+        #expect(json["type"] as? String == "web_search_tool_result")
+        #expect(json["tool_use_id"] as? String == "srvtu_01")
+        let content = try #require(json["content"] as? [[String: Any]])
+        #expect(content.first?["url"] as? String == "example.com")
+    }
+
+    @Test
+    func opaqueBlockEncodesArrayRawPayload() throws {
+        let raw: JSONValue = .array([.string("a"), .int(1), .bool(true)])
+        let block = AnthropicContentBlock.opaque(raw)
+        let data = try JSONEncoder().encode(block)
+        let object = try JSONSerialization.jsonObject(with: data)
+        let array = try #require(object as? [Any])
+        #expect(array.count == 3)
+        #expect(array[0] as? String == "a")
+        #expect(array[1] as? Int == 1)
+        #expect(array[2] as? Bool == true)
+    }
+
+    @Test
+    func opaqueBlockEncodesScalarRawPayload() throws {
+        let raw: JSONValue = .string("plain")
+        let block = AnthropicContentBlock.opaque(raw)
+        let data = try JSONEncoder().encode(block)
+        let object = try JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed)
+        #expect(object as? String == "plain")
+    }
+
+    @Test
     func thinkingConfigEnabledWireFormat() throws {
         let config = AnthropicThinkingConfig.enabled(budgetTokens: 8192)
         let data = try JSONEncoder().encode(config)
@@ -152,7 +190,7 @@ struct AnthropicCacheControlWireFormatTests {
             name: "search", description: "Search",
             parametersSchema: .object(properties: [:], required: [])
         )
-        var toolDef = AnthropicToolDefinition(def)
+        var toolDef = try AnthropicToolDefinition(def)
         toolDef.cacheControl = CacheControl()
         let json = try encodeToDict(toolDef)
 
@@ -170,7 +208,7 @@ struct AnthropicCacheControlWireFormatTests {
             name: "search", description: "Search",
             parametersSchema: .object(properties: [:], required: [])
         )
-        let toolDef = AnthropicToolDefinition(def)
+        let toolDef = try AnthropicToolDefinition(def)
         let json = try encodeToDict(toolDef)
 
         #expect(json["cache_control"] == nil)

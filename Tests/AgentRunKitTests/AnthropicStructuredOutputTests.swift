@@ -67,8 +67,7 @@ struct AnthropicStructuredOutputTests {
         let tools = [ToolDefinition(
             name: "get_weather",
             description: "",
-            parametersSchema: .object(properties: ["city": .string()], required: ["city"]),
-            strict: true
+            parametersSchema: .object(properties: ["city": .string()], required: ["city"])
         )]
         let request = try client.buildRequest(
             messages: [.user("Hi")],
@@ -80,9 +79,6 @@ struct AnthropicStructuredOutputTests {
         let choice = try #require(json["tool_choice"] as? [String: Any])
         #expect(choice["type"] as? String == "any")
         #expect(choice["disable_parallel_tool_use"] as? Bool == true)
-
-        let jsonTools = try #require(json["tools"] as? [[String: Any]])
-        #expect(jsonTools[0]["strict"] == nil)
     }
 
     @Test

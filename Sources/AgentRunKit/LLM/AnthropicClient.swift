@@ -184,7 +184,7 @@ extension AnthropicClient {
         extraFields: [String: JSONValue] = [:]
     ) throws -> AnthropicRequest {
         var (systemBlocks, anthropicMessages) = try AnthropicMessageMapper.mapMessages(messages)
-        var toolDefs: [AnthropicToolDefinition]? = tools.isEmpty ? nil : tools.map(AnthropicToolDefinition.init)
+        var toolDefs: [AnthropicToolDefinition]? = try tools.isEmpty ? nil : tools.map(AnthropicToolDefinition.init)
         let reasoningPlan = try buildReasoningPlan(transport: transport)
         let hasActiveThinking = switch reasoningPlan.thinking {
         case .enabled, .adaptive:

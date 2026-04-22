@@ -117,7 +117,7 @@ extension GeminiClient {
         }
         let (systemInstruction, contents) = try GeminiMessageMapper.mapMessages(messages)
 
-        let toolDefs: [GeminiTool]? = tools.isEmpty ? nil : [
+        let toolDefs: [GeminiTool]? = try tools.isEmpty ? nil : [
             GeminiTool(functionDeclarations: tools.map(GeminiFunctionDeclaration.init))
         ]
         let toolConfig: GeminiToolConfig? = tools.isEmpty ? nil : GeminiToolConfig(
