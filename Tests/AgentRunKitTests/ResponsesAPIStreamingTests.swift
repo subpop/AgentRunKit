@@ -212,6 +212,83 @@ struct ResponsesStreamingTests {
     }
 
     @Test
+    func customToolCallStreamYieldsCustomKindDeltas() async throws {
+        let addedJSON =
+            #"{"type":"response.output_item.added","output_index":0,"#
+                + #""item":{"type":"custom_tool_call","call_id":"call_2","name":"calculator"}}"#
+        let lines = [
+            responsesSSELine(addedJSON),
+            responsesSSELine(
+                #"{"type":"response.custom_tool_call_input.delta","output_index":0,"delta":"2 + "}"#
+            ),
+            responsesSSELine(
+                #"{"type":"response.custom_tool_call_input.delta","output_index":0,"delta":"3"}"#
+            ),
+            responsesSSELine(
+                #"{"type":"response.completed","response":{"id":"resp_002","status":"completed","#
+                    + #""output":[{"type":"custom_tool_call","call_id":"call_2","name":"calculator","#
+                    + #""input":"2 + 3"}],"#
+                    + #""usage":{"input_tokens":4,"output_tokens":2}}}"#
+            )
+        ]
+        let deltas = try await collectResponsesStreamDeltas(client: makeResponsesStreamingClient(), lines: lines)
+
+        #expect(deltas.count == 4)
+        #expect(deltas[0] == .toolCallStart(index: 0, id: "call_2", name: "calculator", kind: .custom))
+        #expect(deltas[1] == .toolCallDelta(index: 0, arguments: "2 + "))
+        #expect(deltas[2] == .toolCallDelta(index: 0, arguments: "3"))
+    }
+
+    @Test
+    func customToolCallReachesAssistantMessageAsCustomKind() async throws {
+        let lines = [
+            responsesSSELine(
+                #"{"type":"response.completed","response":{"id":"resp_003","status":"completed","#
+                    + #""output":[{"type":"custom_tool_call","call_id":"call_3","name":"shell","#
+                    + #""input":"ls -la"}],"#
+                    + #""usage":{"input_tokens":4,"output_tokens":3}}}"#
+            )
+        ]
+        let elements = try await collectRunStreamElements(
+            client: makeResponsesStreamingClient(),
+            lines: lines
+        )
+
+        let toolCallStart = elements.compactMap { element -> StreamDelta? in
+            if case let .delta(delta) = element { return delta }
+            return nil
+        }.first { delta in
+            if case .toolCallStart = delta { return true }
+            return false
+        }
+        guard case let .toolCallStart(_, id, name, kind) = try #require(toolCallStart) else {
+            Issue.record("Expected toolCallStart delta for custom_tool_call")
+            return
+        }
+        #expect(id == "call_3")
+        #expect(name == "shell")
+        #expect(kind == .custom)
+    }
+
+    @Test
+    func mcpCallStreamingThrowsFeatureUnsupported() async throws {
+        let lines = [
+            responsesSSELine(
+                #"{"type":"response.output_item.added","output_index":0,"#
+                    + #""item":{"type":"mcp_call","call_id":"call_4","name":"fs.read"}}"#
+            )
+        ]
+        await #expect {
+            _ = try await collectResponsesStreamDeltas(client: makeResponsesStreamingClient(), lines: lines)
+        } throws: { error in
+            guard case let AgentError.llmError(inner) = error,
+                  case let .featureUnsupported(provider, feature) = inner
+            else { return false }
+            return provider == "responses" && feature.contains("mcp_call")
+        }
+    }
+
+    @Test
     func completedEventYieldsFinished() async throws {
         let lines = [responsesSSELine(responsesCompletedWithReasoningJSON)]
         let deltas = try await collectResponsesStreamDeltas(client: makeResponsesStreamingClient(), lines: lines)

@@ -41,8 +41,8 @@ extension ResponsesAPIClient {
         stallTimeout: Duration?,
         continuation: AsyncThrowingStream<RunStreamElement, Error>.Continuation
     ) async throws where S.Element == UInt8 {
-        let completionState = StreamCompletionState()
-        let semanticState = ResponsesStreamingSemanticState()
+        let completionState = ResponsesStreamCompletionState()
+        let semanticState = ResponsesStreamState()
         try await processSSEStream(bytes: bytes, stallTimeout: stallTimeout) { [self] line in
             let didComplete = try await handleSSELine(
                 line,
@@ -64,7 +64,7 @@ extension ResponsesAPIClient {
     private func handleSSELine(
         _ line: String,
         messagesCount: Int,
-        semanticState: ResponsesStreamingSemanticState,
+        semanticState: ResponsesStreamState,
         continuation: AsyncThrowingStream<RunStreamElement, Error>.Continuation
     ) async throws -> Bool {
         try Task.checkCancellation()
@@ -88,7 +88,7 @@ extension ResponsesAPIClient {
         _ type: String,
         data: Data,
         messagesCount: Int,
-        semanticState: ResponsesStreamingSemanticState,
+        semanticState: ResponsesStreamState,
         continuation: AsyncThrowingStream<RunStreamElement, Error>.Continuation
     ) async throws -> Bool {
         switch type {
@@ -104,8 +104,9 @@ extension ResponsesAPIClient {
                 semanticState: semanticState,
                 continuation: continuation
             )
-        case "response.function_call_arguments.delta":
-            try await handleFunctionCallArgsDelta(
+        case "response.function_call_arguments.delta",
+             "response.custom_tool_call_input.delta":
+            try await handleToolCallArgsDelta(
                 data: data,
                 semanticState: semanticState,
                 continuation: continuation
@@ -139,7 +140,7 @@ extension ResponsesAPIClient {
 
     private func handleTextDelta(
         data: Data,
-        semanticState: ResponsesStreamingSemanticState,
+        semanticState: ResponsesStreamState,
         continuation: AsyncThrowingStream<RunStreamElement, Error>.Continuation
     ) async throws {
         let event = try Self.sseDecoder.decode(
@@ -154,33 +155,44 @@ extension ResponsesAPIClient {
 
     private func handleOutputItemAdded(
         data: Data,
-        semanticState: ResponsesStreamingSemanticState,
+        semanticState: ResponsesStreamState,
         continuation: AsyncThrowingStream<RunStreamElement, Error>.Continuation
     ) async throws {
         let event = try Self.sseDecoder.decode(
             OutputItemAddedEvent.self, from: data
         )
-        guard event.item.type == "function_call",
-              let callId = event.item.callId,
-              let name = event.item.name
-        else { return }
+        let kind: ToolCallKind
+        switch event.item.type {
+        case "function_call":
+            kind = .function
+        case "custom_tool_call":
+            kind = .custom
+        case "mcp_call", "computer_call", "apply_patch_call":
+            throw AgentError.llmError(.featureUnsupported(
+                provider: "responses",
+                feature: "\(event.item.type) streaming"
+            ))
+        default:
+            return
+        }
+        guard let callId = event.item.callId, let name = event.item.name else { return }
         let delta = StreamDelta.toolCallStart(
             index: event.outputIndex,
             id: callId,
             name: name,
-            kind: .function
+            kind: kind
         )
         await semanticState.record(delta)
         continuation.yield(.delta(delta))
     }
 
-    private func handleFunctionCallArgsDelta(
+    private func handleToolCallArgsDelta(
         data: Data,
-        semanticState: ResponsesStreamingSemanticState,
+        semanticState: ResponsesStreamState,
         continuation: AsyncThrowingStream<RunStreamElement, Error>.Continuation
     ) async throws {
         let event = try Self.sseDecoder.decode(
-            FunctionCallArgsDeltaEvent.self, from: data
+            ToolCallArgsDeltaEvent.self, from: data
         )
         if !event.delta.isEmpty {
             let delta = StreamDelta.toolCallDelta(
@@ -194,7 +206,7 @@ extension ResponsesAPIClient {
 
     private func handleReasoningSummaryDelta(
         data: Data,
-        semanticState: ResponsesStreamingSemanticState,
+        semanticState: ResponsesStreamState,
         continuation: AsyncThrowingStream<RunStreamElement, Error>.Continuation
     ) async throws {
         let event = try Self.sseDecoder.decode(
@@ -216,7 +228,7 @@ extension ResponsesAPIClient {
 
     private func handleOutputItemDone(
         data: Data,
-        semanticState: ResponsesStreamingSemanticState,
+        semanticState: ResponsesStreamState,
         continuation: AsyncThrowingStream<RunStreamElement, Error>.Continuation
     ) async throws {
         let value = try Self.sseDecoder.decode(
@@ -231,7 +243,7 @@ extension ResponsesAPIClient {
     private func handleCompleted(
         data: Data,
         messagesCount: Int,
-        semanticState: ResponsesStreamingSemanticState,
+        semanticState: ResponsesStreamState,
         continuation: AsyncThrowingStream<RunStreamElement, Error>.Continuation
     ) async throws -> Bool {
         let event: CompletedEvent
@@ -291,7 +303,7 @@ private struct OutputItemStub: Decodable {
     enum CodingKeys: String, CodingKey { case type, callId = "call_id", name }
 }
 
-private struct FunctionCallArgsDeltaEvent: Decodable {
+private struct ToolCallArgsDeltaEvent: Decodable {
     let outputIndex: Int
     let delta: String
     enum CodingKeys: String, CodingKey { case outputIndex = "output_index", delta }
@@ -323,172 +335,3 @@ private struct OutputItemDoneItem: Decodable {
 private struct CompletedEvent: Decodable { let response: ResponsesAPIResponse }
 private struct FailedEvent: Decodable { let response: FailedResponseBody }
 private struct FailedResponseBody: Decodable { let error: ResponsesErrorDetail? }
-
-private actor StreamCompletionState {
-    private(set) var isCompleted = false
-    func markCompleted() {
-        isCompleted = true
-    }
-}
-
-private actor ResponsesStreamingSemanticState {
-    private var content = ""
-    private var reasoning = ""
-    private var reasoningDetails: [JSONValue] = []
-    private var toolCalls: [Int: ResponsesStreamedToolCall] = [:]
-    private var lastSummaryPart: (outputIndex: Int, summaryIndex: Int)?
-    private var summaryPartCount = 0
-
-    func summaryPartSeparator(forOutput outputIndex: Int?, summary summaryIndex: Int?) -> String? {
-        guard let summaryIndex else { return nil }
-        if let outputIndex {
-            let current = (outputIndex, summaryIndex)
-            defer { lastSummaryPart = current }
-            guard let last = lastSummaryPart,
-                  current.0 != last.outputIndex || current.1 != last.summaryIndex
-            else { return nil }
-            return "\n"
-        }
-        defer { summaryPartCount += 1 }
-        return summaryPartCount > 0 ? "\n" : nil
-    }
-
-    func record(_ delta: StreamDelta) {
-        switch delta {
-        case let .content(text):
-            content += text
-        case let .reasoning(text):
-            reasoning += text
-        case let .reasoningDetails(details):
-            reasoningDetails.append(contentsOf: details)
-        case let .toolCallStart(index, id, name, _):
-            toolCalls[index] = ResponsesStreamedToolCall(
-                id: id,
-                name: name,
-                arguments: toolCalls[index]?.arguments ?? ""
-            )
-        case let .toolCallDelta(index, arguments):
-            let existing = toolCalls[index]
-            toolCalls[index] = ResponsesStreamedToolCall(
-                id: existing?.id,
-                name: existing?.name,
-                arguments: (existing?.arguments ?? "") + arguments
-            )
-        case .audioData, .audioTranscript, .audioStarted, .finished:
-            break
-        }
-    }
-
-    func reconciliationDeltas(
-        response: ResponsesAPIResponse,
-        projection: ResponsesAPIClient.ResponsesTurnProjection
-    ) throws -> [StreamDelta] {
-        let target = try ResponsesCompletedSemanticTarget(response: response, projection: projection)
-        var deltas: [StreamDelta] = []
-
-        guard let reasoningSuffix = utf8Suffix(of: target.reasoning, afterPrefix: reasoning) else {
-            throw AgentError.malformedStream(.finalizedSemanticStateDiverged)
-        }
-        if !reasoningSuffix.isEmpty {
-            reasoning += reasoningSuffix
-            deltas.append(.reasoning(reasoningSuffix))
-        }
-
-        guard target.reasoningDetails.count >= reasoningDetails.count,
-              Array(target.reasoningDetails.prefix(reasoningDetails.count)) == reasoningDetails
-        else {
-            throw AgentError.malformedStream(.finalizedSemanticStateDiverged)
-        }
-        let reasoningDetailSuffix = Array(target.reasoningDetails.dropFirst(reasoningDetails.count))
-        if !reasoningDetailSuffix.isEmpty {
-            reasoningDetails += reasoningDetailSuffix
-            deltas.append(.reasoningDetails(reasoningDetailSuffix))
-        }
-
-        guard let contentSuffix = utf8Suffix(of: target.content, afterPrefix: content) else {
-            throw AgentError.malformedStream(.finalizedSemanticStateDiverged)
-        }
-        if !contentSuffix.isEmpty {
-            content += contentSuffix
-            deltas.append(.content(contentSuffix))
-        }
-
-        let targetIndices = Set(target.toolCalls.keys)
-        guard Set(toolCalls.keys).isSubset(of: targetIndices) else {
-            throw AgentError.malformedStream(.finalizedSemanticStateDiverged)
-        }
-
-        for (index, targetCall) in target.toolCalls.sorted(by: { $0.key < $1.key }) {
-            if let existing = toolCalls[index] {
-                guard existing.id == nil || existing.id == targetCall.id,
-                      existing.name == nil || existing.name == targetCall.name,
-                      let argumentsSuffix = utf8Suffix(
-                          of: targetCall.arguments,
-                          afterPrefix: existing.arguments
-                      )
-                else {
-                    throw AgentError.malformedStream(.finalizedSemanticStateDiverged)
-                }
-                if existing.id == nil, let id = targetCall.id, let name = targetCall.name {
-                    deltas.append(.toolCallStart(index: index, id: id, name: name, kind: .function))
-                }
-                if !argumentsSuffix.isEmpty {
-                    toolCalls[index] = ResponsesStreamedToolCall(
-                        id: existing.id ?? targetCall.id,
-                        name: existing.name ?? targetCall.name,
-                        arguments: existing.arguments + argumentsSuffix
-                    )
-                    deltas.append(.toolCallDelta(index: index, arguments: argumentsSuffix))
-                }
-            } else if let id = targetCall.id, let name = targetCall.name {
-                toolCalls[index] = targetCall
-                deltas.append(.toolCallStart(index: index, id: id, name: name, kind: .function))
-                if !targetCall.arguments.isEmpty {
-                    deltas.append(.toolCallDelta(index: index, arguments: targetCall.arguments))
-                }
-            }
-        }
-
-        return deltas
-    }
-}
-
-private func utf8Suffix(of target: String, afterPrefix prefix: String) -> String? {
-    let targetBytes = Array(target.utf8)
-    let prefixBytes = Array(prefix.utf8)
-    guard targetBytes.starts(with: prefixBytes) else { return nil }
-    return String(bytes: targetBytes.dropFirst(prefixBytes.count), encoding: .utf8)
-}
-
-private struct ResponsesStreamedToolCall: Equatable {
-    let id: String?
-    let name: String?
-    let arguments: String
-}
-
-private struct ResponsesCompletedSemanticTarget {
-    let content: String
-    let reasoning: String
-    let reasoningDetails: [JSONValue]
-    let toolCalls: [Int: ResponsesStreamedToolCall]
-
-    init(
-        response: ResponsesAPIResponse,
-        projection: ResponsesAPIClient.ResponsesTurnProjection
-    ) throws {
-        content = projection.content
-        reasoning = projection.reasoning?.content ?? ""
-        reasoningDetails = projection.reasoningDetails ?? []
-
-        var indexedToolCalls: [Int: ResponsesStreamedToolCall] = [:]
-        for (index, outputItem) in response.output.enumerated() {
-            guard case let .functionCall(call) = outputItem else { continue }
-            indexedToolCalls[index] = ResponsesStreamedToolCall(
-                id: call.callId,
-                name: call.name,
-                arguments: call.arguments
-            )
-        }
-        toolCalls = indexedToolCalls
-    }
-}

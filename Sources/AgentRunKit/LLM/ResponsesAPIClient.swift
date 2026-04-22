@@ -273,6 +273,13 @@ extension ResponsesAPIClient {
                 toolCalls.append(ToolCall(
                     id: call.callId, name: call.name, arguments: call.arguments
                 ))
+            case let .opaque(opaque) where opaque.type == "custom_tool_call":
+                guard case let .object(fields) = opaque.raw,
+                      case let .string(callId) = fields["call_id"],
+                      case let .string(name) = fields["name"]
+                else { break }
+                let input = if case let .string(text) = fields["input"] { text } else { "" }
+                toolCalls.append(ToolCall(id: callId, name: name, arguments: input, kind: .custom))
             case let .reasoning(reasoning):
                 reasoningDetails.append(reasoning.raw)
                 let value = reasoning.raw
