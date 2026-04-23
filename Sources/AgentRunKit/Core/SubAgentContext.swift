@@ -1,7 +1,13 @@
+/// Surface a current sub-agent recursion depth so emission gates (`historyEmissionDepthLimit`)
+/// can apply across non-`SubAgentContext` context types adopted by external consumers.
+public protocol CurrentDepthProviding {
+    var currentDepth: Int { get }
+}
+
 /// A depth-tracking wrapper around a `ToolContext` for sub-agent composition.
 ///
 /// For a guide, see <doc:SubAgents>.
-public struct SubAgentContext<C: ToolContext>: ToolContext {
+public struct SubAgentContext<C: ToolContext>: ToolContext, CurrentDepthProviding {
     public let inner: C
     public let currentDepth: Int
     public let maxDepth: Int

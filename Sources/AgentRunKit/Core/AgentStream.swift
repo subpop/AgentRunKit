@@ -154,7 +154,7 @@ public final class AgentStream<C: ToolContext> {
             if let finishContent, content.isEmpty {
                 content = finishContent
             }
-        case let .iterationCompleted(usage, _):
+        case let .iterationCompleted(usage, _, _):
             iterationUsages.append(usage)
         case let .budgetUpdated(budget):
             contextBudget = budget

@@ -13,6 +13,8 @@ public struct AgentConfiguration: Sendable, Equatable {
     public let maxToolResultCharacters: Int?
     public let contextBudget: ContextBudgetConfig?
     public let approvalPolicy: ToolApprovalPolicy
+    /// Maximum sub-agent depth at which iteration events carry the history snapshot; nil means no limit.
+    public let historyEmissionDepthLimit: Int?
 
     public init(
         maxIterations: Int = 10,
@@ -23,7 +25,8 @@ public struct AgentConfiguration: Sendable, Equatable {
         compactionPrompt: String? = nil,
         maxToolResultCharacters: Int? = nil,
         contextBudget: ContextBudgetConfig? = nil,
-        approvalPolicy: ToolApprovalPolicy = .none
+        approvalPolicy: ToolApprovalPolicy = .none,
+        historyEmissionDepthLimit: Int? = nil
     ) {
         precondition(maxIterations >= 1, "maxIterations must be at least 1")
         precondition(toolTimeout >= .milliseconds(1), "toolTimeout must be at least 1ms")
@@ -39,6 +42,10 @@ public struct AgentConfiguration: Sendable, Equatable {
         if let maxToolResultCharacters {
             precondition(maxToolResultCharacters >= 1, "maxToolResultCharacters must be at least 1")
         }
+        precondition(
+            historyEmissionDepthLimit.map { $0 >= 0 } ?? true,
+            "historyEmissionDepthLimit must be non-negative"
+        )
         self.maxIterations = maxIterations
         self.toolTimeout = toolTimeout
         self.systemPrompt = systemPrompt
@@ -48,5 +55,6 @@ public struct AgentConfiguration: Sendable, Equatable {
         self.maxToolResultCharacters = maxToolResultCharacters
         self.contextBudget = contextBudget
         self.approvalPolicy = approvalPolicy
+        self.historyEmissionDepthLimit = historyEmissionDepthLimit
     }
 }

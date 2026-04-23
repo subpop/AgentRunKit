@@ -762,7 +762,7 @@ struct AgentIterationCompletedTests {
 
         var iterationEvents: [(usage: TokenUsage, iteration: Int)] = []
         for try await event in agent.stream(userMessage: "Go", context: EmptyContext()) {
-            if case let .iterationCompleted(usage, iteration) = event.kind {
+            if case let .iterationCompleted(usage, iteration, _) = event.kind {
                 iterationEvents.append((usage, iteration))
             }
         }
@@ -796,7 +796,7 @@ struct AgentIterationCompletedTests {
 
         var iterationEvents: [(usage: TokenUsage, iteration: Int)] = []
         for try await event in agent.stream(userMessage: "Go", context: EmptyContext()) {
-            if case let .iterationCompleted(usage, iteration) = event.kind {
+            if case let .iterationCompleted(usage, iteration, _) = event.kind {
                 iterationEvents.append((usage, iteration))
             }
         }

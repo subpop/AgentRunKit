@@ -67,8 +67,10 @@ extension Agent {
             continuation.yield(.make(.subAgentCompleted(toolCallId: call.id, toolName: call.name, result: result)))
         }
 
-        let eventHandler: @Sendable (StreamEvent) -> Void = { event in
-            continuation.yield(.make(.subAgentEvent(toolCallId: call.id, toolName: call.name, event: event)))
+        let parentDepth = (context as? any CurrentDepthProviding)?.currentDepth ?? 0
+        let eventHandler: @Sendable (StreamEvent) -> Void = { [self] event in
+            let processed = applyHistoryEmissionLimitToSubAgentEvent(event, parentDepth: parentDepth)
+            continuation.yield(.make(.subAgentEvent(toolCallId: call.id, toolName: call.name, event: processed)))
         }
 
         do {

@@ -97,7 +97,7 @@ Cases are grouped below by category.
 | Case | Payload | Description |
 |---|---|---|
 | ``StreamEvent/Kind/finished(tokenUsage:content:reason:history:)`` | ``TokenUsage``, content, reason, history | Agent loop completed |
-| ``StreamEvent/Kind/iterationCompleted(usage:iteration:)`` | ``TokenUsage``, iteration number | One generate or tool-call cycle completed |
+| ``StreamEvent/Kind/iterationCompleted(usage:iteration:history:)`` | ``TokenUsage``, iteration number, post-append message snapshot | One generate or tool-call cycle completed |
 | ``StreamEvent/Kind/compacted(totalTokens:windowSize:)`` | `totalTokens`, `windowSize` | Context was compacted to fit the window |
 | ``StreamEvent/Kind/budgetUpdated(budget:)`` | ``ContextBudget`` | Latest budget snapshot after a provider response |
 | ``StreamEvent/Kind/budgetAdvisory(budget:)`` | ``ContextBudget`` | Soft threshold was crossed |

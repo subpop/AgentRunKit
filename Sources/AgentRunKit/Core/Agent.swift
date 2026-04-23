@@ -347,10 +347,11 @@ extension Agent {
                 requestContext: options.requestContext
             )
 
-            if let usage = iteration.usage {
-                continuation.yield(.make(.iterationCompleted(usage: usage, iteration: iterationNumber)))
-            }
             state.messages.append(.assistant(iteration.toAssistantMessage()))
+            yieldIterationCompletedIfPossible(
+                iteration: iteration, iterationNumber: iterationNumber,
+                messages: state.messages, context: context, continuation: continuation
+            )
             let budgetUsage = iteration.usage
 
             if try tryFinishOnTerminalEvent(

@@ -36,7 +36,7 @@ Equality compares payloads only. For ``subAgentEvent(toolCallId:toolName:event:)
 ### Lifecycle Events
 
 - ``finished(tokenUsage:content:reason:history:)``
-- ``iterationCompleted(usage:iteration:)``
+- ``iterationCompleted(usage:iteration:history:)``
 - ``compacted(totalTokens:windowSize:)``
 - ``budgetUpdated(budget:)``
 - ``budgetAdvisory(budget:)``

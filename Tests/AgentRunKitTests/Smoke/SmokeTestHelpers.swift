@@ -834,8 +834,9 @@ func assertSmokeIterationCompleted(client: any LLMClient) async throws {
     var iterationEvents: [(usage: TokenUsage, iteration: Int)] = []
 
     for try await event in agent.stream(userMessage: "What is 10 + 20?", context: EmptyContext()) {
-        if case let .iterationCompleted(usage, iteration) = event.kind {
+        if case let .iterationCompleted(usage, iteration, history) = event.kind {
             iterationEvents.append((usage, iteration))
+            try smokeExpect(!history.isEmpty)
         }
     }
 

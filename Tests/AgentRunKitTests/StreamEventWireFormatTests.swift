@@ -130,4 +130,55 @@ struct StreamEventWireFormatTests {
         let decoded = try StreamEventJSONCodec.decode(data)
         #expect(decoded.kind == event.kind)
     }
+
+    @Test func iterationCompletedWithHistoryFixtureIsStable() throws {
+        let event = try StreamEvent(
+            id: EventID(rawValue: uuid("00000000-0000-0000-0000-000000000401")),
+            timestamp: fixedDate(millisecondsSince1970: 1_774_880_527_123),
+            kind: .iterationCompleted(
+                usage: TokenUsage(input: 10, output: 5),
+                iteration: 1,
+                history: [.user("Hi")]
+            )
+        )
+
+        let data = try StreamEventJSONCodec.encode(event)
+        let string = try #require(String(data: data, encoding: .utf8))
+        let expected = [
+            #"{"id":"00000000-0000-0000-0000-000000000401","#,
+            #""kind":{"history":[{"content":"Hi","role":"user"}],"#,
+            #""iteration":1,"#,
+            #""type":"iterationCompleted","#,
+            #""usage":{"input":10,"output":5,"reasoning":0}},"#,
+            #""timestamp":"2026-03-30T14:22:07.123Z"}"#,
+        ].joined()
+        #expect(string == expected)
+
+        let decoded = try StreamEventJSONCodec.decode(data)
+        #expect(decoded.kind == event.kind)
+
+        let reencoded = try StreamEventJSONCodec.encode(decoded)
+        let reencodedString = try #require(String(data: reencoded, encoding: .utf8))
+        #expect(reencodedString == string)
+    }
+
+    @Test func iterationCompletedV1ArchiveDecodesAsEmptyHistory() throws {
+        let v1Archive = [
+            #"{"id":"00000000-0000-0000-0000-000000000401","#,
+            #""kind":{"iteration":1,"#,
+            #""type":"iterationCompleted","#,
+            #""usage":{"input":10,"output":5,"reasoning":0}},"#,
+            #""timestamp":"2026-03-30T14:22:07.123Z"}"#,
+        ].joined()
+        let data = try #require(v1Archive.data(using: .utf8))
+
+        let decoded = try StreamEventJSONCodec.decode(data)
+        guard case let .iterationCompleted(usage, iteration, history) = decoded.kind else {
+            Issue.record("Expected iterationCompleted kind, got \(decoded.kind)")
+            return
+        }
+        #expect(usage == TokenUsage(input: 10, output: 5))
+        #expect(iteration == 1)
+        #expect(history.isEmpty)
+    }
 }

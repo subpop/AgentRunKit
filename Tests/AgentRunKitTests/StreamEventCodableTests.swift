@@ -106,7 +106,8 @@ struct StreamEventKindCodableTests {
     @Test func iterationCompletedRoundTrips() throws {
         let kind = StreamEvent.Kind.iterationCompleted(
             usage: TokenUsage(input: 200, output: 80, reasoning: 10),
-            iteration: 3
+            iteration: 3,
+            history: [.user("Hi"), .tool(id: "tc_1", name: "echo", content: "{\"echoed\":\"hi\"}")]
         )
         #expect(try roundTrip(kind) == kind)
     }

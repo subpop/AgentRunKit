@@ -52,7 +52,7 @@ public struct StreamEvent: Sendable, Identifiable {
         case subAgentStarted(toolCallId: String, toolName: String)
         indirect case subAgentEvent(toolCallId: String, toolName: String, event: StreamEvent)
         case subAgentCompleted(toolCallId: String, toolName: String, result: ToolResult)
-        case iterationCompleted(usage: TokenUsage, iteration: Int)
+        case iterationCompleted(usage: TokenUsage, iteration: Int, history: [ChatMessage])
         case compacted(totalTokens: Int, windowSize: Int)
         /// Emitted after each provider response when a budget snapshot is available.
         case budgetUpdated(budget: ContextBudget)
@@ -92,8 +92,9 @@ extension StreamEvent.Kind: Equatable {
             lhsID == rhsID && lhsName == rhsName && lhsEvent.kind == rhsEvent.kind
         case let (.subAgentCompleted(lhsID, lhsName, lhsResult), .subAgentCompleted(rhsID, rhsName, rhsResult)):
             lhsID == rhsID && lhsName == rhsName && lhsResult == rhsResult
-        case let (.iterationCompleted(lhsUsage, lhsIter), .iterationCompleted(rhsUsage, rhsIter)):
-            lhsUsage == rhsUsage && lhsIter == rhsIter
+        case let (.iterationCompleted(lhsUsage, lhsIter, lhsHistory),
+                  .iterationCompleted(rhsUsage, rhsIter, rhsHistory)):
+            lhsUsage == rhsUsage && lhsIter == rhsIter && lhsHistory == rhsHistory
         case let (.compacted(lhsTokens, lhsWindow), .compacted(rhsTokens, rhsWindow)):
             lhsTokens == rhsTokens && lhsWindow == rhsWindow
         case let (.budgetUpdated(lhsBudget), .budgetUpdated(rhsBudget)):
@@ -178,9 +179,13 @@ extension StreamEvent.Kind: Codable {
                 result: container.decode(ToolResult.self, forKey: .result)
             )
         case "iterationCompleted":
+            let history: [ChatMessage] = container.contains(.history)
+                ? try container.decode([ChatMessage].self, forKey: .history)
+                : []
             self = try .iterationCompleted(
                 usage: container.decode(TokenUsage.self, forKey: .usage),
-                iteration: container.decode(Int.self, forKey: .iteration)
+                iteration: container.decode(Int.self, forKey: .iteration),
+                history: history
             )
         case "compacted":
             self = try .compacted(
@@ -206,7 +211,7 @@ extension StreamEvent.Kind: Codable {
         }
     }
 
-    // swiftlint:disable:next cyclomatic_complexity
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
@@ -256,10 +261,11 @@ extension StreamEvent.Kind: Codable {
             try container.encode(toolCallId, forKey: .toolCallId)
             try container.encode(toolName, forKey: .toolName)
             try container.encode(result, forKey: .result)
-        case let .iterationCompleted(usage, iteration):
+        case let .iterationCompleted(usage, iteration, history):
             try container.encode("iterationCompleted", forKey: .type)
             try container.encode(usage, forKey: .usage)
             try container.encode(iteration, forKey: .iteration)
+            try container.encode(history, forKey: .history)
         case let .compacted(totalTokens, windowSize):
             try container.encode("compacted", forKey: .type)
             try container.encode(totalTokens, forKey: .totalTokens)
