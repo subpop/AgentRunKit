@@ -268,12 +268,14 @@ struct StreamEventEnvelopeCodableTests {
         let sessionID = SessionID()
         let runID = RunID()
         let parentEventID = EventID()
+        let checkpointID = CheckpointID()
         let event = StreamEvent(
             id: id,
             timestamp: Date(timeIntervalSince1970: 1_711_800_000),
             sessionID: sessionID,
             runID: runID,
             parentEventID: parentEventID,
+            origin: .replayed(from: checkpointID),
             kind: .delta("test")
         )
 
@@ -284,6 +286,7 @@ struct StreamEventEnvelopeCodableTests {
         #expect(decoded.sessionID == sessionID)
         #expect(decoded.runID == runID)
         #expect(decoded.parentEventID == parentEventID)
+        #expect(decoded.origin == .replayed(from: checkpointID))
         #expect(decoded.kind == .delta("test"))
     }
 
@@ -319,6 +322,7 @@ struct StreamEventEnvelopeCodableTests {
         #expect(json["sessionID"] == nil)
         #expect(json["runID"] == nil)
         #expect(json["parentEventID"] == nil)
+        #expect(json["origin"] == nil)
     }
 
     @Test func nonNilOptionalFieldsPreserved() throws {
@@ -338,6 +342,70 @@ struct StreamEventEnvelopeCodableTests {
         #expect(decoded.sessionID == sessionID)
         #expect(decoded.runID == runID)
         #expect(decoded.parentEventID == parentEventID)
+    }
+}
+
+struct EventOriginCodableTests {
+    private func roundTrip(_ origin: EventOrigin) throws -> EventOrigin {
+        let data = try JSONEncoder().encode(origin)
+        return try JSONDecoder().decode(EventOrigin.self, from: data)
+    }
+
+    private func encodedString(_ origin: EventOrigin) throws -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return try #require(try String(data: encoder.encode(origin), encoding: .utf8))
+    }
+
+    private func uuid(_ value: String) throws -> UUID {
+        try #require(UUID(uuidString: value))
+    }
+
+    @Test func liveEncodesAsTypeOnlyDictionary() throws {
+        #expect(try encodedString(.live) == #"{"type":"live"}"#)
+        #expect(try roundTrip(.live) == .live)
+    }
+
+    @Test func replayedEncodesAsTaggedDictionary() throws {
+        let checkpointID = try CheckpointID(rawValue: uuid("00000000-0000-0000-0000-000000000601"))
+        let origin = EventOrigin.replayed(from: checkpointID)
+        let expected = #"{"from":"00000000-0000-0000-0000-000000000601","type":"replayed"}"#
+        #expect(try encodedString(origin) == expected)
+        #expect(try roundTrip(origin) == origin)
+    }
+
+    @Test func unknownTypeThrowsWithDescriptiveError() throws {
+        let data = Data(#"{"type":"forked","from":"00000000-0000-0000-0000-000000000601"}"#.utf8)
+
+        do {
+            _ = try JSONDecoder().decode(EventOrigin.self, from: data)
+            Issue.record("Expected DecodingError.dataCorrupted")
+        } catch let DecodingError.dataCorrupted(context) {
+            #expect(context.debugDescription.contains("forked"))
+        } catch {
+            Issue.record("Expected DecodingError.dataCorrupted, got \(error)")
+        }
+    }
+
+    @Test func replayedTypeWithoutFromKeyThrows() throws {
+        let data = Data(#"{"type":"replayed"}"#.utf8)
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder().decode(EventOrigin.self, from: data)
+        }
+    }
+
+    @Test func replayedTypeWithNullFromThrows() throws {
+        let data = Data(#"{"type":"replayed","from":null}"#.utf8)
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder().decode(EventOrigin.self, from: data)
+        }
+    }
+
+    @Test func liveOriginIsOmittedFromEnvelopeEncode() throws {
+        let event = StreamEvent(origin: .live, kind: .delta("x"))
+        let data = try JSONEncoder().encode(event)
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(json["origin"] == nil)
     }
 }
 

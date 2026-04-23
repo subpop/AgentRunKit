@@ -93,3 +93,28 @@ public struct RunID: Sendable, Hashable, Codable, CustomStringConvertible {
         try IdentifierCoding.encodeUUID(rawValue, to: encoder)
     }
 }
+
+/// Uniquely identifies a persisted checkpoint.
+public struct CheckpointID: Sendable, Hashable, Codable, CustomStringConvertible {
+    public let rawValue: UUID
+
+    public init() {
+        rawValue = UUID()
+    }
+
+    public init(rawValue: UUID) {
+        self.rawValue = rawValue
+    }
+
+    public var description: String {
+        rawValue.uuidString
+    }
+
+    public init(from decoder: any Decoder) throws {
+        rawValue = try IdentifierCoding.decodeUUID(from: decoder, typeName: "CheckpointID")
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        try IdentifierCoding.encodeUUID(rawValue, to: encoder)
+    }
+}

@@ -31,6 +31,7 @@ enum StreamEventInvariantAssertions {
         #expect(event.sessionID == nil)
         #expect(event.runID == nil)
         #expect(event.parentEventID == nil)
+        #expect(event.origin == .live)
         if case let .subAgentEvent(_, _, nestedEvent) = event.kind {
             assertStage1RuntimeInvariants(
                 nestedEvent,

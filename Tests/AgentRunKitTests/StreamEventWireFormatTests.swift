@@ -181,4 +181,47 @@ struct StreamEventWireFormatTests {
         #expect(iteration == 1)
         #expect(history.isEmpty)
     }
+
+    @Test func replayedOriginRoundTripsWithCheckpointID() throws {
+        let checkpointID = try CheckpointID(rawValue: uuid("00000000-0000-0000-0000-000000000501"))
+        let event = try StreamEvent(
+            id: EventID(rawValue: uuid("00000000-0000-0000-0000-000000000502")),
+            timestamp: fixedDate(millisecondsSince1970: 1_774_880_529_123),
+            origin: .replayed(from: checkpointID),
+            kind: .delta("x")
+        )
+
+        let data = try StreamEventJSONCodec.encode(event)
+        let string = try #require(String(data: data, encoding: .utf8))
+        let expected = [
+            #"{"id":"00000000-0000-0000-0000-000000000502","#,
+            #""kind":{"text":"x","type":"delta"},"#,
+            #""origin":{"from":"00000000-0000-0000-0000-000000000501","type":"replayed"},"#,
+            #""timestamp":"2026-03-30T14:22:09.123Z"}"#,
+        ].joined()
+        #expect(string == expected)
+
+        let decoded = try StreamEventJSONCodec.decode(data)
+        #expect(decoded.id == event.id)
+        #expect(decoded.timestamp == event.timestamp)
+        #expect(decoded.origin == event.origin)
+        #expect(decoded.kind == event.kind)
+
+        let reencoded = try StreamEventJSONCodec.encode(decoded)
+        let reencodedString = try #require(String(data: reencoded, encoding: .utf8))
+        #expect(reencodedString == string)
+    }
+
+    @Test func envelopeV1ArchiveWithoutOriginDecodesAsLive() throws {
+        let v1Archive = [
+            #"{"id":"00000000-0000-0000-0000-000000000503","#,
+            #""kind":{"text":"x","type":"delta"},"#,
+            #""timestamp":"2026-03-30T14:22:09.123Z"}"#,
+        ].joined()
+        let data = try #require(v1Archive.data(using: .utf8))
+
+        let decoded = try StreamEventJSONCodec.decode(data)
+        #expect(decoded.origin == .live)
+        #expect(decoded.kind == .delta("x"))
+    }
 }

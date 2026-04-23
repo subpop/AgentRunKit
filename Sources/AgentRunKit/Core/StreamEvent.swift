@@ -1,14 +1,13 @@
 import Foundation
 
-/// Envelope for a streamed event, carrying identity and session context around a semantic payload.
-///
-/// For a guide, see <doc:StreamingAndSwiftUI>.
+/// Streamed event envelope with identity, session context, and semantic payload; see <doc:StreamingAndSwiftUI>.
 public struct StreamEvent: Sendable, Identifiable {
     public let id: EventID
     public let timestamp: Date
     public let sessionID: SessionID?
     public let runID: RunID?
     public let parentEventID: EventID?
+    public let origin: EventOrigin
     public let kind: Kind
 
     public init(
@@ -17,6 +16,7 @@ public struct StreamEvent: Sendable, Identifiable {
         sessionID: SessionID? = nil,
         runID: RunID? = nil,
         parentEventID: EventID? = nil,
+        origin: EventOrigin = .live,
         kind: Kind
     ) {
         self.id = id
@@ -24,6 +24,7 @@ public struct StreamEvent: Sendable, Identifiable {
         self.sessionID = sessionID
         self.runID = runID
         self.parentEventID = parentEventID
+        self.origin = origin
         self.kind = kind
     }
 
@@ -31,9 +32,28 @@ public struct StreamEvent: Sendable, Identifiable {
         _ kind: Kind,
         sessionID: SessionID? = nil,
         runID: RunID? = nil,
-        parentEventID: EventID? = nil
+        parentEventID: EventID? = nil,
+        origin: EventOrigin = .live
     ) -> StreamEvent {
-        StreamEvent(sessionID: sessionID, runID: runID, parentEventID: parentEventID, kind: kind)
+        StreamEvent(
+            sessionID: sessionID,
+            runID: runID,
+            parentEventID: parentEventID,
+            origin: origin,
+            kind: kind
+        )
+    }
+
+    func with(origin: EventOrigin) -> StreamEvent {
+        StreamEvent(
+            id: id,
+            timestamp: timestamp,
+            sessionID: sessionID,
+            runID: runID,
+            parentEventID: parentEventID,
+            origin: origin,
+            kind: kind
+        )
     }
 
     /// Semantic event payload independent of envelope identity.
@@ -291,7 +311,7 @@ extension StreamEvent.Kind: Codable {
 
 extension StreamEvent: Codable {
     private enum CodingKeys: String, CodingKey {
-        case id, timestamp, sessionID, runID, parentEventID, kind
+        case id, timestamp, sessionID, runID, parentEventID, origin, kind
     }
 
     private static let timestampCalendar: Calendar = {
@@ -317,6 +337,7 @@ extension StreamEvent: Codable {
         sessionID = try container.decodeIfPresent(SessionID.self, forKey: .sessionID)
         runID = try container.decodeIfPresent(RunID.self, forKey: .runID)
         parentEventID = try container.decodeIfPresent(EventID.self, forKey: .parentEventID)
+        origin = container.contains(.origin) ? try container.decode(EventOrigin.self, forKey: .origin) : .live
         kind = try container.decode(Kind.self, forKey: .kind)
     }
 
@@ -331,6 +352,9 @@ extension StreamEvent: Codable {
         try container.encodeIfPresent(sessionID, forKey: .sessionID)
         try container.encodeIfPresent(runID, forKey: .runID)
         try container.encodeIfPresent(parentEventID, forKey: .parentEventID)
+        if case .replayed = origin {
+            try container.encode(origin, forKey: .origin)
+        }
         try container.encode(kind, forKey: .kind)
     }
 

@@ -110,7 +110,7 @@ public final class AgentStream<C: ToolContext> {
         handle(event, toolCallIdPath: [], toolNamePath: [])
     }
 
-    private func handle(_ event: StreamEvent, toolCallIdPath: [String], toolNamePath: [String]) {
+    func handle(_ event: StreamEvent, toolCallIdPath: [String], toolNamePath: [String]) {
         switch event.kind {
         case let .delta(text):
             content += text
@@ -143,7 +143,7 @@ public final class AgentStream<C: ToolContext> {
             break
         case let .subAgentEvent(toolCallId, toolName, nestedEvent):
             handle(
-                nestedEvent,
+                nestedEvent.with(origin: event.origin),
                 toolCallIdPath: toolCallIdPath + [toolCallId],
                 toolNamePath: toolNamePath + [toolName]
             )
