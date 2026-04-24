@@ -32,10 +32,13 @@ public final class AgentStream<C: ToolContext> {
     public private(set) var contextBudget: ContextBudget?
 
     private let agent: Agent<C>
+    let buffer: StreamEventBuffer?
     private var activeTask: Task<Void, Never>?
+    var sendGeneration: UInt64 = 0
 
-    public init(agent: Agent<C>) {
+    public init(agent: Agent<C>, bufferCapacity: Int? = nil) {
         self.agent = agent
+        buffer = bufferCapacity.map { StreamEventBuffer(capacity: $0) }
     }
 
     public func send(
@@ -63,11 +66,14 @@ public final class AgentStream<C: ToolContext> {
     ) {
         cancel()
         reset()
+        sendGeneration &+= 1
+        let generation = sendGeneration
         isStreaming = true
 
-        activeTask = Task { [agent] in
+        activeTask = Task {
+            if let buffer = self.buffer { await buffer.clear() }
             do {
-                let stream = agent.stream(
+                let stream = self.agent.stream(
                     userMessage: message,
                     history: history,
                     context: context,
@@ -76,14 +82,22 @@ public final class AgentStream<C: ToolContext> {
                     approvalHandler: approvalHandler
                 )
                 for try await event in stream {
+                    guard generation == self.sendGeneration else {
+                        continue
+                    }
+                    if let buffer = self.buffer { await buffer.record(event) }
+                    guard generation == self.sendGeneration else {
+                        continue
+                    }
                     self.handle(event)
                 }
             } catch is CancellationError {
                 return
             } catch {
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, generation == self.sendGeneration else { return }
                 self.error = error
             }
+            guard generation == self.sendGeneration else { return }
             self.isStreaming = false
         }
     }
@@ -91,7 +105,33 @@ public final class AgentStream<C: ToolContext> {
     public func cancel() {
         activeTask?.cancel()
         activeTask = nil
+        sendGeneration &+= 1
         isStreaming = false
+    }
+
+    public func replay(from cursor: UInt64) -> AsyncThrowingStream<StreamEvent, Error> {
+        guard let buffer else {
+            return AsyncThrowingStream { continuation in
+                continuation.finish(throwing: BufferReplayError.bufferDisabled)
+            }
+        }
+        return AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    for try await event in await buffer.replay(from: cursor) {
+                        continuation.yield(event)
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    var bufferedCursor: UInt64? {
+        get async { await buffer?.cursor }
     }
 
     private func reset() {
